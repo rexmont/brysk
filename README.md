@@ -7,7 +7,7 @@
 > [`docs/upstream.md`](docs/upstream.md). The rest of this README describes the original app.
 >
 > Release build (universal, Developer ID, notarised DMG):
-> `BRYSK_DEVELOPER_ID='Developer ID Application: …' BRYSK_NOTARY_PROFILE=brysk-notary scripts/package-macos.sh`
+> `BRYSK_DEVELOPER_ID='Developer ID Application: …' BRYSK_NOTARY_PROFILE=dioramac-notary scripts/package-macos.sh`
 > → `dist/Brysk-<version>.dmg`.
 
 <picture>

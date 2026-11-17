@@ -256,8 +256,9 @@ Next (visible gaps, in order):
 * Finder tags are read and written (the `_kMDItemUserTags` attribute): toggling a tag in
   Brysk writes it to Finder, and Finder tags on selected items are imported when a tag
   menu opens. First launch explains the macOS folder/TCC prompts; About and a generated
-  `.icns` (from the project's SVG) are in the bundle. Universal build (`UNIVERSAL=1`) and `scripts/package-macos.sh` are ready; release
-  packaging needs the Developer ID identity and the notarytool keychain profile.
+  `.icns` (from the project's SVG) are in the bundle. Universal build (`UNIVERSAL=1`) and `scripts/package-macos.sh` are in use: 0.8.8 is
+  notarised and stapled (`dist/Brysk-0.8.8.dmg`, 60 MB, x86_64 + arm64, Developer ID
+  `Uygar Yasar (3Y65F83UKM)`, `source=Notarized Developer ID`).
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions
   written that way are read correctly) — the cause of "folder not found" on every tab.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).

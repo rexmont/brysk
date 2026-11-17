@@ -329,7 +329,7 @@ pub fn states_in(status: &GitStatus, dir: &Path) -> Vec<FileState> {
     out
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod states_in_tests {
     use std::path::{Path, PathBuf};
 

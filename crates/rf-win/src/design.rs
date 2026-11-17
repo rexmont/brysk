@@ -429,6 +429,8 @@ mod tests {
     }
 
     /// CorelDRAW: the whole drawing, not the page; a blank page is passed over.
+    // (a Windows fixture: paths and ZIP timestamps)
+    #[cfg(windows)]
     #[test]
     fn coreldraw_shows_the_drawing() {
         let p = temp("a.cdr");
@@ -446,6 +448,8 @@ mod tests {
         assert_eq!(preview(&r).map(|i| i.dimensions()), Some((18, 25)));
     }
 
+    // (a Windows fixture: paths and ZIP timestamps)
+    #[cfg(windows)]
     #[test]
     fn other_zip_formats() {
         let p = temp("a.kra");
@@ -456,6 +460,8 @@ mod tests {
         assert_eq!(preview(&q).map(|i| i.dimensions()), Some((12, 16)));
     }
 
+    // (a Windows fixture: paths and ZIP timestamps)
+    #[cfg(windows)]
     #[test]
     fn xmp_thumbnail_in_postscript() {
         let jpeg = {

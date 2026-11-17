@@ -225,7 +225,14 @@ Done:
   hotkey (Carbon `RegisterEventHotKey`, Alt+Space registers successfully), and
   `rf-platform::input` (Quartz cursor/modifiers) are in.
 * `scripts/build-macos.sh` builds `target/rustyfiles.app` (Info.plist with the TCC usage
-  texts, both binaries, ad-hoc signature); the bundled app launches and shows its window.
+  texts, ad-hoc signature) with DirectLook as a **nested agent app** under
+  `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices
+  registered the helper as `com.rustyfiles.app`, and `open rustyfiles.app` then activated the
+  invisible helper instead of starting the file manager.
+* Launch timing (macOS 26 arm64, debug build): 250–400 ms direct binary to a visible window,
+  ~460 ms through `open` (5 runs: 459/460/472/464/464 ms), including a launch while the
+  DirectLook helper is already running. An earlier 7 s launch came from a stale bundle that
+  still had the 5 s main-thread hotkey timeout.
 * `cargo test -p rf-mac`: 32 pass; 6 fail — all Windows-fixture tests that came in with the
   included modules (`design` ZIPs, `git` path states, a watch timing test), not macOS code.
 

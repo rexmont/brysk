@@ -20,8 +20,15 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp packaging/macos/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/rustyfiles" "$APP/Contents/MacOS/rustyfiles"
-cp "$BIN/directlook" "$APP/Contents/MacOS/directlook"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+
+# DirectLook is an app of its own (a nested agent bundle): run as a bare binary inside
+# rustyfiles.app, LaunchServices registers it as rustyfiles and `open rustyfiles.app` then
+# activates the invisible helper instead of starting the file manager.
+HELPER="$APP/Contents/Helpers/DirectLook.app"
+mkdir -p "$HELPER/Contents/MacOS"
+cp packaging/macos/DirectLook-Info.plist "$HELPER/Contents/Info.plist"
+cp "$BIN/directlook" "$HELPER/Contents/MacOS/directlook"
 
 # The icon is optional: `packaging/macos/rustyfiles.icns` when it exists.
 if [ -f packaging/macos/rustyfiles.icns ]; then
@@ -30,8 +37,7 @@ if [ -f packaging/macos/rustyfiles.icns ]; then
 fi
 
 # Mach-O binaries only; the ad-hoc identity is enough for local use.
-codesign --force --deep --sign "${CODESIGN_ID:--}" "$APP/Contents/MacOS/rustyfiles" 2>/dev/null || true
-codesign --force --deep --sign "${CODESIGN_ID:--}" "$APP/Contents/MacOS/directlook" 2>/dev/null || true
+codesign --force --deep --sign "${CODESIGN_ID:--}" "$APP/Contents/Helpers/DirectLook.app" 2>/dev/null || true
 codesign --force --deep --sign "${CODESIGN_ID:--}" "$APP"
 
 echo "built $APP"

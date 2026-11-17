@@ -110,14 +110,23 @@ impl ToApp {
     }
 }
 
-/// directlook(.exe): bu programın yanında.
+/// directlook(.exe): bu programın yanında (pakette: `Contents/Helpers/DirectLook.app`).
 pub fn exe() -> Option<PathBuf> {
     let me = std::env::current_exe().ok()?;
     #[cfg(windows)]
-    let name = "directlook.exe";
+    let p = me.with_file_name("directlook.exe");
     #[cfg(not(windows))]
-    let name = "directlook";
-    let p = me.with_file_name(name);
+    let p = {
+        // rustyfiles.app/Contents/MacOS/rustyfiles → Contents/Helpers/DirectLook.app/…
+        let mut helper = None;
+        if let Some(contents) = me.parent().and_then(|macos| macos.parent()) {
+            let cand = contents.join("Helpers/DirectLook.app/Contents/MacOS/directlook");
+            if cand.exists() {
+                helper = Some(cand);
+            }
+        }
+        helper.unwrap_or_else(|| me.with_file_name("directlook"))
+    };
     p.exists().then_some(p)
 }
 

@@ -481,6 +481,9 @@ impl Render for RecycleView {
                 .gap_2()
                 .child(Icon::new(L::Trash).size(px(40.)).text_color(p.text_tertiary))
                 .child(div().text_color(p.text_secondary).child(if cfg!(target_os = "macos") { t!("Çöp sepeti boş") } else { t!("Geri dönüşüm kutusu boş") }))
+                .when(cfg!(target_os = "macos"), |d| {
+                    d.child(div().pt_2().text_xs().text_color(p.text_tertiary).child(t!("Başka uygulamaların çöp sepetine attığı öğeler yalnızca Tam Disk Erişimi verildiğinde listelenir.")))
+                })
                 .into_any_element()
         } else if self.order.is_empty() {
             div().p_6().text_sm().text_color(p.text_secondary).child(t!("Eşleşen öğe yok")).into_any_element()

@@ -397,9 +397,13 @@ impl LookWindow {
         });
     }
 
-    /// Windows' share sheet for the shown file, over DirectLook's window (`rf_win::share`, issue 48).
+    /// The native share sheet for the shown file, over DirectLook's window (`rf_win::share`, issue 48).
     fn share(&self, window: &Window, cx: &mut App) {
-        crate::share::open(hwnd_of(window), vec![self.path.clone()], cx);
+        let hwnd = hwnd_of(window);
+        // macOS' sheet uses the key window; `share::open` only refuses a zero placeholder.
+        #[cfg(target_os = "macos")]
+        let hwnd = if hwnd == 0 { 1 } else { hwnd };
+        crate::share::open(hwnd, vec![self.path.clone()], cx);
     }
 
     fn open_with(&self) {

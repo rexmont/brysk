@@ -2059,4 +2059,8 @@ pub const EN: &[(&str, &str)] = &[
     ("Çöp Sepeti ayarları…", "Trash settings…"),
     ("Çöp Sepeti ayarları kaydedildi", "Trash settings saved"),
     ("Çöp sepeti boş", "The Trash is empty"),
+    (
+        "Başka uygulamaların çöp sepetine attığı öğeler yalnızca Tam Disk Erişimi verildiğinde listelenir.",
+        "Items other applications put in the Trash are listed only when Brysk has Full Disk Access.",
+    ),
 ];

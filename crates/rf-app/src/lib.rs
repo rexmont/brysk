@@ -79,6 +79,7 @@ mod shell_view;
 mod select_box;
 mod settings_view;
 mod share;
+mod shortcuts;
 #[cfg(windows)]
 mod taskbar_preview;
 #[cfg(windows)]
@@ -255,14 +256,22 @@ pub fn open_main_window_made(
         window_bounds: Some(bounds.unwrap_or_else(|| WindowBounds::centered(size(px(1280.), px(800.)), cx))),
         window_min_size: Some(size(px(720.), px(420.))),
         window_background: crate::theme::window_material(WindowBackgroundAppearance::MicaBackdrop),
+        // A window asked for from a menu opens while that menu is closing: make sure it is
+        // the one in front afterwards (Cmd+N and the menu item behave the same).
+        focus: true,
         ..TitleBar::window_options()
     };
-    if let Err(e) = gpui_kit::open_window(options, cx, move |window, cx| cx.new(|cx| Workspace::new(start, ipc, window, cx))) {
-        log::error!("open window: {e:#}");
-        rf_win::handover::trace("open window: failed");
-        return false;
+    match gpui_kit::open_window(options, cx, move |window, cx| cx.new(|cx| Workspace::new(start, ipc, window, cx))) {
+        Ok((handle, _)) => {
+            let _ = handle.update(cx, |_, window, _| window.activate_window());
+            true
+        }
+        Err(e) => {
+            log::error!("open window: {e:#}");
+            rf_win::handover::trace("open window: failed");
+            false
+        }
     }
-    true
 }
 
 /// The first launch on macOS: macOS will ask for folder access on its own; this says what the
@@ -417,8 +426,40 @@ pub(crate) fn start_mark(step: &str) {
     }
 }
 
+/// Finder starts an app with a bare `/usr/bin:/bin:/usr/sbin:/sbin`; Homebrew's `git`, `gh`
+/// and the tools "Open Terminal" expects live elsewhere. Put the usual macOS locations in
+/// front once, so this process and every child it starts can find them.
+#[cfg(target_os = "macos")]
+fn extend_macos_path() {
+    let mut dirs: Vec<std::path::PathBuf> = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .collect();
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = std::path::PathBuf::from(home);
+        for extra in [home.join(".local/bin"), home.join(".cargo/bin")] {
+            if !dirs.contains(&extra) {
+                dirs.push(extra);
+            }
+        }
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for p in std::env::split_paths(&path) {
+            if !dirs.contains(&p) {
+                dirs.push(p);
+            }
+        }
+    }
+    if let Ok(joined) = std::env::join_paths(dirs) {
+        // SAFETY: the first thing `main` does, before any thread of ours exists.
+        unsafe { std::env::set_var("PATH", joined) };
+    }
+}
+
 pub fn main() {
     start_mark("main");
+    #[cfg(target_os = "macos")]
+    extend_macos_path();
     wait_for_the_old_one();
     // Not in the installation folder: the updater renames it, and Windows refuses while it is a working directory of this process
     // or of anything this process starts (`rf_win::ownfolder`). Before everything else, so that every child inherits the way out.
@@ -742,7 +783,20 @@ pub fn main() {
     // (the first window on the CPU renderer or on the card: what this machine was like the last time, see `fast_start`)
     fast_start::before_app(!dock && !bar_preview && pick.is_none() && !quick_search && !snip_only && !no_window && !open_look_settings);
     start_mark("before the app");
-    gpui_kit::application().with_assets(gpui_kit::assets::AllAssets).run(move |cx| {
+    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    // macOS: closing the window with "run in the background" on leaves the app alive;
+    // clicking the Dock icon (or opening it again) has to bring a window back. GPUI's
+    // application delegate reports exactly that reopen request (and only when no window is
+    // visible), so it is registered on the application, before the event loop starts.
+    #[cfg(target_os = "macos")]
+    application.on_reopen(|cx| {
+        if let Some(w) = workspace::main_windows(cx).into_iter().next() {
+            let _ = w.update(cx, |_, window, _| window.activate_window());
+        } else {
+            open_main_window(None, None, restored_bounds(cx), cx);
+        }
+    });
+    application.run(move |cx| {
         start_mark("app running");
         gpui_kit::init(cx);
         ui_stall::start(cx);
@@ -910,6 +964,32 @@ pub fn main() {
         // linger invisibly and swallow every later launch through the single-instance pipe).
         // With "run in the background" on, the app stays in the notification area instead.
         background::init(cx);
+        #[cfg(target_os = "macos")]
+        {
+            // With no window the menu bar's actions have no dispatch tree of their own; the
+            // few entries that make sense without one open a window first. (With a window the
+            // workspace handles them, so these do nothing then.)
+            cx.on_action(|_: &crate::actions::NewWindow, cx| {
+                if !workspace::any_main_window(cx) {
+                    open_main_window(None, None, restored_bounds(cx), cx);
+                }
+            });
+            cx.on_action(|_: &crate::actions::NewTab, cx| {
+                if !workspace::any_main_window(cx) {
+                    open_main_window(None, None, restored_bounds(cx), cx);
+                }
+            });
+            cx.on_action(|_: &crate::actions::GoSettings, cx| {
+                if !workspace::any_main_window(cx) {
+                    open_main_window(Some(Location::Settings), None, restored_bounds(cx), cx);
+                }
+            });
+            cx.on_action(|_: &crate::actions::Quit, cx| {
+                if !workspace::any_main_window(cx) {
+                    quit_when_idle(cx);
+                }
+            });
+        }
         quick_search::init(cx);
         // the folder organizer's watchers (only if a rule runs by itself); not in helper processes
         if primary_instance {

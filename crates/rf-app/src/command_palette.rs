@@ -221,7 +221,7 @@ impl CommandPalette {
             .when(!sel, |d| d.hover(|s| s.bg(p.hover)))
             .child(Icon::new(icon).size(px(16.)).text_color(if sel { p.accent } else { p.text_secondary }))
             .child(div().flex_1().child(label))
-            .when(!keys.is_empty(), |d| d.child(div().text_xs().text_color(p.text_tertiary).child(keys)))
+            .when(!keys.is_empty(), |d| d.child(div().text_xs().text_color(p.text_tertiary).child(crate::shortcuts::hint(keys))))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.selected = ix;
                 this.run_selected(cx);

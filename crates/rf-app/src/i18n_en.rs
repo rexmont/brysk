@@ -1977,4 +1977,22 @@ pub const EN: &[(&str, &str)] = &[
     ("Dock'a sabitlendi", "Pinned to the Dock"),
     ("Yol kopyalandı", "Path copied"),
     ("Başlat'tan kaldır", "Unpin from Start"),
+    (
+        "Uygulama: yakın zamanlar \"5 dakika önce\", eskileri sistemin biçiminde; Sistem: her zaman sistemin tarih ve saat biçimi; Evrensel: 2026-11-05 13:45",
+        "Application: recent times as \"5 min ago\", older ones in the system's format; System: always the system's date and time format; Universal: 2026-11-05 13:45",
+    ),
+    ("Sistem rengi", "System colour"),
+    (
+        "Düğmelerin, seçimin ve vurguların rengi: sistem rengi, hazır renklerden biri ya da kendi yazdığınız renk.",
+        "The colour of buttons, selection and highlights: the system colour, one of the presets, or your own.",
+    ),
+    (
+        "Kopyalama, başka bir birime taşıma ve kalıcı silme kendi paralel motorumuzla. Kapalıyken işlemler sistem motoruyla yapılır.",
+        "Copying, moving to another volume and permanent deletion use our own parallel engine. When off, operations use the system engine.",
+    ),
+    ("Menü çubuğunda bir simge kalır; yeni pencere anında açılır", "An icon stays in the menu bar; a new window opens at once"),
+    (
+        "Bu kısayol kullanılamıyor: Ctrl, Alt, Shift ya da Cmd ile bir tuş seçin",
+        "This shortcut can't be used: choose a key with Control, Option, Shift or Command",
+    ),
 ];

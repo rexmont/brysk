@@ -3,11 +3,14 @@
 //! Copies keep every metadata bit: `copyfile(COPYFILE_ALL)` carries permissions, times, ACLs,
 //! extended attributes and Finder tags, and an APFS clone is used when both ends are on the
 //! same volume. Files are copied in chunks for byte-accurate progress, pause, cancellation and
-//! a speed limit; anything that already exists at the destination is asked about once (replace,
-//! skip, keep both) instead of ever being overwritten silently. A move on one volume is a
-//! rename; across volumes it is a verified copy after which the source is deleted.
+//! a speed limit. A name that already exists at the destination is never overwritten: the copy
+//! keeps both, using the Finder's names ("report copy.txt", "Photos copy 2"). Copying into the
+//! folder an item already lives in is that same case, so paste-in-place completes at once
+//! instead of asking a question. A move on one volume is a rename; across volumes it is a
+//! verified copy after which the source is deleted. Moving an item into the folder it is
+//! already in changes nothing, and a folder cannot be copied or moved into itself.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -152,65 +155,109 @@ struct PlanFile {
     size: u64,
 }
 
-fn plan_walk(src: &Path, dst: &Path, dirs: &mut Vec<PathBuf>, files: &mut Vec<PlanFile>) -> std::io::Result<()> {
+fn exists(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).is_ok()
+}
+
+/// A directory on disk, not a symlink that points at one.
+fn is_real_dir(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).map(|m| m.is_dir() && !m.file_type().is_symlink()).unwrap_or(false)
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+/// The Finder's keep-both name next to `dst`: "report copy.txt", then "report copy 2.txt".
+/// Names this operation already planned are taken too (`reserved`).
+fn keep_both(dst: &Path, is_dir: bool, reserved: &HashSet<PathBuf>) -> PathBuf {
+    let parent = dst.parent().unwrap_or_else(|| Path::new("/"));
+    let name = dst.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "item".into());
+    crate::fileops::duplicate_name_avoiding(parent, &name, is_dir, reserved)
+}
+
+/// Walks one source and gives every entry a destination that does not overwrite anything:
+/// folders with the same name merge, everything else keeps both.
+fn plan_walk(
+    src: &Path,
+    dst: &Path,
+    dirs: &mut Vec<PathBuf>,
+    files: &mut Vec<PlanFile>,
+    reserved: &mut HashSet<PathBuf>,
+) -> std::io::Result<()> {
     let md = std::fs::symlink_metadata(src)?;
     if md.file_type().is_symlink() || md.is_file() {
-        files.push(PlanFile { src: src.to_path_buf(), dst: dst.to_path_buf(), size: md.len() });
+        let dst = if exists(dst) || reserved.contains(dst) { keep_both(dst, false, reserved) } else { dst.to_path_buf() };
+        reserved.insert(dst.clone());
+        files.push(PlanFile { src: src.to_path_buf(), dst, size: md.len() });
         return Ok(());
     }
-    dirs.push(dst.to_path_buf());
+    if !md.is_dir() {
+        return Err(std::io::Error::other(format!("{}: bu tür özel dosyalar kopyalanamaz", src.display())));
+    }
+    // A folder pair merges; a file (or a symlink) in the way makes the folder a "copy".
+    let merge = is_real_dir(dst) && !reserved.contains(dst);
+    let dst = if merge || !(exists(dst) || reserved.contains(dst)) { dst.to_path_buf() } else { keep_both(dst, true, reserved) };
+    reserved.insert(dst.clone());
+    dirs.push(dst.clone());
     for e in std::fs::read_dir(src)? {
         let e = e?;
-        plan_walk(&e.path(), &dst.join(e.file_name()), dirs, files)?;
+        plan_walk(&e.path(), &dst.join(e.file_name()), dirs, files, reserved)?;
     }
     Ok(())
 }
 
-fn unique_for(dst: &Path) -> PathBuf {
-    let parent = dst.parent().unwrap_or_else(|| Path::new("/"));
-    let stem = dst.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "item".into());
-    let ext = dst.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-    crate::fileops::unique_name(parent, &stem, &ext)
+/// Where a top-level source lands. `None` means a move is already there (nothing to do).
+///
+/// Copying an item into the folder it already lives in is the Finder's duplicate, never a
+/// question: `report.txt` becomes `report copy.txt` and the original stays. A clash in another
+/// folder keeps both too (a folder pair merges), so an operation can always finish.
+fn top_target(src: &Path, dest_dir: &Path, kind: Transfer, reserved: &HashSet<PathBuf>) -> anyhow::Result<Option<PathBuf>> {
+    let name = src.file_name().ok_or_else(|| anyhow::anyhow!("ad yok: {}", src.display()))?;
+    let desired = dest_dir.join(name);
+    let src_dir = is_real_dir(src);
+    let dest_canon = dest_dir.canonicalize().with_context(|| format!("{} okunamadı", dest_dir.display()))?;
+
+    // A folder inside itself would recurse forever (and for a move it would delete the copy).
+    // The destination folder itself counts: pasting a folder into the folder is not a way to
+    // make "name copy" — that is what pasting into its parent does.
+    if src_dir {
+        let src_canon = src.canonicalize().with_context(|| format!("{} okunamadı", src.display()))?;
+        if dest_canon.starts_with(&src_canon) {
+            let verb = if kind == Transfer::Move { "taşınamaz" } else { "kopyalanamaz" };
+            anyhow::bail!("{}: bir klasör kendi içine {}", src.display(), verb);
+        }
+    }
+
+    if same_path(src, &desired) {
+        return Ok(match kind {
+            // Cut and paste in the same folder changes nothing.
+            Transfer::Move => None,
+            // Paste a copy next to the original: "name copy".
+            Transfer::Copy => Some(keep_both(&desired, src_dir, reserved)),
+        });
+    }
+
+    let taken = exists(&desired) || reserved.contains(&desired);
+    if !taken || (src_dir && is_real_dir(&desired)) {
+        return Ok(Some(desired));
+    }
+    Ok(Some(keep_both(&desired, src_dir, reserved)))
 }
 
-fn conflict_for(f: &PlanFile) -> Option<Conflict> {
-    let src_md = std::fs::symlink_metadata(&f.src).ok()?;
-    let dst_md = std::fs::symlink_metadata(&f.dst).ok()?;
-    Some(Conflict {
-        src: f.src.clone(),
-        dst: f.dst.clone(),
-        src_dir: false,
-        dst_dir: dst_md.is_dir(),
-        src_size: src_md.len(),
-        dst_size: dst_md.len(),
-        src_time: src_md.modified().ok(),
-        dst_time: dst_md.modified().ok(),
-    })
-}
-
-fn resolve_conflicts(files: &mut [PlanFile], tracker: &Tracker) -> anyhow::Result<Option<HashMap<PathBuf, Resolve>>> {
-    let conflicts: Vec<(usize, Conflict)> = files.iter().enumerate().filter_map(|(i, f)| conflict_for(f).map(|c| (i, c))).collect();
-    if conflicts.is_empty() {
-        return Ok(Some(HashMap::new()));
+/// Removes the folders a move left behind, but only the empty ones: a file that appeared while
+/// the move was running is never thrown away with them.
+fn remove_empty_tree(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        if is_real_dir(&e.path()) {
+            remove_empty_tree(&e.path());
+        }
     }
-    let list: Vec<Conflict> = conflicts.iter().map(|(_, c)| c.clone()).collect();
-    let answers = match tracker.ask.as_ref() {
-        // A question nobody answers is a cancelled operation (the dialog was closed).
-        Some(ask) => ask(&list),
-        // An untracked operation never overwrites: keep both.
-        None => Some(vec![Resolve::KeepBoth; list.len()]),
-    };
-    let Some(answers) = answers else { return Ok(None) };
-    if answers.len() != list.len() {
-        anyhow::bail!("the conflict answers do not match the conflicts");
-    }
-    let mut out = HashMap::new();
-    for ((i, c), r) in conflicts.into_iter().zip(answers) {
-        // A file cannot replace a folder (or the reverse): keep both whatever was answered.
-        let r = if c.mismatched() { Resolve::KeepBoth } else { r };
-        out.insert(files[i].dst.clone(), r);
-    }
-    Ok(Some(out))
+    let _ = std::fs::remove_dir(dir);
 }
 
 // ------------------------------------------------------------------ copying
@@ -345,7 +392,8 @@ fn verify_one(src: &Path, dst: &Path, verify: Verify) -> anyhow::Result<()> {
 
 // ------------------------------------------------------------------ transfer
 
-/// Copies or moves `sources` into `dest_dir`, asking once about every name that exists there.
+/// Copies or moves `sources` into `dest_dir`. Clashes keep both with Finder-style names; the
+/// operation never waits for a question and never overwrites.
 pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: Arc<Tracker>) -> anyhow::Result<bool> {
     if sources.is_empty() {
         return Ok(true);
@@ -354,9 +402,19 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
 
     let mut dirs = Vec::new();
     let mut files = Vec::new();
+    let mut moved_dirs = Vec::new();
+    let mut reserved: HashSet<PathBuf> = HashSet::new();
     for src in sources {
-        let name = src.file_name().ok_or_else(|| anyhow::anyhow!("ad yok: {}", src.display()))?;
-        plan_walk(src, &dest_dir.join(name), &mut dirs, &mut files)?;
+        match top_target(src, dest_dir, kind, &reserved)? {
+            Some(dst) => {
+                if kind == Transfer::Move && is_real_dir(src) {
+                    moved_dirs.push(src.clone());
+                }
+                plan_walk(src, &dst, &mut dirs, &mut files, &mut reserved)?;
+            }
+            // A move into the folder the item is already in: already there, nothing to do.
+            None => {}
+        }
     }
 
     let total_bytes: u64 = files.iter().map(|f| f.size).sum();
@@ -365,20 +423,11 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
     tracker.bytes.set(0, total_bytes);
     (tracker.on_progress)(0, total_files as u32, None);
 
-    let Some(mut answers) = resolve_conflicts(&mut files, &tracker)? else {
-        return Ok(false);
-    };
-
     // Directories first (a merge is harmless), shallowest first.
     dirs.sort_by_key(|d| d.components().count());
     for d in &dirs {
         if tracker.cancel.load(Ordering::Relaxed) {
             return Ok(false);
-        }
-        if let Ok(md) = std::fs::symlink_metadata(d)
-            && !md.is_dir()
-        {
-            anyhow::bail!("{}: hedefte aynı adlı bir dosya var", d.display());
         }
         std::fs::create_dir_all(d)?;
     }
@@ -392,81 +441,30 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
             std::thread::sleep(Duration::from_millis(30));
         }
         let name = f.src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        match answers.remove(&f.dst) {
-            Some(Resolve::Skip) => {
-                done += 1;
-                (tracker.on_progress)(done as u32, total_files as u32, Some(name));
-            }
-            Some(Resolve::KeepBoth) => {
-                let dst = unique_for(&f.dst);
-                copy_one(&f.src, &dst, f.size, &tracker)?;
-                if kind == Transfer::Move {
-                    crate::fileops::remove_recursive(&f.src)?;
-                }
-                tracker.results.lock().unwrap().push((f.src.clone(), dst));
-                done += 1;
-                (tracker.on_progress)(done as u32, total_files as u32, Some(name));
-            }
-            other => {
-                let replace = other == Some(Resolve::Replace);
-                let same_volume = same_device(&f.src, &f.dst);
-                if kind == Transfer::Move && same_volume {
-                    if replace
-                        && let Ok(md) = std::fs::symlink_metadata(&f.dst)
-                        && md.is_dir()
-                    {
-                        std::fs::remove_dir_all(&f.dst)?;
-                    }
-                    // (rename replaces an existing file atomically)
-                    std::fs::rename(&f.src, &f.dst)?;
-                    tracker.results.lock().unwrap().push((f.src.clone(), f.dst.clone()));
-                    tracker.bytes.add(f.size);
-                } else if kind == Transfer::Move {
-                    // Across volumes: copy first, delete the source only once the copy checks out.
-                    let dst = if replace && f.dst.exists() {
-                        let tmp = f.dst.with_extension(format!("Brysk-part-{}", std::process::id()));
-                        copy_one(&f.src, &tmp, f.size, &tracker)?;
-                        std::fs::rename(&tmp, &f.dst)?;
-                        f.dst.clone()
-                    } else {
-                        copy_one(&f.src, &f.dst, f.size, &tracker)?;
-                        f.dst.clone()
-                    };
-                    if tracker.verify_mode() != Verify::Off {
-                        verify_one(&f.src, &dst, tracker.verify_mode())?;
-                    }
-                    crate::fileops::remove_recursive(&f.src)?;
-                    tracker.results.lock().unwrap().push((f.src.clone(), dst));
-                } else if replace && f.dst.exists() {
-                    let tmp = f.dst.with_extension(format!("Brysk-part-{}", std::process::id()));
-                    copy_one(&f.src, &tmp, f.size, &tracker)?;
-                    let md = std::fs::symlink_metadata(&f.dst)?;
-                    if md.is_dir() {
-                        std::fs::remove_dir_all(&f.dst)?;
-                    }
-                    std::fs::rename(&tmp, &f.dst)?;
-                    tracker.results.lock().unwrap().push((f.src.clone(), f.dst.clone()));
-                } else {
-                    copy_one(&f.src, &f.dst, f.size, &tracker)?;
-                    tracker.results.lock().unwrap().push((f.src.clone(), f.dst.clone()));
-                }
-                done += 1;
-                (tracker.on_progress)(done as u32, total_files as u32, Some(name));
+        if kind == Transfer::Move && same_device(&f.src, &f.dst) {
+            // One volume: the rename is the move (and the destination is free by planning).
+            std::fs::rename(&f.src, &f.dst)?;
+            tracker.bytes.add(f.size);
+        } else {
+            copy_one(&f.src, &f.dst, f.size, &tracker)?;
+            // Across volumes (or a copy): the source goes only after the copy checked out.
+            if kind == Transfer::Move {
+                crate::fileops::remove_recursive(&f.src)?;
             }
         }
+        tracker.results.lock().unwrap().push((f.src.clone(), f.dst.clone()));
+        done += 1;
+        (tracker.on_progress)(done as u32, total_files as u32, Some(name));
     }
 
-    // A move removed each file; the emptied source folders go too (deepest first).
+    // A move emptied the source folders; they go too (deepest first). Empty only: never
+    // remove something the operation did not copy.
     if kind == Transfer::Move {
-        let mut src_dirs = Vec::new();
-        for src in sources {
-            if std::fs::symlink_metadata(src).map(|m| m.is_dir()).unwrap_or(false) {
-                src_dirs.push(src.clone());
+        moved_dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+        for d in moved_dirs {
+            if is_real_dir(&d) {
+                remove_empty_tree(&d);
             }
-        }
-        src_dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
-        for d in src_dirs {
-            let _ = std::fs::remove_dir_all(&d);
         }
     }
 
@@ -491,7 +489,7 @@ pub fn cancellable(flag: Arc<AtomicBool>) -> Arc<AtomicBool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
 
     fn scratch(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("rf-mac-copy-{tag}-{}", std::process::id()));
@@ -500,50 +498,203 @@ mod tests {
         d
     }
 
-    fn tracker(ask: Option<Box<dyn Fn(&[Conflict]) -> Option<Vec<Resolve>> + Send + Sync>>) -> Arc<Tracker> {
+    fn tracker() -> Arc<Tracker> {
+        Arc::new(Tracker::new(Box::new(|_, _, _| {}), Arc::new(AtomicBool::new(false))))
+    }
+
+    /// A tracker whose question channel counts calls: every one of these tests has to finish
+    /// without one (that is what used to hang a paste into the same folder).
+    fn asking(calls: Arc<AtomicUsize>) -> Arc<Tracker> {
         let mut t = Tracker::new(Box::new(|_, _, _| {}), Arc::new(AtomicBool::new(false)));
-        t.ask = ask;
+        t.ask = Some(Box::new(move |_| {
+            calls.fetch_add(1, Ordering::Relaxed);
+            None
+        }));
         Arc::new(t)
     }
 
+    fn read(p: &Path) -> Vec<u8> {
+        std::fs::read(p).unwrap()
+    }
+
     #[test]
-    fn a_copy_keeps_both_instead_of_overwriting() {
+    fn a_copy_of_a_conflicting_file_keeps_both() {
         let d = scratch("keepboth");
         let src = d.join("a.txt");
         std::fs::write(&src, b"new").unwrap();
         let dest = d.join("dest");
         std::fs::create_dir(&dest).unwrap();
         std::fs::write(dest.join("a.txt"), b"old").unwrap();
-        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker(None)).unwrap());
-        assert_eq!(std::fs::read(dest.join("a.txt")).unwrap(), b"old");
-        assert_eq!(std::fs::read(dest.join("a (2).txt")).unwrap(), b"new");
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("a.txt")), b"old");
+        assert_eq!(read(&dest.join("a copy.txt")), b"new");
     }
 
     #[test]
-    fn a_move_never_overwrites_without_an_answer() {
+    fn a_move_of_a_conflicting_file_keeps_both_and_moves_the_source() {
         let d = scratch("move");
         let src = d.join("a.txt");
         std::fs::write(&src, b"new").unwrap();
         let dest = d.join("dest");
         std::fs::create_dir(&dest).unwrap();
         std::fs::write(dest.join("a.txt"), b"old").unwrap();
-        assert!(transfer(Transfer::Move, std::slice::from_ref(&src), &dest, tracker(None)).unwrap());
-        assert_eq!(std::fs::read(dest.join("a.txt")).unwrap(), b"old");
-        assert_eq!(std::fs::read(dest.join("a (2).txt")).unwrap(), b"new");
+        assert!(transfer(Transfer::Move, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("a.txt")), b"old");
+        assert_eq!(read(&dest.join("a copy.txt")), b"new");
         assert!(!src.exists());
     }
 
     #[test]
-    fn replace_is_applied_when_answered() {
-        let d = scratch("replace");
+    fn copying_a_file_into_its_own_folder_makes_a_copy_without_asking() {
+        let d = scratch("same-file");
         let src = d.join("a.txt");
         std::fs::write(&src, b"new").unwrap();
+        let asked = Arc::new(AtomicUsize::new(0));
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, asking(asked.clone())).unwrap());
+        assert_eq!(asked.load(Ordering::Relaxed), 0, "a same-folder copy must not ask");
+        assert_eq!(read(&src), b"new");
+        assert_eq!(read(&d.join("a copy.txt")), b"new");
+    }
+
+    #[test]
+    fn another_copy_in_the_same_folder_gets_a_number() {
+        let d = scratch("same-file-2");
+        let src = d.join("a.txt");
+        std::fs::write(&src, b"original").unwrap();
+        std::fs::write(d.join("a copy.txt"), b"first").unwrap();
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&d.join("a copy 2.txt")), b"original");
+        assert_eq!(read(&d.join("a copy.txt")), b"first");
+    }
+
+    #[test]
+    fn copying_a_folder_into_its_own_folder_makes_a_copy_folder() {
+        let d = scratch("same-folder");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("one.txt"), b"one").unwrap();
+        std::fs::write(src.join("sub/two.txt"), b"two").unwrap();
+        let asked = Arc::new(AtomicUsize::new(0));
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, asking(asked.clone())).unwrap());
+        assert_eq!(asked.load(Ordering::Relaxed), 0);
+        // The original is untouched and there is no Photos/Photos copy.
+        assert_eq!(read(&src.join("one.txt")), b"one");
+        assert!(!src.join("Photos copy").exists());
+        assert_eq!(read(&d.join("Photos copy/one.txt")), b"one");
+        assert_eq!(read(&d.join("Photos copy/sub/two.txt")), b"two");
+    }
+
+    #[test]
+    fn a_dangling_symlink_can_be_copied() {
+        let d = scratch("dangling");
+        let link = d.join("gone");
+        std::os::unix::fs::symlink("/nonexistent/target", &link).unwrap();
         let dest = d.join("dest");
         std::fs::create_dir(&dest).unwrap();
-        std::fs::write(dest.join("a.txt"), b"old").unwrap();
-        let t = tracker(Some(Box::new(|list| Some(vec![Resolve::Replace; list.len()]))));
-        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, t).unwrap());
-        assert_eq!(std::fs::read(dest.join("a.txt")).unwrap(), b"new");
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&link), &dest, tracker()).unwrap());
+        assert_eq!(std::fs::read_link(dest.join("gone")).unwrap(), PathBuf::from("/nonexistent/target"));
+    }
+
+    #[test]
+    fn a_folder_with_a_dot_keeps_its_whole_name() {
+        let d = scratch("dotted-folder");
+        let src = d.join("Photos.2024");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("one.txt"), b"one").unwrap();
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&d.join("Photos.2024 copy/one.txt")), b"one");
+    }
+
+    #[test]
+    fn a_second_same_folder_folder_copy_gets_a_number() {
+        let d = scratch("same-folder-2");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("one.txt"), b"one").unwrap();
+        std::fs::create_dir_all(d.join("Photos copy")).unwrap();
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&d.join("Photos copy 2/one.txt")), b"one");
+    }
+
+    #[test]
+    fn moving_a_file_into_its_own_folder_changes_nothing() {
+        let d = scratch("same-move-file");
+        let src = d.join("a.txt");
+        std::fs::write(&src, b"new").unwrap();
+        assert!(transfer(Transfer::Move, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&src), b"new");
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn moving_a_folder_into_its_own_folder_keeps_it() {
+        let d = scratch("same-move-folder");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("one.txt"), b"one").unwrap();
+        assert!(transfer(Transfer::Move, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&src.join("one.txt")), b"one");
+        assert!(src.join("sub").is_dir());
+        assert!(!d.join("Photos copy").exists());
+    }
+
+    #[test]
+    fn a_folder_cannot_be_copied_into_itself() {
+        let d = scratch("inside-copy");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        // Into a descendant…
+        let err = transfer(Transfer::Copy, std::slice::from_ref(&src), &src.join("sub"), tracker()).unwrap_err();
+        assert!(err.to_string().contains("kendi içine"), "{err}");
+        assert!(!src.join("sub/Photos").exists());
+        // …or into the folder itself (pasting into the selected folder).
+        let err = transfer(Transfer::Copy, std::slice::from_ref(&src), &src, tracker()).unwrap_err();
+        assert!(err.to_string().contains("kendi içine"), "{err}");
+        assert!(!src.join("Photos").exists());
+    }
+
+    #[test]
+    fn a_folder_cannot_be_moved_into_itself() {
+        let d = scratch("inside-move");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        let err = transfer(Transfer::Move, std::slice::from_ref(&src), &src.join("sub"), tracker()).unwrap_err();
+        assert!(err.to_string().contains("kendi içine"), "{err}");
+        let err = transfer(Transfer::Move, std::slice::from_ref(&src), &src, tracker()).unwrap_err();
+        assert!(err.to_string().contains("kendi içine"), "{err}");
+        assert!(src.join("sub").is_dir());
+    }
+
+    #[test]
+    fn two_sources_with_one_name_are_not_given_one_destination() {
+        let d = scratch("two-sources");
+        let a = d.join("a.txt");
+        std::fs::write(&a, b"one").unwrap();
+        let sub = d.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let b = sub.join("a.txt");
+        std::fs::write(&b, b"two").unwrap();
+        let dest = d.join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        assert!(transfer(Transfer::Copy, &[a, b], &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("a.txt")), b"one");
+        assert_eq!(read(&dest.join("a copy.txt")), b"two");
+    }
+
+    #[test]
+    fn two_same_named_folders_stay_two_folders() {
+        let d = scratch("two-folders");
+        let one = d.join("one/Photos");
+        let two = d.join("two/Photos");
+        std::fs::create_dir_all(&one).unwrap();
+        std::fs::create_dir_all(&two).unwrap();
+        std::fs::write(one.join("one.txt"), b"one").unwrap();
+        std::fs::write(two.join("two.txt"), b"two").unwrap();
+        let dest = d.join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        assert!(transfer(Transfer::Copy, &[one, two], &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("Photos/one.txt")), b"one");
+        assert_eq!(read(&dest.join("Photos copy/two.txt")), b"two");
     }
 
     #[test]
@@ -554,16 +705,16 @@ mod tests {
         std::fs::write(&src, &data).unwrap();
         let dest = d.join("dest");
         std::fs::create_dir(&dest).unwrap();
-        let t = tracker(None);
+        let t = tracker();
         t.verify.store(Verify::Full as u8, Ordering::Relaxed);
         // A limit forces the chunked path (no clone).
         t.limit.store(50 << 20, Ordering::Relaxed);
         assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, t).unwrap());
-        assert_eq!(std::fs::read(dest.join("big.bin")).unwrap(), data);
+        assert_eq!(read(&dest.join("big.bin")), data);
     }
 
     #[test]
-    fn folders_merge_and_new_names_are_kept() {
+    fn folders_merge_and_nested_conflicts_keep_both() {
         let d = scratch("folders");
         let src = d.join("src");
         std::fs::create_dir_all(src.join("sub")).unwrap();
@@ -572,9 +723,38 @@ mod tests {
         let dest = d.join("dest");
         std::fs::create_dir_all(dest.join("src/sub")).unwrap();
         std::fs::write(dest.join("src/sub/x.txt"), b"existing").unwrap();
-        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker(None)).unwrap());
-        assert_eq!(std::fs::read(dest.join("src/sub/x.txt")).unwrap(), b"existing");
-        assert_eq!(std::fs::read(dest.join("src/sub/x (2).txt")).unwrap(), b"one");
-        assert_eq!(std::fs::read(dest.join("src/y.txt")).unwrap(), b"two");
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("src/sub/x.txt")), b"existing");
+        assert_eq!(read(&dest.join("src/sub/x copy.txt")), b"one");
+        assert_eq!(read(&dest.join("src/y.txt")), b"two");
+    }
+
+    #[test]
+    fn moving_a_folder_merges_and_removes_the_source() {
+        let d = scratch("move-folder");
+        let src = d.join("src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(src.join("sub/y.txt"), b"two").unwrap();
+        let dest = d.join("dest");
+        std::fs::create_dir_all(dest.join("src/sub")).unwrap();
+        std::fs::write(dest.join("src/sub/x.txt"), b"existing").unwrap();
+        assert!(transfer(Transfer::Move, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("src/sub/x.txt")), b"existing");
+        assert_eq!(read(&dest.join("src/sub/y.txt")), b"two");
+        assert!(!src.exists(), "the emptied source folder goes");
+    }
+
+    #[test]
+    fn a_folder_named_like_a_file_keeps_both() {
+        let d = scratch("type-clash");
+        let src = d.join("Photos");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("one.txt"), b"one").unwrap();
+        let dest = d.join("dest");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("Photos"), b"a file, not a folder").unwrap();
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("Photos")), b"a file, not a folder");
+        assert_eq!(read(&dest.join("Photos copy/one.txt")), b"one");
     }
 }

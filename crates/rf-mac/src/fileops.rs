@@ -91,14 +91,52 @@ impl Tracker {
     }
 }
 
-/// A name not taken in `dir`: "report.txt", "report (2).txt", …
+/// Whether a name is taken, including by a dangling symlink (which `Path::exists` misses).
+fn taken(p: &Path) -> bool {
+    std::fs::symlink_metadata(p).is_ok()
+}
+
+/// A name not taken in `dir`, the Finder's new-item style: "report.txt", "report 2.txt", …
 pub fn unique_name(dir: &Path, stem: &str, ext: &str) -> PathBuf {
-    let fmt = |n: u32| if n <= 1 { format!("{stem}{ext}") } else { format!("{stem} ({n}){ext}") };
+    let fmt = |n: u32| if n <= 1 { format!("{stem}{ext}") } else { format!("{stem} {n}{ext}") };
     let mut n = 1;
     loop {
         let p = dir.join(fmt(n));
-        if !p.exists() {
+        if !taken(&p) {
             return p;
+        }
+        n += 1;
+    }
+}
+
+/// The Finder's duplicate name for a file: "report copy.txt", then "report copy 2.txt".
+pub fn duplicate_name(dir: &Path, name: &str) -> PathBuf {
+    duplicate_name_in(dir, name, false)
+}
+
+/// [`duplicate_name`] for an item that may be a folder. A folder's dots are part of its name,
+/// so "Photos.2024" becomes "Photos.2024 copy", not "Photos copy.2024".
+pub fn duplicate_name_in(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
+    duplicate_name_avoiding(dir, name, is_dir, &std::collections::HashSet::new())
+}
+
+/// [`duplicate_name_in`] that also avoids names already planned by the same operation (two
+/// sources with one name pasted together must not be given the same destination).
+pub fn duplicate_name_avoiding(dir: &Path, name: &str, is_dir: bool, avoid: &std::collections::HashSet<PathBuf>) -> PathBuf {
+    let p = Path::new(name);
+    let (stem, ext) = if is_dir {
+        (name.to_string(), String::new())
+    } else {
+        let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| name.to_string());
+        let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        (stem, ext)
+    };
+    let mut n = 1;
+    loop {
+        let candidate = if n == 1 { format!("{stem} copy{ext}") } else { format!("{stem} copy {n}{ext}") };
+        let candidate = dir.join(candidate);
+        if !taken(&candidate) && !avoid.contains(&candidate) {
+            return candidate;
         }
         n += 1;
     }
@@ -111,7 +149,7 @@ pub fn rename(path: &Path, new_name: &str) -> anyhow::Result<bool> {
         return Ok(false);
     }
     let to = parent.join(new_name);
-    if to.exists() {
+    if taken(&to) {
         anyhow::bail!("Bu adda bir öğe zaten var");
     }
     std::fs::rename(path, &to)?;
@@ -122,7 +160,7 @@ pub fn rename(path: &Path, new_name: &str) -> anyhow::Result<bool> {
 /// exposed by std; the check-then-rename is the same guarantee the Windows version has for
 /// one process).
 pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    if to.exists() {
+    if taken(to) {
         return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "exists"));
     }
     std::fs::rename(from, to)
@@ -133,10 +171,8 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path) -> anyhow:
     for src in sources {
         let name = src.file_name().ok_or_else(|| anyhow::anyhow!("ad yok"))?;
         // Never overwrite: a name that exists is kept apart (the tracked path asks the user).
-        let dest = if dest_dir.join(name).exists() {
-            let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "item".into());
-            let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-            unique_name(dest_dir, &stem, &ext)
+        let dest = if taken(&dest_dir.join(name)) {
+            duplicate_name_in(dest_dir, &name.to_string_lossy(), src.is_dir())
         } else {
             dest_dir.join(name)
         };

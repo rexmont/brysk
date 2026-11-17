@@ -226,7 +226,8 @@ Done:
 * `scripts/package-macos.sh` builds a universal (arm64 + x86_64) release, signs the nested
   DirectLook helper and the app with the Developer ID identity (hardened runtime + timestamp),
   creates a DMG, notarises it with the `notarytool` keychain profile and staples it —
-  `dist/Brysk-<version>.dmg`. `scripts/build-macos.sh` builds `target/Brysk.app` (Info.plist with the TCC usage
+  `dist/Brysk-<version>.dmg`. `scripts/build-macos.sh` builds `target/Brysk.app` (debug by
+  default, `PROFILE=release` for a release; Info.plist with the TCC usage
   texts, ad-hoc signature) with DirectLook as a **nested agent app** under
   `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices
   registered the helper as `com.rexmont.brysk`, and `open Brysk.app` then activated the
@@ -261,6 +262,13 @@ Next (visible gaps, in order):
   `Uygar Yasar (3Y65F83UKM)`, `source=Notarized Developer ID`).
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions
   written that way are read correctly) — the cause of "folder not found" on every tab.
+* Context menus are drawn inside the window on macOS: the popup-window menu is the Windows 11
+  path, and on macOS each submenu level opened another `NSWindow` that did not take the click
+  (Layout, Sort, Group, New, Git). Copy/move clashes keep both with Finder names
+  (`name copy`, `name copy 2`), same-folder paste completes without a question, a move into the
+  folder an item is already in is a no-op, a folder cannot be copied or moved into itself, and
+  Cut + Paste inside Brysk moves the files (the pasteboard itself has no cut flag). Launches
+  from Finder get Homebrew and the usual macOS tool folders on `PATH`, so `git` works.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
 * NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
   Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).

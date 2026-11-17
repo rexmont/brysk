@@ -1,12 +1,13 @@
 //! The file clipboard, the macOS half of `rf-win::clipboard`.
 //!
 //! Files are put on the general pasteboard as `public.file-url` items, which the Finder and
-//! every other app read; a paste reads them back. macOS has no "cut" marker on the pasteboard
-//! (the Finder moves with ⌘⌥V after a copy), so a cut is a copy here and the app's own move
-//! still does what the user asked inside Brysk.
+//! every other app read; a paste reads them back. macOS has no "cut" marker on the pasteboard,
+//! so a cut from Brysk is remembered here together with the pasteboard's change count: a paste
+//! inside Brysk moves the files, while a copy (or another app's write) is a plain copy.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -18,10 +19,18 @@ use crate::HWND;
 
 static SEQUENCE: AtomicU32 = AtomicU32::new(1);
 
+/// A cut made by this app: the pasteboard change count it belongs to and the paths.
+static CUT: OnceLock<Mutex<Option<(isize, Vec<PathBuf>)>>> = OnceLock::new();
+
+fn cut() -> &'static Mutex<Option<(isize, Vec<PathBuf>)>> {
+    CUT.get_or_init(|| Mutex::new(None))
+}
+
 /// Clears the pasteboard (the owner window is a Windows concept; unused here).
 pub fn clear(_owner: HWND) -> anyhow::Result<()> {
     let pb = NSPasteboard::generalPasteboard();
     pb.clearContents();
+    *cut().lock().unwrap() = None;
     SEQUENCE.fetch_add(1, Ordering::Relaxed);
     Ok(())
 }
@@ -31,9 +40,9 @@ pub fn sequence() -> u32 {
     SEQUENCE.load(Ordering::Relaxed)
 }
 
-/// Puts `paths` on the pasteboard as file URLs. `kind` is kept for the signature: macOS has no
-/// cut state, see the module note.
-pub fn set_files(_owner: HWND, paths: &[PathBuf], _kind: Transfer) -> anyhow::Result<()> {
+/// Puts `paths` on the pasteboard as file URLs. A `Move` is remembered until the pasteboard is
+/// written again, so Brysk's own paste moves the files the user cut.
+pub fn set_files(_owner: HWND, paths: &[PathBuf], kind: Transfer) -> anyhow::Result<()> {
     let pb = NSPasteboard::generalPasteboard();
     pb.clearContents();
     let urls: Vec<Retained<NSURL>> = paths
@@ -46,6 +55,7 @@ pub fn set_files(_owner: HWND, paths: &[PathBuf], _kind: Transfer) -> anyhow::Re
     let ok = pb.writeObjects(&arr);
     SEQUENCE.fetch_add(1, Ordering::Relaxed);
     anyhow::ensure!(ok, "pano yazılamadı");
+    *cut().lock().unwrap() = (kind == Transfer::Move).then(|| (pb.changeCount(), paths.to_vec()));
     Ok(())
 }
 
@@ -60,8 +70,7 @@ pub fn can_paste() -> bool {
     has_files()
 }
 
-/// The files on the pasteboard and whether the Finder marks the operation a move (it does
-/// not; always [`Transfer::Copy`]).
+/// The files on the pasteboard and whether Brysk cut them (a move) or they are a copy.
 pub fn get_files(_owner: HWND) -> anyhow::Result<Option<(Vec<PathBuf>, Transfer)>> {
     let pb = NSPasteboard::generalPasteboard();
     let Some(items) = pb.pasteboardItems() else { return Ok(None) };
@@ -74,7 +83,15 @@ pub fn get_files(_owner: HWND) -> anyhow::Result<Option<(Vec<PathBuf>, Transfer)
             }
         }
     }
-    Ok((!out.is_empty()).then_some((out, Transfer::Copy)))
+    if out.is_empty() {
+        return Ok(None);
+    }
+    // A cut only counts while the pasteboard still holds what this app wrote.
+    let kind = match cut().lock().unwrap().as_ref() {
+        Some((count, paths)) if *count == pb.changeCount() && *paths == out => Transfer::Move,
+        _ => Transfer::Copy,
+    };
+    Ok(Some((out, kind)))
 }
 
 fn file_url_to_path(url: &str) -> Option<PathBuf> {
@@ -106,6 +123,7 @@ pub fn set_image(_owner: HWND, _w: u32, _h: u32, _rgba: &[u8], png: &[u8]) -> an
     pb.clearContents();
     let data = NSData::with_bytes(png);
     let ok = pb.setData_forType(Some(&data), unsafe { NSPasteboardTypePNG });
+    *cut().lock().unwrap() = None;
     SEQUENCE.fetch_add(1, Ordering::Relaxed);
     anyhow::ensure!(ok, "pano yazılamadı");
     Ok(())

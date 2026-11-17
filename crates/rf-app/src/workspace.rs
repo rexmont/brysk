@@ -1717,6 +1717,8 @@ impl Workspace {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         match HasWindowHandle::window_handle(window).ok()?.as_raw() {
             RawWindowHandle::Win32(w) => Some(w.hwnd.get()),
+            // `rf_win::window` on macOS takes the NSView pointer and reaches its NSWindow.
+            RawWindowHandle::AppKit(w) => Some(w.ns_view.as_ptr() as isize),
             _ => None,
         }
     }
@@ -1771,15 +1773,10 @@ impl Workspace {
     }
 
     fn toggle_always_on_top(&mut self, window: &mut Window) {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        if let Ok(h) = window.window_handle() {
-            if let RawWindowHandle::Win32(w) = h.as_raw() {
-                let hwnd = w.hwnd.get();
-                let on = !rf_win::window::is_topmost(hwnd);
-                if let Err(e) = rf_win::window::set_topmost(hwnd, on) {
-                    log::warn!("always on top: {e}");
-                }
-            }
+        let Some(hwnd) = Self::hwnd(window) else { return };
+        let on = !rf_win::window::is_topmost(hwnd);
+        if let Err(e) = rf_win::window::set_topmost(hwnd, on) {
+            log::warn!("always on top: {e}");
         }
     }
 
@@ -2137,7 +2134,7 @@ impl Workspace {
                 .id("new-tab")
                 .flex_shrink_0()
                 .ml_1()
-                .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new(t!("Yeni sekme  (Ctrl+T)")).build(w, cx))
+                .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new(crate::shortcuts::hint(t!("Yeni sekme  (Ctrl+T)"))).build(w, cx))
                 .size(px(28.))
                 .mb(px(2.))
                 .flex()
@@ -2557,7 +2554,7 @@ impl Workspace {
     ) -> AnyElement {
         div()
             .id(id)
-            .tooltip(move |w, cx| gpui_kit::component::tooltip::Tooltip::new(tooltip_text(id)).build(w, cx))
+            .tooltip(move |w, cx| gpui_kit::component::tooltip::Tooltip::new(crate::shortcuts::hint(tooltip_text(id))).build(w, cx))
             .size(px(32.))
             .flex_shrink_0()
             .flex()

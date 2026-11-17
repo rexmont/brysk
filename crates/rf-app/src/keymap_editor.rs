@@ -46,10 +46,10 @@ pub fn pretty(keys: &str) -> String {
     }
     keys.split('-')
         .map(|p| match p {
-            "ctrl" => "Ctrl".to_string(),
-            "alt" => "Alt".to_string(),
+            "ctrl" => if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }.to_string(),
+            "alt" => if cfg!(target_os = "macos") { "Option" } else { "Alt" }.to_string(),
             "shift" => "Shift".to_string(),
-            "win" => "Win".to_string(),
+            "win" | "cmd" => if cfg!(target_os = "macos") { "Cmd" } else { "Win" }.to_string(),
             k if k.chars().count() == 1 => k.to_uppercase(),
             k => {
                 let mut c = k.chars();

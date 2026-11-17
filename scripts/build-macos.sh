@@ -1,8 +1,10 @@
 #!/bin/sh
-# Builds Brysk.app for macOS: a release build, the two binaries, the Info.plist, and an
-# ad-hoc signature (replace `-` with a Developer ID to ship it).
+# Builds Brysk.app for macOS: the two binaries, the Info.plist, and an ad-hoc signature
+# (replace `-` with a Developer ID to ship it). A debug build by default; releases go
+# through scripts/package-macos.sh.
 #
-#   scripts/build-macos.sh            # target/Brysk.app
+#   scripts/build-macos.sh            # debug → target/Brysk.app
+#   PROFILE=release scripts/build-macos.sh
 #   CODESIGN_ID="Developer ID Application: …" scripts/build-macos.sh
 #
 # An ad-hoc build runs from anywhere, but Gatekeeper will not accept a downloaded copy; a
@@ -10,22 +12,27 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-PROFILE="${PROFILE:-release}"
+PROFILE="${PROFILE:-dev}"
+case "$PROFILE" in
+    dev|debug) CARGO_PROFILE=dev; PROFILE_DIR=debug ;;
+    release) CARGO_PROFILE=release; PROFILE_DIR=release ;;
+    *) CARGO_PROFILE="$PROFILE"; PROFILE_DIR="$PROFILE" ;;
+esac
 APP="target/Brysk.app"
-BIN="target/$PROFILE"
+BIN="target/$PROFILE_DIR"
 UNIVERSAL="${UNIVERSAL:-0}"
 
 if [ "$UNIVERSAL" = "1" ]; then
     # One .app for Apple silicon and Intel. Rust needs the second target once:
     #   rustup target add x86_64-apple-darwin
     for target in aarch64-apple-darwin x86_64-apple-darwin; do
-        cargo build --profile "$PROFILE" --target "$target" -p rf-app --bin brysk --bin directlook
+        cargo build --profile "$CARGO_PROFILE" --target "$target" -p rf-app --bin brysk --bin directlook
     done
     mkdir -p "$BIN"
-    lipo -create -output "$BIN/brysk" "target/aarch64-apple-darwin/$PROFILE/brysk" "target/x86_64-apple-darwin/$PROFILE/brysk"
-    lipo -create -output "$BIN/directlook" "target/aarch64-apple-darwin/$PROFILE/directlook" "target/x86_64-apple-darwin/$PROFILE/directlook"
+    lipo -create -output "$BIN/brysk" "target/aarch64-apple-darwin/$PROFILE_DIR/brysk" "target/x86_64-apple-darwin/$PROFILE_DIR/brysk"
+    lipo -create -output "$BIN/directlook" "target/aarch64-apple-darwin/$PROFILE_DIR/directlook" "target/x86_64-apple-darwin/$PROFILE_DIR/directlook"
 else
-    cargo build --profile "$PROFILE" -p rf-app --bin brysk --bin directlook
+    cargo build --profile "$CARGO_PROFILE" -p rf-app --bin brysk --bin directlook
 fi
 
 rm -rf "$APP"

@@ -599,7 +599,13 @@ fn quick_search_cards(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement
     let shown: SharedString = if waiting { t!("Tuşlara basın…").into() } else { crate::keymap_editor::pretty(&s.quick_search_keys).into() };
     let keys_desc = match crate::quick_search::problem() {
         Some(rf_win::hotkey::HotkeyError::Taken) if s.quick_search => t!("Bu kısayolu başka bir uygulama kullanıyor (ChatGPT, Gemini, PowerToys…): başka bir kısayol seçin"),
-        Some(rf_win::hotkey::HotkeyError::Invalid) if s.quick_search => t!("Bu kısayol kullanılamıyor: Ctrl, Alt, Shift ya da Win ile bir tuş seçin"),
+        Some(rf_win::hotkey::HotkeyError::Invalid) if s.quick_search => {
+            if cfg!(target_os = "macos") {
+                t!("Bu kısayol kullanılamıyor: Ctrl, Alt, Shift ya da Cmd ile bir tuş seçin")
+            } else {
+                t!("Bu kısayol kullanılamıyor: Ctrl, Alt, Shift ya da Win ile bir tuş seçin")
+            }
+        }
         _ => t!("Değiştirmek için tıklayıp yeni tuşlara basın"),
     };
     let warn = s.quick_search && crate::quick_search::problem().is_some();
@@ -691,7 +697,11 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             p,
             L::CalendarClock,
             t!("Tarih biçimi"),
-            Some(t!("Uygulama: yakın zamanlar \"5 dakika önce\", eskileri Windows'un biçiminde; Sistem: her zaman Windows'un tarih ve saat biçimi; Evrensel: 2026-11-05 13:45")),
+            Some(if cfg!(target_os = "macos") {
+                t!("Uygulama: yakın zamanlar \"5 dakika önce\", eskileri sistemin biçiminde; Sistem: her zaman sistemin tarih ve saat biçimi; Evrensel: 2026-11-05 13:45")
+            } else {
+                t!("Uygulama: yakın zamanlar \"5 dakika önce\", eskileri Windows'un biçiminde; Sistem: her zaman Windows'un tarih ve saat biçimi; Evrensel: 2026-11-05 13:45")
+            }),
             dropdown(
                 "datefmt",
                 p,
@@ -806,6 +816,7 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         },
         cx,
     ));
+    #[cfg(windows)]
     v.push(card(
         p,
         L::Ellipsis,
@@ -929,7 +940,8 @@ fn accent_card(p: &Palette, s: &Settings) -> AnyElement {
             .hover(|d| d.bg(p.pressed))
             .child(label)
     };
-    let mut row = h_flex().flex_wrap().gap_2().items_center().justify_end().child(chip("accent-windows", t!("Windows'un rengi"), current.is_none(), p).on_click(|_, _, cx| settings::update(cx, |s| s.accent_color.clear())));
+    let system = if cfg!(target_os = "macos") { t!("Sistem rengi") } else { t!("Windows'un rengi") };
+    let mut row = h_flex().flex_wrap().gap_2().items_center().justify_end().child(chip("accent-windows", system, current.is_none(), p).on_click(|_, _, cx| settings::update(cx, |s| s.accent_color.clear())));
     for (i, c) in ACCENT_CHOICES.into_iter().enumerate() {
         let on = current == Some(c);
         row = row.child(
@@ -967,7 +979,11 @@ fn accent_card(p: &Palette, s: &Settings) -> AnyElement {
         p,
         L::Palette,
         t!("Vurgu rengi"),
-        Some(t!("Düğmelerin, seçimin ve vurguların rengi: Windows'unki, hazır renklerden biri ya da kendi yazdığınız renk.")),
+        Some(if cfg!(target_os = "macos") {
+            t!("Düğmelerin, seçimin ve vurguların rengi: sistem rengi, hazır renklerden biri ya da kendi yazdığınız renk.")
+        } else {
+            t!("Düğmelerin, seçimin ve vurguların rengi: Windows'unki, hazır renklerden biri ya da kendi yazdığınız renk.")
+        }),
         row.into_any_element(),
     )
 }
@@ -1367,7 +1383,6 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                 |s, v| s.theme = v,
             ),
         ),
-        backdrop_card(p, s),
         accent_card(p, s),
         card(
             p,
@@ -1379,7 +1394,7 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                 p,
                 s.animations,
                 vec![
-                    (AnimPref::System, t!("Windows ayarına uy").into()),
+                    (AnimPref::System, if cfg!(target_os = "macos") { t!("Sistem ayarını kullan") } else { t!("Windows ayarına uy") }.into()),
                     (AnimPref::On, t!("Açık").into()),
                     (AnimPref::Off, t!("Kapalı").into()),
                 ],
@@ -1394,6 +1409,10 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             sw("scrollbar", p, s.show_scrollbar, |s, v| s.show_scrollbar = v),
         ),
     ];
+    // (the material card is Windows 11's Mica/Acrylic; macOS windows are solid)
+    if cfg!(windows) {
+        v.insert(1, backdrop_card(p, s));
+    }
     // HyperGlass look, right under the backdrop card (index 1) while Glass is the material
     if s.backdrop_in_use() == BackdropPref::Glass || crate::glass::forced() {
         v.insert(2, hyperglass_card(p, s, cx));
@@ -1880,6 +1899,7 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         Some(t!("Bir arşiv yeni bir klasöre çıkarılınca o klasör yeni sekmede açılır")),
         sw("open-extracted", p, s.open_after_extract, |s, v| s.open_after_extract = v),
     ));
+    #[cfg(windows)]
     v.push(card(
         p,
         L::Search,
@@ -2307,6 +2327,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     if !enabled {
         return v;
     }
+    #[cfg(windows)]
     v.push(card(
         p,
         L::Monitor,
@@ -2325,6 +2346,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             }
         }),
     ));
+    #[cfg(windows)]
     if l.look_system_wide && !l.look_ignore_quicklook && crate::look::system::quicklook_running() {
         v.push(card(
             p,
@@ -2340,6 +2362,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     let _ = cx;
     v.extend([
         section(p, t!("Pencere")),
+        #[cfg(windows)]
         card(
             p,
             L::Layers,
@@ -2359,6 +2382,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             ),
         ),
         card(p, L::PictureInPicture, t!("Her zaman üstte"), None, lsw("look-top", p, l.look_topmost, |s, v| s.look_topmost = v)),
+        #[cfg(windows)]
         card(p, L::PanelBottom, t!("Görev çubuğunda göster"), None, lsw("look-taskbar", p, l.look_show_in_taskbar, |s, v| s.look_show_in_taskbar = v)),
         card(
             p,
@@ -2509,12 +2533,16 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
         hybrid::switch_count(),
         t!("geçiş")
     );
+    #[cfg(windows)]
     let dfm_on = crate::DEFAULT_FM.load(std::sync::atomic::Ordering::Relaxed);
+    #[cfg(windows)]
     let dialogs_on = crate::FILE_DIALOGS.load(std::sync::atomic::Ordering::Relaxed);
     // (only looks: the copy is made when the switch is turned on)
+    #[cfg(windows)]
     let has_dll = std::env::current_exe().is_ok_and(|e| e.with_file_name(rf_win::dialog_reg::DLL_NAME).exists());
     // while Brysk is the default file manager: archives can be given to it too (only the
     // user can pick the default app, in Windows' own page)
+    #[cfg(windows)]
     let archives = dfm_on.then(|| {
         card(
             p,
@@ -2539,6 +2567,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
                 });
             }
         }),
+        #[cfg(windows)]
         card(
             p,
             L::Power,
@@ -2557,7 +2586,11 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::PanelBottom,
             t!("Pencere kapatılınca arka planda çalışmaya devam et"),
-            Some(t!("Bildirim alanında bir simge kalır; yeni pencere anında açılır")),
+            Some(if cfg!(target_os = "macos") {
+                t!("Menü çubuğunda bir simge kalır; yeni pencere anında açılır")
+            } else {
+                t!("Bildirim alanında bir simge kalır; yeni pencere anında açılır")
+            }),
             sw("background", p, s.run_in_background, |s, v| s.run_in_background = v),
         ),
         card(
@@ -2585,6 +2618,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             ),
         ),
         section(p, t!("Performans")),
+        #[cfg(windows)]
         card(
             p,
             L::Zap,
@@ -2645,7 +2679,9 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             ))
             .child(div().pl(px(56.)).pr_4().pb_3().text_xs().text_color(p.text_tertiary).child(live))
             .into_any_element(),
+        #[cfg(windows)]
         section(p, t!("Deneysel")),
+        #[cfg(windows)]
         card(
             p,
             L::AppWindow,
@@ -2665,8 +2701,10 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             }),
         ),
     ];
+    #[cfg(windows)]
     out.extend(archives);
     // other apps' Open / Save / folder dialogs show Brysk (needs rustyfiles_dialog.dll)
+    #[cfg(windows)]
     out.push(card(
         p,
         L::FolderOpen,
@@ -2880,7 +2918,9 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
         link_row(p, "open-log", L::FolderOpen, t!("Kayıt ve ayar klasörünü aç"), settings::app_dir().map(|d| d.display().to_string()).as_deref(), |_, _| {
             if let Some(d) = settings::app_dir() {
                 std::thread::spawn(move || {
-                    let _ = std::process::Command::new("explorer.exe").arg(d).spawn();
+                    if let Err(e) = rf_win::shell::open(&d) {
+                        log::warn!("open settings folder: {e:#}");
+                    }
                 });
             }
         }),

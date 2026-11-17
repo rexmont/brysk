@@ -223,8 +223,10 @@ pub fn show(menu: Menu, pos: Point<Pixels>, window: &mut Window, cx: &mut App) -
     });
 
     // Acrylic popups (Windows 11); RF_INWINDOW_MENU=1 or a failure falls back to drawing the
-    // menu inside the window.
-    if std::env::var_os("RF_INWINDOW_MENU").is_none() {
+    // menu inside the window. On macOS every menu level would be another NSWindow and the
+    // submenus (Layout, New, Git…) do not take the click, so the in-window menu is used there.
+    let popups = cfg!(not(target_os = "macos")) && std::env::var_os("RF_INWINDOW_MENU").is_none();
+    if popups {
         let anchor = window.bounds().origin + pos;
         let area = window.display(cx).map(|d| d.bounds()).unwrap_or_else(|| window.bounds());
         let display = crate::theme::popup_display(window, cx);
@@ -776,7 +778,7 @@ impl MenuView {
         let mut row = h_flex().h(px(QUICK_H - 1.)).px_1().gap_1().items_center();
         for (i, q) in self.quick.iter().enumerate() {
             let run = q.run.clone();
-            let tip = q.tip.clone();
+            let tip = SharedString::from(crate::shortcuts::hint(&q.tip));
             row = row.child(
                 div()
                     .id(("mq", i))
@@ -891,6 +893,9 @@ fn placeholder(text: &str) -> Item {
 }
 
 fn row_content(label: SharedString, icon: MenuIcon, hint: Option<SharedString>, sub: bool, enabled: bool, tick: liquid::TickSlot, p: &Palette) -> AnyElement {
+    // Menus are written with the Explorer keys; on macOS the same rows show Command/Option.
+    let label = SharedString::from(crate::shortcuts::hint(&label));
+    let hint = hint.map(|h| SharedString::from(crate::shortcuts::hint(&h)));
     let icon_el: AnyElement = match icon {
         MenuIcon::None => div().into_any_element(),
         MenuIcon::Lucide(l) => Icon::new(l).size(px(16.)).into_any_element(),

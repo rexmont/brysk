@@ -128,7 +128,7 @@ mod tests {
         let cmd = resolve("cmd").expect("cmd.exe is in System32");
         assert!(cmd.to_string_lossy().to_lowercase().ends_with(r"\cmd.exe"));
         assert_eq!(resolve("cmd"), Some(cmd), "the remembered answer is the same");
-        assert_eq!(resolve("no-such-program-rustyfiles-test"), None);
+        assert_eq!(resolve("no-such-program-Brysk-test"), None);
         assert!(resolve("services.msc").is_some_and(|p| p.to_string_lossy().to_lowercase().ends_with(r"\services.msc")));
     }
 }

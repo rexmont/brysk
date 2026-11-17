@@ -2038,8 +2038,8 @@ fn panel(ops: &Entity<Ops>, p: &Palette, cx: &App) -> Div {
 fn update_row(p: &Palette) -> Option<AnyElement> {
     use crate::installer::State;
     let (title, detail, pct, ready) = match crate::installer::state() {
-        State::Downloading(v, pct) => (t!("rustyfiles {v} indiriliyor").replace("{v}", &v), format!("%{pct}"), Some(pct), false),
-        State::Ready(v) => (t!("rustyfiles {v} hazır").replace("{v}", &v), t!("Yeniden başlatınca kurulur").to_string(), None, true),
+        State::Downloading(v, pct) => (t!("Brysk {v} indiriliyor").replace("{v}", &v), format!("%{pct}"), Some(pct), false),
+        State::Ready(v) => (t!("Brysk {v} hazır").replace("{v}", &v), t!("Yeniden başlatınca kurulur").to_string(), None, true),
         _ => return None,
     };
     Some(
@@ -2108,9 +2108,9 @@ pub fn update_toast(p: &Palette, picker: bool) -> Option<AnyElement> {
     let important = crate::installer::is_important(&v);
     let (edge, sign) = if important { (p.danger, L::TriangleAlert) } else { (p.accent, L::RefreshCw) };
     let (title, line) = if important {
-        (t!("Önemli güncelleme: rustyfiles {v}").replace("{v}", &v), t!("Önemli düzeltmeler içeriyor. Şimdi yeniden başlatın.").to_string())
+        (t!("Önemli güncelleme: Brysk {v}").replace("{v}", &v), t!("Önemli düzeltmeler içeriyor. Şimdi yeniden başlatın.").to_string())
     } else {
-        (t!("rustyfiles {v} hazır").replace("{v}", &v), t!("Yeniden başlatınca kurulur").to_string())
+        (t!("Brysk {v} hazır").replace("{v}", &v), t!("Yeniden başlatınca kurulur").to_string())
     };
     Some(
         div()

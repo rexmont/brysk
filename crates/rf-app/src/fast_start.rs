@@ -44,7 +44,7 @@ fn remembered() -> Option<u32> {
 /// none yet opens on the card.
 ///
 /// ONLY for the file manager's own process with its one window (`main_window`). WHY (0.8.6, found on the owner's PC the morning
-/// after: "rustyfiles kendisi açılmadı, ben açınca da böyle kaldı ... dock vs. gelmedi"): the dock process asked for it too. The
+/// after: "Brysk kendisi açılmadı, ben açınca da böyle kaldı ... dock vs. gelmedi"): the dock process asked for it too. The
 /// dock has several windows (its islands and panels); the switch to the card's device went through for four of its six windows
 /// ("new GPU device ready" six times, "new swap chain committed" four times in its log), the islands drew nothing, two empty panels
 /// stood in the middle of the screen, and with Explorer's taskbar hidden by the dock there was no taskbar at all. The fast start

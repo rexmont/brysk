@@ -45,7 +45,7 @@ fn trace_sink() -> Option<&'static PathBuf> {
     static SINK: OnceLock<Option<PathBuf>> = OnceLock::new();
     SINK.get_or_init(|| {
         let v = std::env::var_os("RUSTYFILES_TRACE_HANDOVER").filter(|v| !v.is_empty())?;
-        Some(if v == "1" { std::env::temp_dir().join("rustyfiles-handover.log") } else { v.into() })
+        Some(if v == "1" { std::env::temp_dir().join("Brysk-handover.log") } else { v.into() })
     })
     .as_ref()
 }

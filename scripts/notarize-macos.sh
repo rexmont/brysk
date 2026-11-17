@@ -1,5 +1,5 @@
 #!/bin/sh
-# Signs with a Developer ID and notarises a built rustyfiles.app.
+# Signs with a Developer ID and notarises a built Brysk.app.
 #
 #   CODESIGN_ID="Developer ID Application: Your Name (TEAMID)" \
 #   APPLE_ID="you@example.com" TEAM_ID="TEAMID" APP_PASSWORD="xxxx-xxxx-xxxx-xxxx" \
@@ -13,8 +13,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-APP="target/rustyfiles.app"
-ZIP="target/rustyfiles-notarize.zip"
+APP="target/Brysk.app"
+ZIP="target/Brysk-notarize.zip"
 : "${CODESIGN_ID:?set CODESIGN_ID to a Developer ID Application identity}"
 : "${APPLE_ID:?set APPLE_ID}"
 : "${TEAM_ID:?set TEAM_ID}"

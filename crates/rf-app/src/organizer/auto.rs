@@ -134,7 +134,7 @@ pub fn sync(cx: &mut App) {
     for (id, name) in missing {
         if !TOLD.lock().unwrap().contains(&id) {
             TOLD.lock().unwrap().push(id);
-            let msg = format!("«{name}»: {}", t!("Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da rustyfiles'ı yeniden başlatın."));
+            let msg = format!("«{name}»: {}", t!("Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da Brysk'ı yeniden başlatın."));
             log::warn!("organizer: {msg}");
             crate::status_center::start(cx, t!("Dosya düzenleyici").to_string(), move |_| anyhow::bail!("{msg}"));
         }

@@ -1141,15 +1141,15 @@
  },
  {
   "id": "e67eea17",
-  "key": "Klasörler ve Win+E rustyfiles ile açılır. Önce scripts\\install.ps1 ile kurun (şu an derleme klasöründen çalışıyor).",
-  "tr": "Klasörler ve Win+E rustyfiles ile açılır. Önce scripts\\install.ps1 ile kurun (şu an derleme klasöründen çalışıyor).",
-  "en": "Folders and Win+E open in rustyfiles. Install it first with scripts\\install.ps1 (currently running from the build folder)."
+  "key": "Klasörler ve Win+E Brysk ile açılır. Önce scripts\\install.ps1 ile kurun (şu an derleme klasöründen çalışıyor).",
+  "tr": "Klasörler ve Win+E Brysk ile açılır. Önce scripts\\install.ps1 ile kurun (şu an derleme klasöründen çalışıyor).",
+  "en": "Folders and Win+E open in Brysk. Install it first with scripts\\install.ps1 (currently running from the build folder)."
  },
  {
   "id": "86ffdbca",
-  "key": "Klasörler ve Win+E rustyfiles ile açılır. Yalnızca bu kullanıcı için, istediğiniz an geri alınır.",
-  "tr": "Klasörler ve Win+E rustyfiles ile açılır. Yalnızca bu kullanıcı için, istediğiniz an geri alınır.",
-  "en": "Folders and Win+E open in rustyfiles. Applies to this user only and can be reverted at any time."
+  "key": "Klasörler ve Win+E Brysk ile açılır. Yalnızca bu kullanıcı için, istediğiniz an geri alınır.",
+  "tr": "Klasörler ve Win+E Brysk ile açılır. Yalnızca bu kullanıcı için, istediğiniz an geri alınır.",
+  "en": "Folders and Win+E open in Brysk. Applies to this user only and can be reverted at any time."
  },
  {
   "id": "e733698e",
@@ -1255,15 +1255,15 @@
  },
  {
   "id": "ca7298dc",
-  "key": "Arşivleri rustyfiles ile aç",
-  "tr": "Arşivleri rustyfiles ile aç",
-  "en": "Open archives with rustyfiles"
+  "key": "Arşivleri Brysk ile aç",
+  "tr": "Arşivleri Brysk ile aç",
+  "en": "Open archives with Brysk"
  },
  {
   "id": "ea38eca8",
-  "key": "Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada rustyfiles'ı varsayılan yapın.",
-  "tr": "Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada rustyfiles'ı varsayılan yapın.",
-  "en": "The default app for zip, 7z, rar and tar is chosen in Windows. Make rustyfiles the default on the page that opens."
+  "key": "Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada Brysk'ı varsayılan yapın.",
+  "tr": "Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada Brysk'ı varsayılan yapın.",
+  "en": "The default app for zip, 7z, rar and tar is chosen in Windows. Make Brysk the default on the page that opens."
  },
  {
   "id": "819bdc03",
@@ -2491,15 +2491,15 @@
  },
  {
   "id": "2220b7a5",
-  "key": "rustyfiles {v} indiriliyor",
-  "tr": "rustyfiles {v} indiriliyor",
-  "en": "Downloading rustyfiles {v}"
+  "key": "Brysk {v} indiriliyor",
+  "tr": "Brysk {v} indiriliyor",
+  "en": "Downloading Brysk {v}"
  },
  {
   "id": "7daa795d",
-  "key": "rustyfiles {v} hazır",
-  "tr": "rustyfiles {v} hazır",
-  "en": "rustyfiles {v} is ready"
+  "key": "Brysk {v} hazır",
+  "tr": "Brysk {v} hazır",
+  "en": "Brysk {v} is ready"
  },
  {
   "id": "099cc52a",
@@ -2821,27 +2821,27 @@
  },
  {
   "id": "cf1e0c2e",
-  "key": "rustyfiles bilgisayarımda 100.000 dosyalık klasörü {ours} sürede açtı, Dosya Gezgini {theirs}.",
-  "tr": "rustyfiles bilgisayarımda 100.000 dosyalık klasörü {ours} sürede açtı, Dosya Gezgini {theirs}.",
-  "en": "rustyfiles opened a 100,000-file folder on my PC in {ours}. File Explorer took {theirs}."
+  "key": "Brysk bilgisayarımda 100.000 dosyalık klasörü {ours} sürede açtı, Dosya Gezgini {theirs}.",
+  "tr": "Brysk bilgisayarımda 100.000 dosyalık klasörü {ours} sürede açtı, Dosya Gezgini {theirs}.",
+  "en": "Brysk opened a 100,000-file folder on my PC in {ours}. File Explorer took {theirs}."
  },
  {
   "id": "f8fbf8fa",
-  "key": "rustyfiles bu bilgisayarda büyük klasörü Dosya Gezgini'nden {x} hızlı açtı.",
-  "tr": "rustyfiles bu bilgisayarda büyük klasörü Dosya Gezgini'nden {x} hızlı açtı.",
-  "en": "On this PC, rustyfiles opened the big folder {x} faster than File Explorer."
+  "key": "Brysk bu bilgisayarda büyük klasörü Dosya Gezgini'nden {x} hızlı açtı.",
+  "tr": "Brysk bu bilgisayarda büyük klasörü Dosya Gezgini'nden {x} hızlı açtı.",
+  "en": "On this PC, Brysk opened the big folder {x} faster than File Explorer."
  },
  {
   "id": "cee01668",
-  "key": "rustyfiles motorları ve Windows",
-  "tr": "rustyfiles motorları ve Windows",
-  "en": "rustyfiles' engines and Windows'"
+  "key": "Brysk motorları ve Windows",
+  "tr": "Brysk motorları ve Windows",
+  "en": "Brysk' engines and Windows'"
  },
  {
   "id": "8fcddc58",
-  "key": "rustyfiles: Windows için hızlı, ücretsiz ve açık kaynak dosya yöneticisi.",
-  "tr": "rustyfiles: Windows için hızlı, ücretsiz ve açık kaynak dosya yöneticisi.",
-  "en": "rustyfiles: a fast, free and open-source file manager for Windows."
+  "key": "Brysk: Windows için hızlı, ücretsiz ve açık kaynak dosya yöneticisi.",
+  "tr": "Brysk: Windows için hızlı, ücretsiz ve açık kaynak dosya yöneticisi.",
+  "en": "Brysk: a fast, free and open-source file manager for Windows."
  },
  {
   "id": "74633f5a",
@@ -2947,9 +2947,9 @@
  },
  {
   "id": "252ff602",
-  "key": "rustyfiles ücretsiz ve tek kişinin emeği. Beğendiysen GitHub'da bir yıldız ver: başkalarının da bulmasına yardım eder.",
-  "tr": "rustyfiles ücretsiz ve tek kişinin emeği. Beğendiysen GitHub'da bir yıldız ver: başkalarının da bulmasına yardım eder.",
-  "en": "rustyfiles is free and made by one person. If you like it, star it on GitHub: it helps others find it."
+  "key": "Brysk ücretsiz ve tek kişinin emeği. Beğendiysen GitHub'da bir yıldız ver: başkalarının da bulmasına yardım eder.",
+  "tr": "Brysk ücretsiz ve tek kişinin emeği. Beğendiysen GitHub'da bir yıldız ver: başkalarının da bulmasına yardım eder.",
+  "en": "Brysk is free and made by one person. If you like it, star it on GitHub: it helps others find it."
  },
  {
   "id": "c0ac6ae1",
@@ -3547,9 +3547,9 @@
  },
  {
   "id": "a28aaea5",
-  "key": "rustyfiles güncel.",
-  "tr": "rustyfiles güncel.",
-  "en": "rustyfiles is up to date."
+  "key": "Brysk güncel.",
+  "tr": "Brysk güncel.",
+  "en": "Brysk is up to date."
  },
  {
   "id": "809a61d8",
@@ -3619,9 +3619,9 @@
  },
  {
   "id": "30b905e5",
-  "key": "rustyfiles işinize yarıyorsa başkalarının da bulmasına yardım eder.",
-  "tr": "rustyfiles işinize yarıyorsa başkalarının da bulmasına yardım eder.",
-  "en": "If rustyfiles is useful to you, it helps others find it."
+  "key": "Brysk işinize yarıyorsa başkalarının da bulmasına yardım eder.",
+  "tr": "Brysk işinize yarıyorsa başkalarının da bulmasına yardım eder.",
+  "en": "If Brysk is useful to you, it helps others find it."
  },
  {
   "id": "fb2db8ea",
@@ -3643,9 +3643,9 @@
  },
  {
   "id": "bc982215",
-  "key": "rustyfiles işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.",
-  "tr": "rustyfiles işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.",
-  "en": "Enjoying rustyfiles? A star on GitHub helps others find it."
+  "key": "Brysk işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.",
+  "tr": "Brysk işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.",
+  "en": "Enjoying Brysk? A star on GitHub helps others find it."
  },
  {
   "id": "86fc237f",
@@ -3661,21 +3661,21 @@
  },
  {
   "id": "6685455e",
-  "key": "Aç / Kaydet pencerelerinde rustyfiles",
-  "tr": "Aç / Kaydet pencerelerinde rustyfiles",
-  "en": "rustyfiles in Open / Save dialogs"
+  "key": "Aç / Kaydet pencerelerinde Brysk",
+  "tr": "Aç / Kaydet pencerelerinde Brysk",
+  "en": "Brysk in Open / Save dialogs"
  },
  {
   "id": "17d99477",
-  "key": "Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri rustyfiles ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.",
-  "tr": "Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri rustyfiles ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.",
-  "en": "Apps' open, save and select-folder dialogs open in rustyfiles. Apps that add their own options to the dialog keep Windows' one. Apps already running pick it up once restarted."
+  "key": "Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri Brysk ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.",
+  "tr": "Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri Brysk ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.",
+  "en": "Apps' open, save and select-folder dialogs open in Brysk. Apps that add their own options to the dialog keep Windows' one. Apps already running pick it up once restarted."
  },
  {
   "id": "dc29599a",
-  "key": "rustyfiles_dialog.dll bulunamadı: rustyfiles'ı kurulum betiğiyle kurun.",
-  "tr": "rustyfiles_dialog.dll bulunamadı: rustyfiles'ı kurulum betiğiyle kurun.",
-  "en": "rustyfiles_dialog.dll is missing: install rustyfiles with the install script."
+  "key": "rustyfiles_dialog.dll bulunamadı: Brysk'ı kurulum betiğiyle kurun.",
+  "tr": "rustyfiles_dialog.dll bulunamadı: Brysk'ı kurulum betiğiyle kurun.",
+  "en": "rustyfiles_dialog.dll is missing: install Brysk with the install script."
  },
  {
   "id": "95e66d77",
@@ -4393,9 +4393,9 @@
  },
  {
   "id": "346e8945",
-  "key": "Windows başladığında rustyfiles'ı aç",
-  "tr": "Windows başladığında rustyfiles'ı aç",
-  "en": "Open rustyfiles when Windows starts"
+  "key": "Windows başladığında Brysk'ı aç",
+  "tr": "Windows başladığında Brysk'ı aç",
+  "en": "Open Brysk when Windows starts"
  },
  {
   "id": "e6672c8e",
@@ -4411,9 +4411,9 @@
  },
  {
   "id": "b069751d",
-  "key": "Klasörler ve Win+E rustyfiles ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.",
-  "tr": "Klasörler ve Win+E rustyfiles ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.",
-  "en": "Folders and Win+E open with rustyfiles. Applies to this user only and can be reverted at any time."
+  "key": "Klasörler ve Win+E Brysk ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.",
+  "tr": "Klasörler ve Win+E Brysk ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.",
+  "en": "Folders and Win+E open with Brysk. Applies to this user only and can be reverted at any time."
  },
  {
   "id": "c8f73ffb",
@@ -5023,15 +5023,15 @@
  },
  {
   "id": "05fcfc72",
-  "key": "Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve rustyfiles önde değilse",
-  "tr": "Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve rustyfiles önde değilse",
-  "en": "When copying, moving or compressing took over 10 seconds and rustyfiles isn't in front"
+  "key": "Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve Brysk önde değilse",
+  "tr": "Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve Brysk önde değilse",
+  "en": "When copying, moving or compressing took over 10 seconds and Brysk isn't in front"
  },
  {
   "id": "bcbb332c",
-  "key": "rustyfiles'ı aç",
-  "tr": "rustyfiles'ı aç",
-  "en": "Open rustyfiles"
+  "key": "Brysk'ı aç",
+  "tr": "Brysk'ı aç",
+  "en": "Open Brysk"
  },
  {
   "id": "26a92876",
@@ -5449,9 +5449,9 @@
  },
  {
   "id": "7c98a34c",
-  "key": "rustyfiles'ta aç",
-  "tr": "rustyfiles'ta aç",
-  "en": "Open in rustyfiles"
+  "key": "Brysk'ta aç",
+  "tr": "Brysk'ta aç",
+  "en": "Open in Brysk"
  },
  {
   "id": "69c2d458",
@@ -5509,9 +5509,9 @@
  },
  {
   "id": "effdf47b",
-  "key": "Açılınca rustyfiles arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge)",
-  "tr": "Açılınca rustyfiles arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge)",
-  "en": "When on, rustyfiles keeps running in the background and opens when Windows starts (icon in the notification area)"
+  "key": "Açılınca Brysk arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge)",
+  "tr": "Açılınca Brysk arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge)",
+  "en": "When on, Brysk keeps running in the background and opens when Windows starts (icon in the notification area)"
  },
  {
   "id": "38e53d30",
@@ -5665,15 +5665,15 @@
  },
  {
   "id": "1a86cf38",
-  "key": "Boşluk ile önizleme. Ayrı bir program olarak çalışır: rustyfiles'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.",
-  "tr": "Boşluk ile önizleme. Ayrı bir program olarak çalışır: rustyfiles'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.",
-  "en": "Preview with Space. Runs as a separate program: it doesn't slow rustyfiles down, and if one closes the other is unaffected."
+  "key": "Boşluk ile önizleme. Ayrı bir program olarak çalışır: Brysk'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.",
+  "tr": "Boşluk ile önizleme. Ayrı bir program olarak çalışır: Brysk'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.",
+  "en": "Preview with Space. Runs as a separate program: it doesn't slow Brysk down, and if one closes the other is unaffected."
  },
  {
   "id": "8a926ab5",
-  "key": "DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); rustyfiles kapalıyken de",
-  "tr": "DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); rustyfiles kapalıyken de",
-  "en": "DirectLook keeps running in the background and opens when Windows starts (icon in the notification area), even while rustyfiles is closed"
+  "key": "DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); Brysk kapalıyken de",
+  "tr": "DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); Brysk kapalıyken de",
+  "en": "DirectLook keeps running in the background and opens when Windows starts (icon in the notification area), even while Brysk is closed"
  },
  {
   "id": "9605c848",
@@ -6117,9 +6117,9 @@
  },
  {
   "id": "badacddf",
-  "key": "Uyarılar ve hatalar rustyfiles.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.",
-  "tr": "Uyarılar ve hatalar rustyfiles.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.",
-  "en": "Warnings and errors are written to rustyfiles.log (1 MB at most; a full one becomes .old). It can be attached when reporting a problem."
+  "key": "Uyarılar ve hatalar brysk.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.",
+  "tr": "Uyarılar ve hatalar brysk.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.",
+  "en": "Warnings and errors are written to brysk.log (1 MB at most; a full one becomes .old). It can be attached when reporting a problem."
  },
  {
   "id": "234605c0",
@@ -6393,9 +6393,9 @@
  },
  {
   "id": "c9f93dc1",
-  "key": "Ekranın altında üç yüzen ada: Başlat ve arama, uygulamalar, sistem simgeleri ve saat. Ayrı bir süreç olarak çalışır ve rustyfiles kapansa da açık kalır; Windows görev çubuğuna dokunmaz.",
-  "tr": "Ekranın altında üç yüzen ada: Başlat ve arama, uygulamalar, sistem simgeleri ve saat. Ayrı bir süreç olarak çalışır ve rustyfiles kapansa da açık kalır; Windows görev çubuğuna dokunmaz.",
-  "en": "Three floating islands at the bottom of the screen: Start and search, apps, system icons and the clock. It runs as a process of its own and stays open when rustyfiles closes; the Windows taskbar is left as it is."
+  "key": "Ekranın altında üç yüzen ada: Başlat ve arama, uygulamalar, sistem simgeleri ve saat. Ayrı bir süreç olarak çalışır ve Brysk kapansa da açık kalır; Windows görev çubuğuna dokunmaz.",
+  "tr": "Ekranın altında üç yüzen ada: Başlat ve arama, uygulamalar, sistem simgeleri ve saat. Ayrı bir süreç olarak çalışır ve Brysk kapansa da açık kalır; Windows görev çubuğuna dokunmaz.",
+  "en": "Three floating islands at the bottom of the screen: Start and search, apps, system icons and the clock. It runs as a process of its own and stays open when Brysk closes; the Windows taskbar is left as it is."
  },
  {
   "id": "3fdc09d4",
@@ -6531,9 +6531,9 @@
  },
  {
   "id": "dc8493b0",
-  "key": "Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken rustyfiles pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.",
-  "tr": "Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken rustyfiles pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.",
-  "en": "On this version of Windows, or while the screenshot border permission is off, rustyfiles windows do not appear in screenshots, recordings or screen sharing."
+  "key": "Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken Brysk pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.",
+  "tr": "Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken Brysk pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.",
+  "en": "On this version of Windows, or while the screenshot border permission is off, Brysk windows do not appear in screenshots, recordings or screen sharing."
  },
  {
   "id": "ae35b06a",
@@ -6549,9 +6549,9 @@
  },
  {
   "id": "7aaebf4d",
-  "key": "Dosyaları aramak için rustyfiles'ı arka planda başlat",
-  "tr": "Dosyaları aramak için rustyfiles'ı arka planda başlat",
-  "en": "Start rustyfiles in the background to search files"
+  "key": "Dosyaları aramak için Brysk'ı arka planda başlat",
+  "tr": "Dosyaları aramak için Brysk'ı arka planda başlat",
+  "en": "Start Brysk in the background to search files"
  },
  {
   "id": "4c46d867",
@@ -6711,27 +6711,27 @@
  },
  {
   "id": "c42ebb7e",
-  "key": "rustyfiles Başlat menüsünü kullan",
-  "tr": "rustyfiles Başlat menüsünü kullan",
-  "en": "Use the rustyfiles Start menu"
+  "key": "Brysk Başlat menüsünü kullan",
+  "tr": "Brysk Başlat menüsünü kullan",
+  "en": "Use the Brysk Start menu"
  },
  {
   "id": "d95f3c3f",
-  "key": "Dock'taki logo ve arama alanı Windows'un Başlat menüsü yerine rustyfiles'ın kendi panelini açar. Kapalıyken Windows'un Başlat menüsü ve hızlı arama açılır.",
-  "tr": "Dock'taki logo ve arama alanı Windows'un Başlat menüsü yerine rustyfiles'ın kendi panelini açar. Kapalıyken Windows'un Başlat menüsü ve hızlı arama açılır.",
-  "en": "The dock's logo and search field open the rustyfiles Start panel instead of Windows' Start menu. When off, Windows' Start menu and the quick search open."
+  "key": "Dock'taki logo ve arama alanı Windows'un Başlat menüsü yerine Brysk'ın kendi panelini açar. Kapalıyken Windows'un Başlat menüsü ve hızlı arama açılır.",
+  "tr": "Dock'taki logo ve arama alanı Windows'un Başlat menüsü yerine Brysk'ın kendi panelini açar. Kapalıyken Windows'un Başlat menüsü ve hızlı arama açılır.",
+  "en": "The dock's logo and search field open the Brysk Start panel instead of Windows' Start menu. When off, Windows' Start menu and the quick search open."
  },
  {
   "id": "7dbe8ecc",
-  "key": "rustyfiles denetim merkezini kullan",
-  "tr": "rustyfiles denetim merkezini kullan",
-  "en": "Use the rustyfiles control centre"
+  "key": "Brysk denetim merkezini kullan",
+  "tr": "Brysk denetim merkezini kullan",
+  "en": "Use the Brysk control centre"
  },
  {
   "id": "77b68886",
-  "key": "Dock'taki ağ ve ses simgeleri Windows'un hızlı ayarları yerine rustyfiles'ın panelini açar: ses, ağ, Bluetooth, şimdi çalan, parlaklık. Kapalıyken Windows'un hızlı ayarları açılır.",
-  "tr": "Dock'taki ağ ve ses simgeleri Windows'un hızlı ayarları yerine rustyfiles'ın panelini açar: ses, ağ, Bluetooth, şimdi çalan, parlaklık. Kapalıyken Windows'un hızlı ayarları açılır.",
-  "en": "The dock's network and volume symbols open the rustyfiles panel instead of Windows' quick settings: sound, network, Bluetooth, now playing, brightness. When off, Windows' quick settings open."
+  "key": "Dock'taki ağ ve ses simgeleri Windows'un hızlı ayarları yerine Brysk'ın panelini açar: ses, ağ, Bluetooth, şimdi çalan, parlaklık. Kapalıyken Windows'un hızlı ayarları açılır.",
+  "tr": "Dock'taki ağ ve ses simgeleri Windows'un hızlı ayarları yerine Brysk'ın panelini açar: ses, ağ, Bluetooth, şimdi çalan, parlaklık. Kapalıyken Windows'un hızlı ayarları açılır.",
+  "en": "The dock's network and volume symbols open the Brysk panel instead of Windows' quick settings: sound, network, Bluetooth, now playing, brightness. When off, Windows' quick settings open."
  },
  {
   "id": "a839a55a",
@@ -7161,15 +7161,15 @@
  },
  {
   "id": "11bc9f8f",
-  "key": "Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.",
-  "tr": "Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.",
-  "en": "The rules file could not be read or set aside; rules will not be saved. Restart rustyfiles."
+  "key": "Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.",
+  "tr": "Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.",
+  "en": "The rules file could not be read or set aside; rules will not be saved. Restart Brysk."
  },
  {
   "id": "4bd0c988",
-  "key": "Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.",
-  "tr": "Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.",
-  "en": "The rules file cannot be read right now; writing could overwrite it, so rules will not be saved. Restart rustyfiles."
+  "key": "Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.",
+  "tr": "Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.",
+  "en": "The rules file cannot be read right now; writing could overwrite it, so rules will not be saved. Restart Brysk."
  },
  {
   "id": "d5724b8b",
@@ -7389,9 +7389,9 @@
  },
  {
   "id": "9f4ea023",
-  "key": "rustyfiles'ın kendi ayar ve veri klasörü düzenlenemez",
-  "tr": "rustyfiles'ın kendi ayar ve veri klasörü düzenlenemez",
-  "en": "rustyfiles' own settings and data folder cannot be organized"
+  "key": "Brysk'ın kendi ayar ve veri klasörü düzenlenemez",
+  "tr": "Brysk'ın kendi ayar ve veri klasörü düzenlenemez",
+  "en": "Brysk' own settings and data folder cannot be organized"
  },
  {
   "id": "7def4607",
@@ -7629,9 +7629,9 @@
  },
  {
   "id": "ce92e96d",
-  "key": "Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da rustyfiles'ı yeniden başlatın.",
-  "tr": "Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da rustyfiles'ı yeniden başlatın.",
-  "en": "The folder was not found or cannot be opened; the rule is not running by itself. Save the rule once the folder is back, or restart rustyfiles."
+  "key": "Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da Brysk'ı yeniden başlatın.",
+  "tr": "Klasör bulunamadı ya da açılamadı; kural kendiliğinden çalışmıyor. Klasör yerine gelince kuralı kaydedin ya da Brysk'ı yeniden başlatın.",
+  "en": "The folder was not found or cannot be opened; the rule is not running by itself. Save the rule once the folder is back, or restart Brysk."
  },
  {
   "id": "72318c2f",
@@ -7983,15 +7983,15 @@
  },
  {
   "id": "4b46b10d",
-  "key": "rustyfiles masaüstü (önizleme, deneme klasörü)",
-  "tr": "rustyfiles masaüstü (önizleme, deneme klasörü)",
-  "en": "rustyfiles desktop (preview, scratch folder)"
+  "key": "Brysk masaüstü (önizleme, deneme klasörü)",
+  "tr": "Brysk masaüstü (önizleme, deneme klasörü)",
+  "en": "Brysk desktop (preview, scratch folder)"
  },
  {
   "id": "70095f3c",
-  "key": "rustyfiles masaüstü (önizleme)",
-  "tr": "rustyfiles masaüstü (önizleme)",
-  "en": "rustyfiles desktop (preview)"
+  "key": "Brysk masaüstü (önizleme)",
+  "tr": "Brysk masaüstü (önizleme)",
+  "en": "Brysk desktop (preview)"
  },
  {
   "id": "33e5715f",
@@ -8067,9 +8067,9 @@
  },
  {
   "id": "b28bcc80",
-  "key": "Masaüstünü rustyfiles çizsin (deneysel)",
-  "tr": "Masaüstünü rustyfiles çizsin (deneysel)",
-  "en": "Let rustyfiles draw the desktop (experimental)"
+  "key": "Masaüstünü Brysk çizsin (deneysel)",
+  "tr": "Masaüstünü Brysk çizsin (deneysel)",
+  "en": "Let Brysk draw the desktop (experimental)"
  },
  {
   "id": "f542bb4a",
@@ -8169,27 +8169,27 @@
  },
  {
   "id": "c920928a",
-  "key": "rustyfiles takvimini kullan",
-  "tr": "rustyfiles takvimini kullan",
-  "en": "Use rustyfiles' calendar"
+  "key": "Brysk takvimini kullan",
+  "tr": "Brysk takvimini kullan",
+  "en": "Use Brysk' calendar"
  },
  {
   "id": "2a186a48",
-  "key": "rustyfiles bildirim panelini kullan",
-  "tr": "rustyfiles bildirim panelini kullan",
-  "en": "Use rustyfiles' notification panel"
+  "key": "Brysk bildirim panelini kullan",
+  "tr": "Brysk bildirim panelini kullan",
+  "en": "Use Brysk' notification panel"
  },
  {
   "id": "a6c4a1fe",
-  "key": "Dock'taki saate tıklayınca Windows'un takvimi yerine rustyfiles'ın paneli açılır: ay, hafta numarasız gün tablosu, saniyeli saat. Kapalıyken Windows'un bildirim merkezi ve takvimi açılır.",
-  "tr": "Dock'taki saate tıklayınca Windows'un takvimi yerine rustyfiles'ın paneli açılır: ay, hafta numarasız gün tablosu, saniyeli saat. Kapalıyken Windows'un bildirim merkezi ve takvimi açılır.",
-  "en": "Clicking the clock in the dock opens rustyfiles' own panel instead of Windows' calendar: the month, a grid of days without week numbers, the time with seconds. When off, Windows' notification centre and calendar open."
+  "key": "Dock'taki saate tıklayınca Windows'un takvimi yerine Brysk'ın paneli açılır: ay, hafta numarasız gün tablosu, saniyeli saat. Kapalıyken Windows'un bildirim merkezi ve takvimi açılır.",
+  "tr": "Dock'taki saate tıklayınca Windows'un takvimi yerine Brysk'ın paneli açılır: ay, hafta numarasız gün tablosu, saniyeli saat. Kapalıyken Windows'un bildirim merkezi ve takvimi açılır.",
+  "en": "Clicking the clock in the dock opens Brysk' own panel instead of Windows' calendar: the month, a grid of days without week numbers, the time with seconds. When off, Windows' notification centre and calendar open."
  },
  {
   "id": "ab0406ce",
-  "key": "Dock'taki zile tıklayınca Windows'un bildirim merkezi yerine rustyfiles'ın paneli açılır: diğer uygulamaların bildirimleri uygulamaya göre gruplanır, zilde bildirim varken küçük bir nokta görünür. Kapalıyken Windows'un bildirim merkezi açılır.",
-  "tr": "Dock'taki zile tıklayınca Windows'un bildirim merkezi yerine rustyfiles'ın paneli açılır: diğer uygulamaların bildirimleri uygulamaya göre gruplanır, zilde bildirim varken küçük bir nokta görünür. Kapalıyken Windows'un bildirim merkezi açılır.",
-  "en": "Clicking the bell in the dock opens rustyfiles' own panel instead of Windows' notification centre: other apps' notifications grouped by app, and a small dot on the bell while there are notifications. When off, Windows' notification centre opens."
+  "key": "Dock'taki zile tıklayınca Windows'un bildirim merkezi yerine Brysk'ın paneli açılır: diğer uygulamaların bildirimleri uygulamaya göre gruplanır, zilde bildirim varken küçük bir nokta görünür. Kapalıyken Windows'un bildirim merkezi açılır.",
+  "tr": "Dock'taki zile tıklayınca Windows'un bildirim merkezi yerine Brysk'ın paneli açılır: diğer uygulamaların bildirimleri uygulamaya göre gruplanır, zilde bildirim varken küçük bir nokta görünür. Kapalıyken Windows'un bildirim merkezi açılır.",
+  "en": "Clicking the bell in the dock opens Brysk' own panel instead of Windows' notification centre: other apps' notifications grouped by app, and a small dot on the bell while there are notifications. When off, Windows' notification centre opens."
  },
  {
   "id": "1d7d8489",
@@ -8205,27 +8205,27 @@
  },
  {
   "id": "fa8f574a",
-  "key": "Windows tuşu rustyfiles Başlat'ını açsın (deneysel)",
-  "tr": "Windows tuşu rustyfiles Başlat'ını açsın (deneysel)",
-  "en": "Windows key opens rustyfiles' Start (experimental)"
+  "key": "Windows tuşu Brysk Başlat'ını açsın (deneysel)",
+  "tr": "Windows tuşu Brysk Başlat'ını açsın (deneysel)",
+  "en": "Windows key opens Brysk' Start (experimental)"
  },
  {
   "id": "7eb53d49",
-  "key": "Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Windows tuşlu kısayollara dokunmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "tr": "Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Windows tuşlu kısayollara dokunmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "en": "While on, rustyfiles listens to the keyboard with a system-wide hook and looks only at a tap of the Windows key by itself; it does not store, record or forward any other key. To keep Windows' own Start menu from opening it sends one invisible key that does nothing. Shortcuts that use the Windows key are left alone. If rustyfiles stops or stalls, Windows goes back to its own behaviour."
+  "key": "Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Windows tuşlu kısayollara dokunmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "tr": "Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Windows tuşlu kısayollara dokunmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "en": "While on, Brysk listens to the keyboard with a system-wide hook and looks only at a tap of the Windows key by itself; it does not store, record or forward any other key. To keep Windows' own Start menu from opening it sends one invisible key that does nothing. Shortcuts that use the Windows key are left alone. If Brysk stops or stalls, Windows goes back to its own behaviour."
  },
  {
   "id": "0d6e292d",
-  "key": "Alt+Tab rustyfiles pencere değiştiricisini açsın (deneysel)",
-  "tr": "Alt+Tab rustyfiles pencere değiştiricisini açsın (deneysel)",
-  "en": "Alt+Tab opens rustyfiles' window switcher (experimental)"
+  "key": "Alt+Tab Brysk pencere değiştiricisini açsın (deneysel)",
+  "tr": "Alt+Tab Brysk pencere değiştiricisini açsın (deneysel)",
+  "en": "Alt+Tab opens Brysk' window switcher (experimental)"
  },
  {
   "id": "147cbee7",
-  "key": "Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Alt+Tab'a (ve açıkken Sekme, oklar, Enter, Esc, Alt'ı bırakmaya) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Alt bırakılırken öndeki programın menü çubuğu etkinleşmesin diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. rustyfiles durursa ya da takılırsa Windows'un kendi Alt+Tab'ı geri gelir.",
-  "tr": "Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Alt+Tab'a (ve açıkken Sekme, oklar, Enter, Esc, Alt'ı bırakmaya) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Alt bırakılırken öndeki programın menü çubuğu etkinleşmesin diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. rustyfiles durursa ya da takılırsa Windows'un kendi Alt+Tab'ı geri gelir.",
-  "en": "While on, rustyfiles listens to the keyboard with a system-wide hook and looks only at Alt+Tab (and, while the switcher is open, Tab, the arrows, Enter, Esc and letting go of Alt); it does not store, record or forward any other key. To keep the menu bar of the program in front from activating when Alt is released it sends one invisible key that does nothing. If rustyfiles stops or stalls, Windows' own Alt+Tab comes back."
+  "key": "Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Alt+Tab'a (ve açıkken Sekme, oklar, Enter, Esc, Alt'ı bırakmaya) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Alt bırakılırken öndeki programın menü çubuğu etkinleşmesin diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Brysk durursa ya da takılırsa Windows'un kendi Alt+Tab'ı geri gelir.",
+  "tr": "Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Alt+Tab'a (ve açıkken Sekme, oklar, Enter, Esc, Alt'ı bırakmaya) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Alt bırakılırken öndeki programın menü çubuğu etkinleşmesin diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Brysk durursa ya da takılırsa Windows'un kendi Alt+Tab'ı geri gelir.",
+  "en": "While on, Brysk listens to the keyboard with a system-wide hook and looks only at Alt+Tab (and, while the switcher is open, Tab, the arrows, Enter, Esc and letting go of Alt); it does not store, record or forward any other key. To keep the menu bar of the program in front from activating when Alt is released it sends one invisible key that does nothing. If Brysk stops or stalls, Windows' own Alt+Tab comes back."
  },
  {
   "id": "8395560c",
@@ -8277,9 +8277,9 @@
  },
  {
   "id": "35b8fa67",
-  "key": "Dock'taki bir uygulamanın simgesine sağ tıklayınca rustyfiles'ın kendi menüsü açılır: uygulamanın adı, Dock'a sabitle / Dock'tan kaldır ve pencereleri kapat. Dock'un sabitleme listesi kendisinindir; Windows'un görev çubuğu sabitlerine yazılmaz.",
-  "tr": "Dock'taki bir uygulamanın simgesine sağ tıklayınca rustyfiles'ın kendi menüsü açılır: uygulamanın adı, Dock'a sabitle / Dock'tan kaldır ve pencereleri kapat. Dock'un sabitleme listesi kendisinindir; Windows'un görev çubuğu sabitlerine yazılmaz.",
-  "en": "A right click on an app's icon in the dock opens rustyfiles' own menu: the app's name, pin to / remove from the dock, and close windows. The dock keeps its own list of pins; the Windows taskbar's pins are never written."
+  "key": "Dock'taki bir uygulamanın simgesine sağ tıklayınca Brysk'ın kendi menüsü açılır: uygulamanın adı, Dock'a sabitle / Dock'tan kaldır ve pencereleri kapat. Dock'un sabitleme listesi kendisinindir; Windows'un görev çubuğu sabitlerine yazılmaz.",
+  "tr": "Dock'taki bir uygulamanın simgesine sağ tıklayınca Brysk'ın kendi menüsü açılır: uygulamanın adı, Dock'a sabitle / Dock'tan kaldır ve pencereleri kapat. Dock'un sabitleme listesi kendisinindir; Windows'un görev çubuğu sabitlerine yazılmaz.",
+  "en": "A right click on an app's icon in the dock opens Brysk' own menu: the app's name, pin to / remove from the dock, and close windows. The dock keeps its own list of pins; the Windows taskbar's pins are never written."
  },
  {
   "id": "fca9e5c0",
@@ -8553,15 +8553,15 @@
  },
  {
   "id": "ee680141",
-  "key": "Tepsi simgelerini rustyfiles de toplasın (deneysel)",
-  "tr": "Tepsi simgelerini rustyfiles de toplasın (deneysel)",
-  "en": "Let rustyfiles collect tray icons too (experimental)"
+  "key": "Tepsi simgelerini Brysk de toplasın (deneysel)",
+  "tr": "Tepsi simgelerini Brysk de toplasın (deneysel)",
+  "en": "Let Brysk collect tray icons too (experimental)"
  },
  {
   "id": "4c5c2d8f",
-  "key": "Açıkken rustyfiles, programların bildirim alanına gönderdiği simge iletilerini Explorer'ın görev çubuğu penceresinin önünde bir pencereyle karşılar, kendine kaydeder ve her iletiyi değiştirmeden Explorer'a da iletir; Explorer'ın kendi tepsisi aynen çalışır. Dock simgeleri henüz göstermez. Kapatınca ya da rustyfiles durunca bu pencere kaldırılır ve programlardan simgelerini yeniden eklemeleri istenir. Her ileti Explorer'a da gittiği için Explorer'ın kendi listesi eksiksiz kalır.",
-  "tr": "Açıkken rustyfiles, programların bildirim alanına gönderdiği simge iletilerini Explorer'ın görev çubuğu penceresinin önünde bir pencereyle karşılar, kendine kaydeder ve her iletiyi değiştirmeden Explorer'a da iletir; Explorer'ın kendi tepsisi aynen çalışır. Dock simgeleri henüz göstermez. Kapatınca ya da rustyfiles durunca bu pencere kaldırılır ve programlardan simgelerini yeniden eklemeleri istenir. Her ileti Explorer'a da gittiği için Explorer'ın kendi listesi eksiksiz kalır.",
-  "en": "When on, rustyfiles receives the icon messages that programs send to the notification area with a window placed in front of the Explorer taskbar's window, keeps them, and also passes every message on to Explorer unchanged; Explorer's own tray works exactly as before. The dock does not show the icons yet. When you turn it off, or when rustyfiles stops, this window is removed and programs are asked to add their icons again. Because every message also goes to Explorer, Explorer's own list stays complete."
+  "key": "Açıkken Brysk, programların bildirim alanına gönderdiği simge iletilerini Explorer'ın görev çubuğu penceresinin önünde bir pencereyle karşılar, kendine kaydeder ve her iletiyi değiştirmeden Explorer'a da iletir; Explorer'ın kendi tepsisi aynen çalışır. Dock simgeleri henüz göstermez. Kapatınca ya da Brysk durunca bu pencere kaldırılır ve programlardan simgelerini yeniden eklemeleri istenir. Her ileti Explorer'a da gittiği için Explorer'ın kendi listesi eksiksiz kalır.",
+  "tr": "Açıkken Brysk, programların bildirim alanına gönderdiği simge iletilerini Explorer'ın görev çubuğu penceresinin önünde bir pencereyle karşılar, kendine kaydeder ve her iletiyi değiştirmeden Explorer'a da iletir; Explorer'ın kendi tepsisi aynen çalışır. Dock simgeleri henüz göstermez. Kapatınca ya da Brysk durunca bu pencere kaldırılır ve programlardan simgelerini yeniden eklemeleri istenir. Her ileti Explorer'a da gittiği için Explorer'ın kendi listesi eksiksiz kalır.",
+  "en": "When on, Brysk receives the icon messages that programs send to the notification area with a window placed in front of the Explorer taskbar's window, keeps them, and also passes every message on to Explorer unchanged; Explorer's own tray works exactly as before. The dock does not show the icons yet. When you turn it off, or when Brysk stops, this window is removed and programs are asked to add their icons again. Because every message also goes to Explorer, Explorer's own list stays complete."
  },
  {
   "id": "445037c1",
@@ -8571,9 +8571,9 @@
  },
  {
   "id": "cb8c604c",
-  "key": "Dock çalıştığı sürece Windows'un görev çubuğu ve bildirim alanı simgeleri gizlenir; dock durunca geri gelir. Windows'un hiçbir görev çubuğu ayarı değiştirilmez. rustyfiles beklenmedik biçimde durursa küçük bir yardımcı program (rustyfiles-shellguard.exe) görev çubuğunu bir iki saniye içinde geri getirir; yardımcı çalışmıyorsa görev çubuğu gizlenmez. Windows tuşu ve Windows'un kendi açılır pencereleri (Başlat, hızlı ayarlar, saat) hâlâ gizli görev çubuğunun yerine göre açılır; Windows tuşunun rustyfiles Başlat'ını açması için aşağıdaki Windows tuşu anahtarını da açmanız önerilir.",
-  "tr": "Dock çalıştığı sürece Windows'un görev çubuğu ve bildirim alanı simgeleri gizlenir; dock durunca geri gelir. Windows'un hiçbir görev çubuğu ayarı değiştirilmez. rustyfiles beklenmedik biçimde durursa küçük bir yardımcı program (rustyfiles-shellguard.exe) görev çubuğunu bir iki saniye içinde geri getirir; yardımcı çalışmıyorsa görev çubuğu gizlenmez. Windows tuşu ve Windows'un kendi açılır pencereleri (Başlat, hızlı ayarlar, saat) hâlâ gizli görev çubuğunun yerine göre açılır; Windows tuşunun rustyfiles Başlat'ını açması için aşağıdaki Windows tuşu anahtarını da açmanız önerilir.",
-  "en": "While the dock runs, the Windows taskbar and its notification-area icons are hidden; they come back when the dock stops. None of Windows' taskbar settings is changed. If rustyfiles stops unexpectedly, a small helper program (rustyfiles-shellguard.exe) brings the taskbar back within a second or two; if the helper is not running, the taskbar is not hidden. The Windows key and Windows' own flyouts (Start, quick settings, clock) still open where the hidden taskbar was; to have the Windows key open the rustyfiles Start panel, turn on the Windows key switch below as well."
+  "key": "Dock çalıştığı sürece Windows'un görev çubuğu ve bildirim alanı simgeleri gizlenir; dock durunca geri gelir. Windows'un hiçbir görev çubuğu ayarı değiştirilmez. Brysk beklenmedik biçimde durursa küçük bir yardımcı program (rustyfiles-shellguard.exe) görev çubuğunu bir iki saniye içinde geri getirir; yardımcı çalışmıyorsa görev çubuğu gizlenmez. Windows tuşu ve Windows'un kendi açılır pencereleri (Başlat, hızlı ayarlar, saat) hâlâ gizli görev çubuğunun yerine göre açılır; Windows tuşunun Brysk Başlat'ını açması için aşağıdaki Windows tuşu anahtarını da açmanız önerilir.",
+  "tr": "Dock çalıştığı sürece Windows'un görev çubuğu ve bildirim alanı simgeleri gizlenir; dock durunca geri gelir. Windows'un hiçbir görev çubuğu ayarı değiştirilmez. Brysk beklenmedik biçimde durursa küçük bir yardımcı program (rustyfiles-shellguard.exe) görev çubuğunu bir iki saniye içinde geri getirir; yardımcı çalışmıyorsa görev çubuğu gizlenmez. Windows tuşu ve Windows'un kendi açılır pencereleri (Başlat, hızlı ayarlar, saat) hâlâ gizli görev çubuğunun yerine göre açılır; Windows tuşunun Brysk Başlat'ını açması için aşağıdaki Windows tuşu anahtarını da açmanız önerilir.",
+  "en": "While the dock runs, the Windows taskbar and its notification-area icons are hidden; they come back when the dock stops. None of Windows' taskbar settings is changed. If Brysk stops unexpectedly, a small helper program (rustyfiles-shellguard.exe) brings the taskbar back within a second or two; if the helper is not running, the taskbar is not hidden. The Windows key and Windows' own flyouts (Start, quick settings, clock) still open where the hidden taskbar was; to have the Windows key open the Brysk Start panel, turn on the Windows key switch below as well."
  },
  {
   "id": "7719c317",
@@ -8919,15 +8919,15 @@
  },
  {
   "id": "8db74511",
-  "key": "Masaüstü, Explorer'ın masaüstünün üstüne rustyfiles'ın çizdiği masaüstüdür: duvar kâğıdınız, simgeleriniz, sürükle-bırak ve menüler. Deneyseldir ve varsayılan olarak kapalıdır.",
-  "tr": "Masaüstü, Explorer'ın masaüstünün üstüne rustyfiles'ın çizdiği masaüstüdür: duvar kâğıdınız, simgeleriniz, sürükle-bırak ve menüler. Deneyseldir ve varsayılan olarak kapalıdır.",
-  "en": "The desktop is the one rustyfiles draws over Explorer's: your wallpaper, your icons, drag and drop and menus. It is experimental and off by default."
+  "key": "Masaüstü, Explorer'ın masaüstünün üstüne Brysk'ın çizdiği masaüstüdür: duvar kâğıdınız, simgeleriniz, sürükle-bırak ve menüler. Deneyseldir ve varsayılan olarak kapalıdır.",
+  "tr": "Masaüstü, Explorer'ın masaüstünün üstüne Brysk'ın çizdiği masaüstüdür: duvar kâğıdınız, simgeleriniz, sürükle-bırak ve menüler. Deneyseldir ve varsayılan olarak kapalıdır.",
+  "en": "The desktop is the one Brysk draws over Explorer's: your wallpaper, your icons, drag and drop and menus. It is experimental and off by default."
  },
  {
   "id": "edda4d66",
-  "key": "Windows'un ayarları yalnızca okunur, hiçbir zaman değiştirilmez. \"Windows ayarını izle\" seçiliyken simge Windows'un kendi ayarına göre görünür; \"Göster\" ve \"Gizle\" yalnızca rustyfiles masaüstünü etkiler, Explorer'ın masaüstüne dokunmaz.",
-  "tr": "Windows'un ayarları yalnızca okunur, hiçbir zaman değiştirilmez. \"Windows ayarını izle\" seçiliyken simge Windows'un kendi ayarına göre görünür; \"Göster\" ve \"Gizle\" yalnızca rustyfiles masaüstünü etkiler, Explorer'ın masaüstüne dokunmaz.",
-  "en": "Windows' settings are only read and never changed. With \"Follow Windows' setting\" an icon appears as Windows' own setting says; \"Show\" and \"Hide\" affect only the rustyfiles desktop and leave Explorer's desktop alone."
+  "key": "Windows'un ayarları yalnızca okunur, hiçbir zaman değiştirilmez. \"Windows ayarını izle\" seçiliyken simge Windows'un kendi ayarına göre görünür; \"Göster\" ve \"Gizle\" yalnızca Brysk masaüstünü etkiler, Explorer'ın masaüstüne dokunmaz.",
+  "tr": "Windows'un ayarları yalnızca okunur, hiçbir zaman değiştirilmez. \"Windows ayarını izle\" seçiliyken simge Windows'un kendi ayarına göre görünür; \"Göster\" ve \"Gizle\" yalnızca Brysk masaüstünü etkiler, Explorer'ın masaüstüne dokunmaz.",
+  "en": "Windows' settings are only read and never changed. With \"Follow Windows' setting\" an icon appears as Windows' own setting says; \"Show\" and \"Hide\" affect only the Brysk desktop and leave Explorer's desktop alone."
  },
  {
   "id": "0d0746d6",
@@ -8937,9 +8937,9 @@
  },
  {
   "id": "688c5828",
-  "key": "rustyfiles masaüstü kapalı: seçimleriniz kaydedilir ve masaüstü açılınca uygulanır.",
-  "tr": "rustyfiles masaüstü kapalı: seçimleriniz kaydedilir ve masaüstü açılınca uygulanır.",
-  "en": "The rustyfiles desktop is off: your choices are saved and applied when the desktop is turned on."
+  "key": "Brysk masaüstü kapalı: seçimleriniz kaydedilir ve masaüstü açılınca uygulanır.",
+  "tr": "Brysk masaüstü kapalı: seçimleriniz kaydedilir ve masaüstü açılınca uygulanır.",
+  "en": "The Brysk desktop is off: your choices are saved and applied when the desktop is turned on."
  },
  {
   "id": "71329280",
@@ -8961,9 +8961,9 @@
  },
  {
   "id": "00ab9813",
-  "key": "Çift tıklayınca rustyfiles'ta açılır; sağ tık menüsünde Özellikler (Sistem) vardır.",
-  "tr": "Çift tıklayınca rustyfiles'ta açılır; sağ tık menüsünde Özellikler (Sistem) vardır.",
-  "en": "A double click opens it in rustyfiles; its right-click menu has Properties (System)."
+  "key": "Çift tıklayınca Brysk'ta açılır; sağ tık menüsünde Özellikler (Sistem) vardır.",
+  "tr": "Çift tıklayınca Brysk'ta açılır; sağ tık menüsünde Özellikler (Sistem) vardır.",
+  "en": "A double click opens it in Brysk; its right-click menu has Properties (System)."
  },
  {
   "id": "1c9b0657",
@@ -9315,9 +9315,9 @@
  },
  {
   "id": "ac337139",
-  "key": "Explorer kabuk olarak çalışmıyorsa Windows tuşu hiçbir şey açmaz: Windows tuşunun rustyfiles Başlat'ını açması için bu anahtar GEREKLİDİR (Explorer çalışırken de Windows'un Başlat'ı yerine rustyfiles'ınki açılır). Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya (ve Windows tuşuyla E ya da D'ye) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Explorer kabuk değilken Win+E bir rustyfiles penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "tr": "Explorer kabuk olarak çalışmıyorsa Windows tuşu hiçbir şey açmaz: Windows tuşunun rustyfiles Başlat'ını açması için bu anahtar GEREKLİDİR (Explorer çalışırken de Windows'un Başlat'ı yerine rustyfiles'ınki açılır). Açıkken rustyfiles klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya (ve Windows tuşuyla E ya da D'ye) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Explorer kabuk değilken Win+E bir rustyfiles penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "en": "While Explorer is not the shell, the Windows key opens nothing: this switch is NEEDED for the Windows key to open the rustyfiles Start panel (with Explorer running, rustyfiles' Start opens instead of Windows'). While on, rustyfiles listens to the keyboard with a system-wide hook and looks only at a tap of the Windows key by itself (and at the Windows key with E or D); it does not store, record or forward any other key. To keep Windows' own Start menu from opening it sends one invisible key that does nothing. While Explorer is not the shell, Win+E opens a rustyfiles window and Win+D shows the desktop; other shortcuts that use the Windows key are left alone. If rustyfiles stops or stalls, Windows goes back to its own behaviour."
+  "key": "Explorer kabuk olarak çalışmıyorsa Windows tuşu hiçbir şey açmaz: Windows tuşunun Brysk Başlat'ını açması için bu anahtar GEREKLİDİR (Explorer çalışırken de Windows'un Başlat'ı yerine Brysk'ınki açılır). Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya (ve Windows tuşuyla E ya da D'ye) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Explorer kabuk değilken Win+E bir Brysk penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "tr": "Explorer kabuk olarak çalışmıyorsa Windows tuşu hiçbir şey açmaz: Windows tuşunun Brysk Başlat'ını açması için bu anahtar GEREKLİDİR (Explorer çalışırken de Windows'un Başlat'ı yerine Brysk'ınki açılır). Açıkken Brysk klavyeyi sistem genelinde bir kancayla dinler ve yalnızca Windows tuşuna tek başına basıp bırakmaya (ve Windows tuşuyla E ya da D'ye) bakar; başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderir. Explorer kabuk değilken Win+E bir Brysk penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "en": "While Explorer is not the shell, the Windows key opens nothing: this switch is NEEDED for the Windows key to open the Brysk Start panel (with Explorer running, Brysk' Start opens instead of Windows'). While on, Brysk listens to the keyboard with a system-wide hook and looks only at a tap of the Windows key by itself (and at the Windows key with E or D); it does not store, record or forward any other key. To keep Windows' own Start menu from opening it sends one invisible key that does nothing. While Explorer is not the shell, Win+E opens a Brysk window and Win+D shows the desktop; other shortcuts that use the Windows key are left alone. If Brysk stops or stalls, Windows goes back to its own behaviour."
  },
  {
   "id": "5efd64a5",
@@ -9501,15 +9501,15 @@
  },
  {
   "id": "59a78ffe",
-  "key": "rustyfiles Dock'unu kullan (deneysel)",
-  "tr": "rustyfiles Dock'unu kullan (deneysel)",
-  "en": "Use the rustyfiles Dock (experimental)"
+  "key": "Brysk Dock'unu kullan (deneysel)",
+  "tr": "Brysk Dock'unu kullan (deneysel)",
+  "en": "Use the Brysk Dock (experimental)"
  },
  {
   "id": "54113b92",
-  "key": "Başlat, arama ve denetim merkeziyle ekranın altında üç yüzen ada.\nKendi masaüstümüz (duvar kâğıdı ve simgeler), Explorer'ınkinin üstünde.\nProgramların tepsi simgeleri Dock'ta.\nDock çalıştığı sürece Windows görev çubuğu gizlenir; Dock durunca geri gelir.\nWindows tuşu ve Alt+Tab, Windows'unkini değil rustyfiles'ınkini açar.",
-  "tr": "Başlat, arama ve denetim merkeziyle ekranın altında üç yüzen ada.\nKendi masaüstümüz (duvar kâğıdı ve simgeler), Explorer'ınkinin üstünde.\nProgramların tepsi simgeleri Dock'ta.\nDock çalıştığı sürece Windows görev çubuğu gizlenir; Dock durunca geri gelir.\nWindows tuşu ve Alt+Tab, Windows'unkini değil rustyfiles'ınkini açar.",
-  "en": "Three floating islands at the bottom of the screen, with Start, search and the control centre.\nOur own desktop (wallpaper and icons), over Explorer's.\nThe programs' tray icons are in the Dock.\nWhile the Dock runs, Windows' taskbar is hidden; it comes back when the Dock stops.\nThe Windows key and Alt+Tab open rustyfiles' Start and switcher, not Windows'."
+  "key": "Başlat, arama ve denetim merkeziyle ekranın altında üç yüzen ada.\nKendi masaüstümüz (duvar kâğıdı ve simgeler), Explorer'ınkinin üstünde.\nProgramların tepsi simgeleri Dock'ta.\nDock çalıştığı sürece Windows görev çubuğu gizlenir; Dock durunca geri gelir.\nWindows tuşu ve Alt+Tab, Windows'unkini değil Brysk'ınkini açar.",
+  "tr": "Başlat, arama ve denetim merkeziyle ekranın altında üç yüzen ada.\nKendi masaüstümüz (duvar kâğıdı ve simgeler), Explorer'ınkinin üstünde.\nProgramların tepsi simgeleri Dock'ta.\nDock çalıştığı sürece Windows görev çubuğu gizlenir; Dock durunca geri gelir.\nWindows tuşu ve Alt+Tab, Windows'unkini değil Brysk'ınkini açar.",
+  "en": "Three floating islands at the bottom of the screen, with Start, search and the control centre.\nOur own desktop (wallpaper and icons), over Explorer's.\nThe programs' tray icons are in the Dock.\nWhile the Dock runs, Windows' taskbar is hidden; it comes back when the Dock stops.\nThe Windows key and Alt+Tab open Brysk' Start and switcher, not Windows'."
  },
  {
   "id": "1dc537af",
@@ -9591,9 +9591,9 @@
  },
  {
   "id": "a872ef8b",
-  "key": "Windows tuşu ve Alt+Tab için klavye, sistem genelinde bir kancayla dinlenir; yalnızca Windows tuşuna tek başına basmaya (ve Windows tuşuyla E ya da D'ye) ve Alt+Tab'a (açıkken Sekme, oklar, Enter, Esc ve Alt'ı bırakmaya da) bakılır, başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü ve öndeki programın menü çubuğu açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderilir. Explorer kabuk değilken Win+E bir rustyfiles penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunulmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "tr": "Windows tuşu ve Alt+Tab için klavye, sistem genelinde bir kancayla dinlenir; yalnızca Windows tuşuna tek başına basmaya (ve Windows tuşuyla E ya da D'ye) ve Alt+Tab'a (açıkken Sekme, oklar, Enter, Esc ve Alt'ı bırakmaya da) bakılır, başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü ve öndeki programın menü çubuğu açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderilir. Explorer kabuk değilken Win+E bir rustyfiles penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunulmaz. rustyfiles durursa ya da takılırsa Windows eski davranışına döner.",
-  "en": "For the Windows key and Alt+Tab the keyboard is listened to with a system-wide hook; it only looks at the Windows key pressed alone (and the Windows key with E or D) and at Alt+Tab (and, while the switcher is open, Tab, the arrows, Enter, Esc and releasing Alt), and does not keep, record or forward any other key. So that Windows' own Start menu and the foreground program's menu bar do not open, one invisible key that does nothing is sent. While Explorer is not the shell, Win+E opens a rustyfiles window and Win+D shows the desktop; other shortcuts with the Windows key are left alone. If rustyfiles stops or hangs, Windows goes back to its old behaviour."
+  "key": "Windows tuşu ve Alt+Tab için klavye, sistem genelinde bir kancayla dinlenir; yalnızca Windows tuşuna tek başına basmaya (ve Windows tuşuyla E ya da D'ye) ve Alt+Tab'a (açıkken Sekme, oklar, Enter, Esc ve Alt'ı bırakmaya da) bakılır, başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü ve öndeki programın menü çubuğu açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderilir. Explorer kabuk değilken Win+E bir Brysk penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunulmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "tr": "Windows tuşu ve Alt+Tab için klavye, sistem genelinde bir kancayla dinlenir; yalnızca Windows tuşuna tek başına basmaya (ve Windows tuşuyla E ya da D'ye) ve Alt+Tab'a (açıkken Sekme, oklar, Enter, Esc ve Alt'ı bırakmaya da) bakılır, başka hiçbir tuşu saklamaz, kaydetmez ya da başka yere göndermez. Windows'un kendi Başlat menüsü ve öndeki programın menü çubuğu açılmasın diye tek bir görünmez, hiçbir şey yapmayan tuş gönderilir. Explorer kabuk değilken Win+E bir Brysk penceresi açar, Win+D masaüstünü gösterir; Windows tuşlu diğer kısayollara dokunulmaz. Brysk durursa ya da takılırsa Windows eski davranışına döner.",
+  "en": "For the Windows key and Alt+Tab the keyboard is listened to with a system-wide hook; it only looks at the Windows key pressed alone (and the Windows key with E or D) and at Alt+Tab (and, while the switcher is open, Tab, the arrows, Enter, Esc and releasing Alt), and does not keep, record or forward any other key. So that Windows' own Start menu and the foreground program's menu bar do not open, one invisible key that does nothing is sent. While Explorer is not the shell, Win+E opens a Brysk window and Win+D shows the desktop; other shortcuts with the Windows key are left alone. If Brysk stops or hangs, Windows goes back to its old behaviour."
  },
  {
   "id": "b2489267",
@@ -9717,9 +9717,9 @@
  },
  {
   "id": "2142b9ce",
-  "key": "rustyfiles ayarları",
-  "tr": "rustyfiles ayarları",
-  "en": "rustyfiles settings"
+  "key": "Brysk ayarları",
+  "tr": "Brysk ayarları",
+  "en": "Brysk settings"
  },
  {
   "id": "dbb620a7",
@@ -10140,9 +10140,9 @@
  },
  {
   "id": "633435a8",
-  "key": "rustyfiles arka planda çalışırken gösterilmez: tek simge rustyfiles'ınkidir",
-  "tr": "rustyfiles arka planda çalışırken gösterilmez: tek simge rustyfiles'ınkidir",
-  "en": "Not shown while rustyfiles runs in the background: then rustyfiles' icon is the only one"
+  "key": "Brysk arka planda çalışırken gösterilmez: tek simge Brysk'ınkidir",
+  "tr": "Brysk arka planda çalışırken gösterilmez: tek simge Brysk'ınkidir",
+  "en": "Not shown while Brysk runs in the background: then Brysk' icon is the only one"
  },
  {
   "id": "535c8baa",
@@ -10803,21 +10803,21 @@
  },
  {
   "id": "8978479c",
-  "key": "Merhaba, ben Özer. rustyfiles'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?",
-  "tr": "Merhaba, ben Özer. rustyfiles'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?",
-  "en": "Hi, I'm Özer. I build rustyfiles on my own, in my spare time. If it helps you, would you buy me a coffee?"
+  "key": "Merhaba, ben Özer. Brysk'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?",
+  "tr": "Merhaba, ben Özer. Brysk'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?",
+  "en": "Hi, I'm Özer. I build Brysk on my own, in my spare time. If it helps you, would you buy me a coffee?"
  },
  {
   "id": "8219562e",
-  "key": "rustyfiles'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.",
-  "tr": "rustyfiles'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.",
-  "en": "You've opened rustyfiles {n} times so far, so it must be earning its keep. A coffee helps the next feature arrive a little sooner."
+  "key": "Brysk'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.",
+  "tr": "Brysk'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.",
+  "en": "You've opened Brysk {n} times so far, so it must be earning its keep. A coffee helps the next feature arrive a little sooner."
  },
  {
   "id": "aa48f133",
-  "key": "rustyfiles ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.",
-  "tr": "rustyfiles ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.",
-  "en": "rustyfiles is free, ad-free and open source, and it will stay that way. It lives on small support from people like you."
+  "key": "Brysk ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.",
+  "tr": "Brysk ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.",
+  "en": "Brysk is free, ad-free and open source, and it will stay that way. It lives on small support from people like you."
  },
  {
   "id": "d42a0144",
@@ -10845,9 +10845,9 @@
  },
  {
   "id": "7f657a3a",
-  "key": "rustyfiles'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.",
-  "tr": "rustyfiles'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.",
-  "en": "I build rustyfiles on my own; every bit of support helps me keep going."
+  "key": "Brysk'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.",
+  "tr": "Brysk'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.",
+  "en": "I build Brysk on my own; every bit of support helps me keep going."
  },
  {
   "id": "b96dcc2f",
@@ -10857,33 +10857,33 @@
  },
  {
   "id": "27a4fe13",
-  "key": "Bu bilgisayardaki hız testinde rustyfiles {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.",
-  "tr": "Bu bilgisayardaki hız testinde rustyfiles {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.",
-  "en": "In the speed test on this PC, rustyfiles opened a folder of {files} files {x}× faster than File Explorer."
+  "key": "Bu bilgisayardaki hız testinde Brysk {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.",
+  "tr": "Bu bilgisayardaki hız testinde Brysk {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.",
+  "en": "In the speed test on this PC, Brysk opened a folder of {files} files {x}× faster than File Explorer."
  },
  {
   "id": "73f2f739",
-  "key": "Bu bilgisayardaki hız testinde rustyfiles aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.",
-  "tr": "Bu bilgisayardaki hız testinde rustyfiles aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.",
-  "en": "In the speed test on this PC, showing the same folder, rustyfiles used {x}× less memory than File Explorer, as Task Manager counts it."
+  "key": "Bu bilgisayardaki hız testinde Brysk aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.",
+  "tr": "Bu bilgisayardaki hız testinde Brysk aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.",
+  "en": "In the speed test on this PC, showing the same folder, Brysk used {x}× less memory than File Explorer, as Task Manager counts it."
  },
  {
   "id": "b4fb4c4a",
-  "key": "Bu bilgisayardaki hız testinde rustyfiles dosyaları Windows'tan {x} kat hızlı kopyaladı.",
-  "tr": "Bu bilgisayardaki hız testinde rustyfiles dosyaları Windows'tan {x} kat hızlı kopyaladı.",
-  "en": "In the speed test on this PC, rustyfiles copied files {x}× faster than Windows."
+  "key": "Bu bilgisayardaki hız testinde Brysk dosyaları Windows'tan {x} kat hızlı kopyaladı.",
+  "tr": "Bu bilgisayardaki hız testinde Brysk dosyaları Windows'tan {x} kat hızlı kopyaladı.",
+  "en": "In the speed test on this PC, Brysk copied files {x}× faster than Windows."
  },
  {
   "id": "17ecb2f2",
-  "key": "Bu bilgisayardaki hız testinde rustyfiles bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.",
-  "tr": "Bu bilgisayardaki hız testinde rustyfiles bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.",
-  "en": "In the speed test on this PC, rustyfiles extracted a ZIP archive {x}× faster than Windows."
+  "key": "Bu bilgisayardaki hız testinde Brysk bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.",
+  "tr": "Bu bilgisayardaki hız testinde Brysk bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.",
+  "en": "In the speed test on this PC, Brysk extracted a ZIP archive {x}× faster than Windows."
  },
  {
   "id": "8449c6fa",
-  "key": "Bu bilgisayardaki hız testinde rustyfiles {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.",
-  "tr": "Bu bilgisayardaki hız testinde rustyfiles {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.",
-  "en": "In the speed test on this PC, rustyfiles searched {entries} items by name in {ms} ms."
+  "key": "Bu bilgisayardaki hız testinde Brysk {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.",
+  "tr": "Bu bilgisayardaki hız testinde Brysk {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.",
+  "en": "In the speed test on this PC, Brysk searched {entries} items by name in {ms} ms."
  },
  {
   "id": "dd32fa89",
@@ -11399,9 +11399,9 @@
  },
  {
   "id": "cb4114f9",
-  "key": "Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca rustyfiles uyar, Windows'un varsayılan programları değişmez.",
-  "tr": "Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca rustyfiles uyar, Windows'un varsayılan programları değişmez.",
-  "en": "Make your own list of programs for a file type: the first program in the list opens that type on a double click, and all of them stand at the top of \"Open with\" in the right-click menu. Programs are given by their paths, so a program Windows does not know works too. Only rustyfiles follows these lists; Windows' default programs do not change."
+  "key": "Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, Windows'un varsayılan programları değişmez.",
+  "tr": "Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, Windows'un varsayılan programları değişmez.",
+  "en": "Make your own list of programs for a file type: the first program in the list opens that type on a double click, and all of them stand at the top of \"Open with\" in the right-click menu. Programs are given by their paths, so a program Windows does not know works too. Only Brysk follows these lists; Windows' default programs do not change."
  },
  {
   "id": "f4d44539",
@@ -11599,9 +11599,9 @@
  },
  {
   "id": "b596207c",
-  "key": "Dock çalışırken rustyfiles kendi masaüstünü çizmez: Windows'un masaüstü, simgeleri ve masaüstünü düzenleyen başka programlar olduğu gibi kalır. Açıkken bu sayfadaki diğer seçimler bir şey yapmaz.",
-  "tr": "Dock çalışırken rustyfiles kendi masaüstünü çizmez: Windows'un masaüstü, simgeleri ve masaüstünü düzenleyen başka programlar olduğu gibi kalır. Açıkken bu sayfadaki diğer seçimler bir şey yapmaz.",
-  "en": "While the Dock runs, rustyfiles does not draw its own desktop: Windows' desktop, its icons and any other program that arranges the desktop stay as they are. While this is on, the other choices on this page do nothing."
+  "key": "Dock çalışırken Brysk kendi masaüstünü çizmez: Windows'un masaüstü, simgeleri ve masaüstünü düzenleyen başka programlar olduğu gibi kalır. Açıkken bu sayfadaki diğer seçimler bir şey yapmaz.",
+  "tr": "Dock çalışırken Brysk kendi masaüstünü çizmez: Windows'un masaüstü, simgeleri ve masaüstünü düzenleyen başka programlar olduğu gibi kalır. Açıkken bu sayfadaki diğer seçimler bir şey yapmaz.",
+  "en": "While the Dock runs, Brysk does not draw its own desktop: Windows' desktop, its icons and any other program that arranges the desktop stay as they are. While this is on, the other choices on this page do nothing."
  },
  {
   "id": "e619f52d",

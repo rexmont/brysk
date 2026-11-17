@@ -3,7 +3,7 @@
 //! Files are put on the general pasteboard as `public.file-url` items, which the Finder and
 //! every other app read; a paste reads them back. macOS has no "cut" marker on the pasteboard
 //! (the Finder moves with ⌘⌥V after a copy), so a cut is a copy here and the app's own move
-//! still does what the user asked inside rustyfiles.
+//! still does what the user asked inside Brysk.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};

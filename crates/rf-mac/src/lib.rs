@@ -1,4 +1,4 @@
-//! rf-mac: the macOS platform layer of rustyfiles.
+//! rf-mac: the macOS platform layer of Brysk.
 //!
 //! `rf-win` re-exports this crate on macOS (its Windows modules are cfg-gated) and is itself
 //! the Windows platform layer, so `rf-app` keeps calling `rf_win::<module>` on both. The modules below mirror

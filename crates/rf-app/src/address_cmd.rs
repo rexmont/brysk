@@ -311,7 +311,7 @@ mod tests {
         // an absolute place that exists
         assert!(matches!(super::resolve_and_run(&root.to_string_lossy(), &root, None), super::Outcome::Go(p) if p == root));
         // neither a place nor a program: nothing is started
-        assert!(matches!(super::resolve_and_run("no-such-thing-rustyfiles", std::path::Path::new("no-such-thing-rustyfiles"), Some(&root)), super::Outcome::Neither));
+        assert!(matches!(super::resolve_and_run("no-such-thing-Brysk", std::path::Path::new("no-such-thing-Brysk"), Some(&root)), super::Outcome::Neither));
         assert!(matches!(super::resolve_and_run("https://example.com", std::path::Path::new("https://example.com"), Some(&root)), super::Outcome::Neither));
         assert!(matches!(super::resolve_and_run(r"Z:\no\such\dir", std::path::Path::new(r"Z:\no\such\dir"), None), super::Outcome::Neither));
         let _ = std::fs::remove_dir_all(&root);

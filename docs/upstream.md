@@ -8,7 +8,7 @@ implementation; on macOS `rf-win` is a façade that re-exports `rf-mac`.
 
 | Remote | URL | What it is |
 | --- | --- | --- |
-| `origin` | `https://github.com/rexmont/rustyfiles` | this fork (push here) |
+| `origin` | `https://github.com/rexmont/brysk` | this fork (push here) |
 | `upstream` | `https://github.com/gelenmedya/rustyfiles` | the original project (read only) |
 
 ## Branches

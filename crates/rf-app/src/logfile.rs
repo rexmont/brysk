@@ -1,6 +1,6 @@
 //! The log file: what the app logs (warnings and errors unless `RUST_LOG` says otherwise) goes
-//! to `rustyfiles.log` in the settings folder as well as to stderr, which a release build has
-//! none of. The file is kept small: at 1 MB it becomes `rustyfiles.log.old` (replacing the
+//! to `brysk.log` in the settings folder as well as to stderr, which a release build has
+//! none of. The file is kept small: at 1 MB it becomes `brysk.log.old` (replacing the
 //! previous one) and a new file starts.
 
 use std::fs::{File, OpenOptions};
@@ -8,14 +8,14 @@ use std::io::Write;
 use std::path::PathBuf;
 
 const MAX_BYTES: u64 = 1 << 20;
-const NAME: &str = "rustyfiles.log";
+const NAME: &str = "brysk.log";
 
 /// Where the log is written (None without a settings folder).
 pub fn path() -> Option<PathBuf> {
     crate::settings::app_dir().map(|d| d.join(NAME))
 }
 
-/// Writes to stderr and to the log file. Lines are appended whole, so several rustyfiles
+/// Writes to stderr and to the log file. Lines are appended whole, so several Brysk
 /// processes can share the file.
 pub struct Tee {
     file: Option<File>,
@@ -101,7 +101,7 @@ mod tests {
         // exactly 1 MB written: the file was put aside, the next line starts a new one
         t.write_all(b"after\n").unwrap();
         t.flush().unwrap();
-        assert_eq!(std::fs::metadata(dir.join("rustyfiles.log.old")).unwrap().len(), MAX_BYTES);
+        assert_eq!(std::fs::metadata(dir.join("brysk.log.old")).unwrap().len(), MAX_BYTES);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "after\n");
         drop(t);
         let _ = std::fs::remove_dir_all(&dir);

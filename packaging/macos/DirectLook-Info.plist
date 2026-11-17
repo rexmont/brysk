@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>directlook</string>
     <key>CFBundleIdentifier</key>
-    <string>com.rustyfiles.directlook</string>
+    <string>com.rexmont.brysk.directlook</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

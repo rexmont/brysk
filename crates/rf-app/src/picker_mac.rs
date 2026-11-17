@@ -1,4 +1,4 @@
-//! Another app's Open/Save dialog being answered by rustyfiles is a Windows DLL feature
+//! Another app's Open/Save dialog being answered by Brysk is a Windows DLL feature
 //! (`rustyfiles_dialog.dll`). The types keep the window code compiling; nothing starts a pick.
 
 use gpui_kit::*;

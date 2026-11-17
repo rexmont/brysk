@@ -1,6 +1,6 @@
-//! Files for the dock's search, from the running rustyfiles.
+//! Files for the dock's search, from the running Brysk.
 //!
-//! The name index (every file name of every drive, tens of MB) is loaded by the main rustyfiles only; the dock process deliberately
+//! The name index (every file name of every drive, tens of MB) is loaded by the main Brysk only; the dock process deliberately
 //! does not load it (`background::DOCK_PROCESS`). When the dock's search needs files it asks the main app over a pipe of its own
 //! (`<instance name>-search`, served by the main app next to its instance pipe), and the answer comes back over the dock's control
 //! pipe (these pipes are one-way, so there are two):
@@ -175,7 +175,7 @@ pub fn app_name() -> String {
     format!("{}-search", rf_win::single_instance::instance_name())
 }
 
-/// Asks the running main rustyfiles for files. False when none answers on its pipe (there is no main app, or one too old to know
+/// Asks the running main Brysk for files. False when none answers on its pipe (there is no main app, or one too old to know
 /// this: the caller says so in the list instead). Blocks for a pipe write at most: a worker thread.
 pub fn ask(r: &Request) -> bool {
     rf_win::single_instance::send_to(&app_name(), &encode_request(r))
@@ -223,7 +223,7 @@ pub fn touch() {
 pub enum Idle {
     /// Still wanted: look again later.
     Waiting,
-    /// A window has been opened in this process: it is an ordinary rustyfiles now and ends the ordinary way.
+    /// A window has been opened in this process: it is an ordinary Brysk now and ends the ordinary way.
     Windowed,
     /// Nobody has asked for files for long enough and there is no window: end the process.
     Over,
@@ -438,7 +438,7 @@ mod tests {
         assert_eq!(idle_verdict(false, 0), Idle::Waiting);
         assert_eq!(idle_verdict(false, IDLE_QUIT_MS - 1), Idle::Waiting);
         assert_eq!(idle_verdict(false, IDLE_QUIT_MS), Idle::Over);
-        // somebody opened a window in it: it is a normal rustyfiles now, however long ago the last search was
+        // somebody opened a window in it: it is a normal Brysk now, however long ago the last search was
         assert_eq!(idle_verdict(true, IDLE_QUIT_MS * 5), Idle::Windowed);
         touch();
         assert!(now_ms().saturating_sub(LAST_ACTIVITY.load(Ordering::Relaxed)) < 5_000);

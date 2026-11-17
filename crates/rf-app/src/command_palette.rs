@@ -37,7 +37,7 @@ fn commands() -> Vec<Cmd> {
         cmd!("Yeni metin belgesi", "", L::FilePlus, NewTextFile),
         cmd!("Yenile", "F5", L::RotateCw, Refresh),
         cmd!("Ağ sürücüsüne bağlan…", "", L::Network, MapNetworkDrive),
-        cmd!("rustyfiles'ı yeniden başlat", "Ctrl+Alt+Shift+R", L::RotateCw, RestartApp),
+        cmd!("Brysk'ı yeniden başlat", "Ctrl+Alt+Shift+R", L::RotateCw, RestartApp),
         cmd!("Oturumu kaydet…", "", L::Save, SaveSession),
         cmd!("Ağ sürücüsü bağlantısını kes…", "", L::Network, DisconnectNetworkDrive),
         cmd!("Geri", "Alt+←", L::ArrowLeft, GoBack),

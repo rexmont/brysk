@@ -339,7 +339,7 @@ pub fn any_main_window(cx: &App) -> bool {
 }
 
 /// A second launch's message that asks for a file to be shown selected in its folder
-/// (`rustyfiles /select,<file>`, like Explorer).
+/// (`Brysk /select,<file>`, like Explorer).
 pub const SELECT_PREFIX: &str = "\u{1}select:";
 
 /// A file to select in the window that just opened its folder ("Show in folder" from another app,
@@ -348,7 +348,7 @@ pub const SELECT_HERE_PREFIX: &str = "\u{1}select-here:";
 
 /// A second launch on a shell folder (a phone, Network…) reaches the running window as this
 /// prefix plus the folder's parsing name (and, in a saved session, a tab and its name).
-pub const SHELL_PREFIX: &str = "rustyfiles-shell:";
+pub const SHELL_PREFIX: &str = "Brysk-shell:";
 
 /// How a tab is kept in the saved session: a folder's path, a search's folder, the Recycle Bin
 /// and shell folders (a phone…) by name; other places come back as Home ("").
@@ -562,7 +562,7 @@ pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
     for (handle, ws) in list.into_iter().rev() {
         let Some(ws) = ws.upgrade() else { continue };
         // an Open/Save picker is another app's dialog: a launch never becomes one of its tabs
-        // (with only a picker open, rustyfiles started from the Start menu opened in it)
+        // (with only a picker open, Brysk started from the Start menu opened in it)
         if ws.read(cx).picker.is_some() {
             continue;
         }
@@ -4099,7 +4099,7 @@ impl Render for Workspace {
                 .text_xs()
                 .text_color(p.text_secondary)
                 .child(Icon::new(L::Star).size(px(12.)).text_color(p.accent))
-                .child(div().flex_1().child(t!("rustyfiles işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.")))
+                .child(div().flex_1().child(t!("Brysk işinize yarıyor mu? GitHub'da bir yıldız, başkalarının da bulmasına yardım eder.")))
                 .child(action("star-yes", t!("Yıldız ver"), true))
                 .child(action("star-no", t!("Bir daha gösterme"), false))
         });
@@ -4149,7 +4149,7 @@ impl Render for Workspace {
                 .child(action("coffee-no", t!("Bir daha gösterme"), 2))
         });
         // Taskbar title follows the active folder.
-        let title = format!("{} — rustyfiles", self.active_tab().read(cx).title(cx));
+        let title = format!("{} — Brysk", self.active_tab().read(cx).title(cx));
         if title != self.last_title {
             window.set_window_title(&title);
             self.last_title = title;

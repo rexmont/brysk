@@ -22,22 +22,22 @@ pub fn quitting() -> bool {
 
 fn labels() -> rf_win::tray::Labels {
     rf_win::tray::Labels {
-        tooltip: "rustyfiles".into(),
-        open: t!("rustyfiles'ı aç").into(),
+        tooltip: "Brysk".into(),
+        open: t!("Brysk'ı aç").into(),
         new_window: t!("Yeni pencere").into(),
         settings: t!("Ayarlar").into(),
         quit: t!("Çıkış").into(),
     }
 }
 
-/// Bu süreç DirectLook: rustyfiles'ın bildirim alanı simgesi gösterilmez (DirectLook'un kendisi var).
+/// Bu süreç DirectLook: Brysk'ın bildirim alanı simgesi gösterilmez (DirectLook'un kendisi var).
 pub static DIRECTLOOK_PROCESS: AtomicBool = AtomicBool::new(false);
 
-/// This process is the dock (`rustyfiles --dock`): a side process like DirectLook, so it owns no tray icon, no name index and no
+/// This process is the dock (`Brysk --dock`): a side process like DirectLook, so it owns no tray icon, no name index and no
 /// hotkey, and does not start or stop the dock itself.
 pub static DOCK_PROCESS: AtomicBool = AtomicBool::new(false);
 
-/// A process that only helps the main rustyfiles (DirectLook, the dock) and must leave the machine-wide things to it.
+/// A process that only helps the main Brysk (DirectLook, the dock) and must leave the machine-wide things to it.
 pub fn side_process() -> bool {
     DIRECTLOOK_PROCESS.load(Ordering::Relaxed) || DOCK_PROCESS.load(Ordering::Relaxed)
 }
@@ -106,7 +106,7 @@ fn on_tray(e: rf_win::tray::TrayEvent, cx: &mut App) {
     }
 }
 
-/// An operation ended: notify when it was long and rustyfiles is not in front.
+/// An operation ended: notify when it was long and Brysk is not in front.
 pub fn op_finished(ops: &Entity<Ops>, id: u64, cx: &mut App) {
     if !cx.global::<crate::settings::Settings>().notify_long_ops {
         return;

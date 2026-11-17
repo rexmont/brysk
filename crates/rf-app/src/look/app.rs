@@ -1,6 +1,6 @@
 //! DirectLook programının girişi: ayrı süreç, kendi tek örnek borusu, kendi bildirim alanı simgesi.
-//! rustyfiles'tan iletiler (`ipc::Msg`) ve isteğe bağlı sistem geneli klavye kancasıyla çalışır.
-//! rustyfiles'ın `settings.toml`'undan yalnız dil ve temayı okur, hiç yazmaz.
+//! Brysk'tan iletiler (`ipc::Msg`) ve isteğe bağlı sistem geneli klavye kancasıyla çalışır.
+//! Brysk'ın `settings.toml`'undan yalnız dil ve temayı okur, hiç yazmaz.
 
 use gpui_kit::*;
 
@@ -8,7 +8,7 @@ use super::config::LookSettings;
 use super::ipc::{Msg, ToApp, app_name};
 use super::{LookManager, ShowOpts};
 
-/// Açılış argümanları: `--msg <ileti>` (rustyfiles), `--look <yol> [top,pin]` (komut satırı),
+/// Açılış argümanları: `--msg <ileti>` (Brysk), `--look <yol> [top,pin]` (komut satırı),
 /// `--background` (Windows'la başlama, ön ısıtma).
 pub fn parse_args(args: &[&str]) -> Msg {
     match args.first().copied() {
@@ -33,7 +33,7 @@ fn tray_labels() -> rf_win::tray::Labels {
     }
 }
 
-/// An arrow key: tells rustyfiles to move its selection by one (see `ToApp::Step`). Nothing happens when rustyfiles is not running
+/// An arrow key: tells Brysk to move its selection by one (see `ToApp::Step`). Nothing happens when Brysk is not running
 /// or the preview was not opened from it: it then has no list to step through.
 pub(crate) fn step(forward: bool) {
     std::thread::spawn(move || {
@@ -41,7 +41,7 @@ pub(crate) fn step(forward: bool) {
     });
 }
 
-/// Ayarlar sayfasını rustyfiles'ta açar (çalışmıyorsa başlatır).
+/// Ayarlar sayfasını Brysk'ta açar (çalışmıyorsa başlatır).
 fn open_settings() {
     std::thread::spawn(|| {
         if rf_win::single_instance::send_to(&rf_win::single_instance::instance_name(), &ToApp::OpenSettings.encode()) {
@@ -53,7 +53,7 @@ fn open_settings() {
     });
 }
 
-/// DirectLook's own icon: when its setting is on and rustyfiles has none (rustyfiles running in
+/// DirectLook's own icon: when its setting is on and Brysk has none (Brysk running in
 /// the background has one, with the settings in its menu): one icon, not two.
 fn tray_wanted(cx: &App) -> bool {
     cx.global::<LookSettings>().look_tray_icon && !cx.global::<crate::settings::Settings>().run_in_background
@@ -86,7 +86,7 @@ fn handle(msg: Msg, cx: &mut App) {
         Msg::Close => LookManager::close(cx),
         Msg::Reload => {
             cx.set_global(LookSettings::load());
-            // rustyfiles' settings too: language, theme, and whether it has a tray icon
+            // Brysk' settings too: language, theme, and whether it has a tray icon
             cx.set_global(crate::settings::Settings::load());
             sync_tray(cx);
         }
@@ -138,7 +138,7 @@ pub fn main() {
     let app = app.with_windowing(gpui_kit::WindowingRequest::Headless);
     app.run(move |cx| {
         gpui_kit::init(cx);
-        // rustyfiles'ın ayarları: yalnız dil, tema, tarih biçimi için okunur, asla yazılmaz
+        // Brysk'ın ayarları: yalnız dil, tema, tarih biçimi için okunur, asla yazılmaz
         cx.set_global(crate::settings::Settings::load());
         if !rf_win::encoding::user_locale_is_turkish() {
             rf_core::textload::set_locale_hint(None);

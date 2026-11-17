@@ -1,6 +1,6 @@
-# Porting rustyfiles to macOS — plan
+# Porting Brysk to macOS — plan
 
-Status: draft for review (M0). Goal: run the *same* rustyfiles interface — the Windows Explorer
+Status: draft for review (M0). Goal: run the *same* Brysk interface — the Windows Explorer
 look: tabs, breadcrumbs, details/grid/columns, Mica-ish chrome, DirectLook, archives — on macOS,
 with macOS/Unix behavior underneath (POSIX paths, APFS volumes, Trash, Quick Look, FSEvents,
 LaunchServices, native dialogs and menus).
@@ -101,7 +101,7 @@ bundle + Sparkle-style updater later), `bench` (Win32 timing harness).
 
 **M0 — scaffold (1–2 days).** `crates/rf-mac` with `[lib] name = "rf_win"`; workspace + macOS
 conditional dep; `gpui-windows-shim`; drop the Windows `[patch]` on macOS; `cargo check -p
-rustyfiles` on macOS gets past dependency resolution. CI job on `macos-14` (`cargo check`).
+Brysk` on macOS gets past dependency resolution. CI job on `macos-14` (`cargo check`).
 
 **M1 — read-only Explorer (1–2 wks).** Main window, tabs, sidebar, breadcrumbs, details/grid/
 columns, folder tree, sorting, settings load/save, home/volumes, icons + thumbnails, file
@@ -109,7 +109,7 @@ properties. Acceptance: browse `$HOME`, `/Applications`, an SMB share and a 100k
 without blocking the UI; screenshot matches the Windows chrome.
 
 **M2 — file ops (2–3 wks).** Copy/move/rename/delete-to-Trash, conflict dialog, undo/redo,
-bulk rename, drag & drop between rustyfiles and Finder, progress/status center, folder sizes.
+bulk rename, drag & drop between Brysk and Finder, progress/status center, folder sizes.
 Acceptance: the copybench scenarios pass on APFS and exFAT; undo restores.
 
 **M3 — preview & DirectLook (2 wks).** `directlook` as a second binary in a `.app` bundle;
@@ -156,8 +156,8 @@ reviewers rejected that). 14–18 only if quick search/indexing and full video a
 
 Architecture (review 1):
 
-* facade, not alias (above); `cargo check -p rf-app --bin rustyfiles` is the M0 gate, not
-  `-p rustyfiles`.
+* facade, not alias (above); `cargo check -p rf-app --bin brysk` is the M0 gate, not
+  `-p rf-app --bin brysk`.
 * `rf-app` is not untouched: ~100 direct `windows::`/`std::os::windows` uses remain and are
   being replaced one by one (cursor/modifiers via `rf_win::input`, `CommandExt` and
   `MetadataExt` behind `cfg`, a real `flock` settings lock).
@@ -214,7 +214,7 @@ Done:
   (dock geometry, status bar, taskbar progress, shell namespaces, property system, preview
   host, PDF, DirectLook hooks).
 * Plan reviewed by two expert agents; corrections above.
-* **`rf-app` compiles, links and launches**: `cargo build -p rf-app --bin rustyfiles` on
+* **`rf-app` compiles, links and launches**: `cargo build -p rf-app --bin brysk` on
   macOS 26 arm64; the process creates its 1280×800 window in ~290 ms (start-up trace:
   "first render at 259 ms", "window opened at 287 ms"), opens a folder given on the command
   line, writes `settings.toml`, and stays running.
@@ -223,10 +223,10 @@ Done:
   real Unix-socket single-instance/launch hand-over, the Trash backend, the global quick-search
   hotkey (Carbon `RegisterEventHotKey`, Alt+Space registers successfully), and
   `rf_win::input` (Quartz cursor/modifiers) are in.
-* `scripts/build-macos.sh` builds `target/rustyfiles.app` (Info.plist with the TCC usage
+* `scripts/build-macos.sh` builds `target/Brysk.app` (Info.plist with the TCC usage
   texts, ad-hoc signature) with DirectLook as a **nested agent app** under
   `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices
-  registered the helper as `com.rustyfiles.app`, and `open rustyfiles.app` then activated the
+  registered the helper as `com.rexmont.brysk`, and `open Brysk.app` then activated the
   invisible helper instead of starting the file manager.
 * Launch timing (macOS 26 arm64, debug build): 250–400 ms direct binary to a visible window,
   ~460 ms through `open` (5 runs: 459/460/472/464/464 ms), including a launch while the
@@ -238,7 +238,7 @@ Done:
 Next (visible gaps, in order):
 
 * Screenshot-verified theme pass (the shell has no Screen Recording permission, so the UI has
-  only been verified through the window server: owner `rustyfiles`, 1280×800, layer 0).
+  only been verified through the window server: owner `Brysk`, 1280×800, layer 0).
 * Quick Look thumbnails are in (PDF pages, video frames, Office/HEIC through
   `QLThumbnailGenerator`); the list shows them wherever thumbnails are on.
 * The PDF viewer renders through PDFKit; DirectLook video plays through the FilmCraft
@@ -251,7 +251,7 @@ Next (visible gaps, in order):
   back under their original name and folder), Open With chooser, a persistent name index
   (cache loads in ~1.7 s for 480k names), and a real menu bar are in.
 * Finder tags are read and written (the `_kMDItemUserTags` attribute): toggling a tag in
-  rustyfiles writes it to Finder, and Finder tags on selected items are imported when a tag
+  Brysk writes it to Finder, and Finder tags on selected items are imported when a tag
   menu opens. First launch explains the macOS folder/TCC prompts; About and a generated
   `.icns` (from the project's SVG) are in the bundle. Universal build
   (`UNIVERSAL=1`) and `scripts/notarize-macos.sh` are ready; notarisation needs the

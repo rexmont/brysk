@@ -1,5 +1,5 @@
 //! The "buy me a coffee" strip's messages. Some are plain thanks; the others quote what the
-//! speed test measured on this PC (Settings → Speed test): how much faster rustyfiles opened a
+//! speed test measured on this PC (Settings → Speed test): how much faster Brysk opened a
 //! big folder, copied or unzipped than Windows, how much less memory it took. A comparison is
 //! only said when it was measured here and the difference is real (at least 1.3×); nothing is
 //! estimated.
@@ -63,7 +63,7 @@ fn versus(v: &Option<Versus>) -> Option<f64> {
 #[cfg(windows)]
 pub fn facts(r: &Results) -> Facts {
     let mut f = Facts::default();
-    // the biggest folder both rustyfiles and File Explorer opened
+    // the biggest folder both Brysk and File Explorer opened
     for (test, files) in [(OpenTest::Files100k, 100_000), (OpenTest::Files10k, 10_000), (OpenTest::Files1k, 1_000)] {
         let Some(o) = r.open.iter().find(|o| o.test == test) else { continue };
         let pick = |k: AppKind| o.apps.iter().filter(|a| a.app == k).filter_map(|a| a.median()).filter(|m| !m.timed_out).min_by(|a, b| a.settled_ms.total_cmp(&b.settled_ms));
@@ -112,7 +112,7 @@ fn thousands(n: u64) -> String {
     out
 }
 
-/// Every message the strip can show, in order; `starts` = how many times rustyfiles was opened.
+/// Every message the strip can show, in order; `starts` = how many times Brysk was opened.
 pub fn messages(starts: u32) -> Vec<String> {
     let facts = FACTS.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
     messages_for(&facts, starts)
@@ -120,29 +120,29 @@ pub fn messages(starts: u32) -> Vec<String> {
 
 pub fn messages_for(f: &Facts, starts: u32) -> Vec<String> {
     let ask = t!("Geliştirmeye devam edebilmem için bir kahveyle destek olur musun?");
-    let mut v = vec![t!("Merhaba, ben Özer. rustyfiles'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?").to_string()];
+    let mut v = vec![t!("Merhaba, ben Özer. Brysk'ı tek başıma, boş zamanlarımda geliştiriyorum. İşine yarıyorsa bana bir kahve ısmarlar mısın?").to_string()];
     if let Some((files, x)) = f.open {
         v.push(format!(
             "{} {ask}",
-            t!("Bu bilgisayardaki hız testinde rustyfiles {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.").replace("{files}", &thousands(files as u64)).replace("{x}", &times(x))
+            t!("Bu bilgisayardaki hız testinde Brysk {files} dosyalık bir klasörü Dosya Gezgini'nden {x} kat hızlı açtı.").replace("{files}", &thousands(files as u64)).replace("{x}", &times(x))
         ));
     }
-    v.push(t!("rustyfiles'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.").replace("{n}", &thousands(starts as u64)));
+    v.push(t!("Brysk'ı şimdiye kadar {n} kez açtın; demek ki işine yarıyor. Bir kahveyle destek olursan bir sonraki özellik biraz daha çabuk gelir.").replace("{n}", &thousands(starts as u64)));
     if let Some(x) = f.memory {
-        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde rustyfiles aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.").replace("{x}", &times(x))));
+        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde Brysk aynı klasörü gösterirken, Görev Yöneticisi'ne göre Dosya Gezgini'nden {x} kat daha az bellek kullandı.").replace("{x}", &times(x))));
     }
-    v.push(t!("rustyfiles ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.").to_string());
+    v.push(t!("Brysk ücretsiz, reklamsız ve açık kaynak; öyle de kalacak. Yaşaması, senin gibi kullananların küçük desteklerine bağlı.").to_string());
     if let Some(x) = f.copy {
-        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde rustyfiles dosyaları Windows'tan {x} kat hızlı kopyaladı.").replace("{x}", &times(x))));
+        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde Brysk dosyaları Windows'tan {x} kat hızlı kopyaladı.").replace("{x}", &times(x))));
     }
     if let Some(x) = f.unzip {
-        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde rustyfiles bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.").replace("{x}", &times(x))));
+        v.push(format!("{} {ask}", t!("Bu bilgisayardaki hız testinde Brysk bir ZIP arşivini Windows'tan {x} kat hızlı çıkardı.").replace("{x}", &times(x))));
     }
     v.push(t!("Bu dosya yöneticisinin arkasında tek bir kişi ve epey kahve var. Bir fincanı da senden olursa çok sevinirim.").to_string());
     if let Some((ms, entries)) = f.search {
         v.push(format!(
             "{} {ask}",
-            t!("Bu bilgisayardaki hız testinde rustyfiles {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.").replace("{entries}", &thousands(entries)).replace("{ms}", &format!("{ms:.0}"))
+            t!("Bu bilgisayardaki hız testinde Brysk {entries} öğe arasında adla aramayı {ms} ms'de bitirdi.").replace("{entries}", &thousands(entries)).replace("{ms}", &format!("{ms:.0}"))
         ));
     }
     v.push(t!("Kullandığın için teşekkür ederim. Projeyi sürdürmeme yardım etmek istersen, küçük bir bağış bile çok şey ifade eder.").to_string());

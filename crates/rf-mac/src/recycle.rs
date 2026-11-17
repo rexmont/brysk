@@ -33,7 +33,7 @@ fn journal_path() -> Option<PathBuf> {
     if let Some(cfg) = std::env::var_os("RUSTYFILES_CONFIG_DIR") {
         return Some(PathBuf::from(cfg).join("trash.json"));
     }
-    dirs::data_dir().map(|d| d.join("rustyfiles").join("trash.json"))
+    dirs::data_dir().map(|d| d.join("Brysk").join("trash.json"))
 }
 
 fn load_journal() -> std::collections::HashMap<String, String> {

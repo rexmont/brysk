@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>rustyfiles</string>
+    <string>brysk</string>
     <key>CFBundleIdentifier</key>
-    <string>com.rustyfiles.app</string>
+    <string>com.rexmont.brysk</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>rustyfiles</string>
+    <string>Brysk</string>
     <key>CFBundleDisplayName</key>
-    <string>rustyfiles</string>
+    <string>Brysk</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -31,18 +31,18 @@
     <!-- The folders the file manager reads: macOS shows its own consent prompt the first
          time one of them is touched (TCC), naming the app with these texts. -->
     <key>NSDesktopFolderUsageDescription</key>
-    <string>rustyfiles shows and manages the files on your Desktop.</string>
+    <string>Brysk shows and manages the files on your Desktop.</string>
     <key>NSDocumentsFolderUsageDescription</key>
-    <string>rustyfiles shows and manages the files in your Documents folder.</string>
+    <string>Brysk shows and manages the files in your Documents folder.</string>
     <key>NSDownloadsFolderUsageDescription</key>
-    <string>rustyfiles shows and manages the files in your Downloads folder.</string>
+    <string>Brysk shows and manages the files in your Downloads folder.</string>
     <key>NSRemovableVolumesUsageDescription</key>
-    <string>rustyfiles browses and copies files on external disks.</string>
+    <string>Brysk browses and copies files on external disks.</string>
     <key>NSNetworkVolumesUsageDescription</key>
-    <string>rustyfiles browses and copies files on network shares.</string>
+    <string>Brysk browses and copies files on network shares.</string>
     <!-- Not sandboxed: a file manager must reach every folder the user can. Developer ID +
          hardened runtime is the distribution route. -->
     <key>NSHumanReadableCopyright</key>
-    <string>MIT. rustyfiles is by Özer Güzel; the macOS port keeps the same licence.</string>
+    <string>MIT. Brysk is a macOS port of rustyfiles by Özer Güzel; the same licence.</string>
 </dict>
 </plist>

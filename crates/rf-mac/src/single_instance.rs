@@ -30,11 +30,11 @@ impl Drop for InstanceGuard {
     }
 }
 
-/// "rustyfiles", or "rustyfiles-NAME" with `RUSTYFILES_INSTANCE=NAME`.
+/// "Brysk", or "Brysk-NAME" with `RUSTYFILES_INSTANCE=NAME`.
 pub fn instance_name() -> String {
     match std::env::var("RUSTYFILES_INSTANCE") {
-        Ok(n) if !n.is_empty() => format!("rustyfiles-{n}"),
-        _ => "rustyfiles".to_string(),
+        Ok(n) if !n.is_empty() => format!("Brysk-{n}"),
+        _ => "Brysk".to_string(),
     }
 }
 

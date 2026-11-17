@@ -1,7 +1,7 @@
 //! The settings block of the thumbnail cache and the glue between the caches and it.
 //!
 //! WHAT THE CACHE IS: `image_cache::ImageCache` keeps decoded thumbnails and per-file / per-type
-//! icons in MEMORY only (rustyfiles has no thumbnail files of its own), least recently used out
+//! icons in MEMORY only (Brysk has no thumbnail files of its own), least recently used out
 //! first once a byte budget is passed. There can be several such caches (one per workspace window,
 //! the quick-search popup, the desktop view, the preview windows share one); each tells this module
 //! how much it holds through a pair of counters, so "how big is it now" is two atomic loads per

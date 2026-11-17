@@ -6,7 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "rustyfiles"
+name = "brysk"
 path = "src/main.rs"
 
 [[bin]]
@@ -14,7 +14,7 @@ name = "directlook"
 path = "src/bin/directlook.rs"
 
 [dependencies]
-# the speed test asks rustyfiles.com for a short result link (already in the tree through velopack)
+# the speed test asks github.com/rexmont/brysk for a short result link (already in the tree through velopack)
 ureq = "3.5"
 rf-core.workspace = true
 rf-win.workspace = true

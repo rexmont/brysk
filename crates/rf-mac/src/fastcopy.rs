@@ -424,7 +424,7 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
                 } else if kind == Transfer::Move {
                     // Across volumes: copy first, delete the source only once the copy checks out.
                     let dst = if replace && f.dst.exists() {
-                        let tmp = f.dst.with_extension(format!("rustyfiles-part-{}", std::process::id()));
+                        let tmp = f.dst.with_extension(format!("Brysk-part-{}", std::process::id()));
                         copy_one(&f.src, &tmp, f.size, &tracker)?;
                         std::fs::rename(&tmp, &f.dst)?;
                         f.dst.clone()
@@ -438,7 +438,7 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
                     crate::fileops::remove_recursive(&f.src)?;
                     tracker.results.lock().unwrap().push((f.src.clone(), dst));
                 } else if replace && f.dst.exists() {
-                    let tmp = f.dst.with_extension(format!("rustyfiles-part-{}", std::process::id()));
+                    let tmp = f.dst.with_extension(format!("Brysk-part-{}", std::process::id()));
                     copy_one(&f.src, &tmp, f.size, &tracker)?;
                     let md = std::fs::symlink_metadata(&f.dst)?;
                     if md.is_dir() {

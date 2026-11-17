@@ -1,8 +1,10 @@
-> **macOS fork.** This tree is being ported to macOS; only the macOS build is maintained
-> here. Build and run: `./scripts/build-macos.sh && open target/rustyfiles.app`, or
-> `cargo mac` for a quick run. The plan, the module map and the remaining work are in
-> [`docs/port-macos.md`](docs/port-macos.md). The Windows code is still in the tree as the
-> reference implementation (and is no longer a build target of this fork).
+> **Brysk** is a macOS file manager: a port of
+> [rustyfiles](https://github.com/gelenmedya/rustyfiles) by Özer Güzel, keeping its Explorer-style
+> interface while the platform layer speaks macOS/Unix. This fork is macOS-only.
+>
+> Build and run: `./scripts/build-macos.sh && open target/Brysk.app`, or `cargo mac`.
+> The port plan and status are in [`docs/port-macos.md`](docs/port-macos.md); upstream sync in
+> [`docs/upstream.md`](docs/upstream.md). The rest of this README describes the original app.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">

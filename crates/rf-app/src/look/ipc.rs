@@ -1,4 +1,4 @@
-//! rustyfiles ↔ DirectLook iletileri (tek örnek borusu üzerinden, satır başına bir ileti).
+//! Brysk ↔ DirectLook iletileri (tek örnek borusu üzerinden, satır başına bir ileti).
 
 use std::path::PathBuf;
 
@@ -23,7 +23,7 @@ const TO_APP_PREFIX: &str = "\u{1}directlook:";
 pub enum Msg {
     /// Göster (komut satırı `--look`).
     Show(PathBuf, ShowOpts),
-    /// Açıksa kapat, değilse göster (rustyfiles'ta Boşluk).
+    /// Açıksa kapat, değilse göster (Brysk'ta Boşluk).
     Toggle(PathBuf),
     /// Seçim değişti: açıksa bu dosyaya geç, değilse bir şey yapma.
     Follow(PathBuf),
@@ -78,10 +78,10 @@ impl Msg {
     }
 }
 
-/// DirectLook'tan rustyfiles'a giden ileti.
+/// DirectLook'tan Brysk'a giden ileti.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToApp {
-    /// Önizleme penceresi kapandı (rustyfiles "açık" bilgisini bırakır).
+    /// Önizleme penceresi kapandı (Brysk "açık" bilgisini bırakır).
     LookClosed,
     /// Ayarlar → DirectLook sayfasını aç.
     OpenSettings,
@@ -117,7 +117,7 @@ pub fn exe() -> Option<PathBuf> {
     let p = me.with_file_name("directlook.exe");
     #[cfg(not(windows))]
     let p = {
-        // rustyfiles.app/Contents/MacOS/rustyfiles → Contents/Helpers/DirectLook.app/…
+        // Brysk.app/Contents/MacOS/Brysk → Contents/Helpers/DirectLook.app/…
         let mut helper = None;
         if let Some(contents) = me.parent().and_then(|macos| macos.parent()) {
             let cand = contents.join("Helpers/DirectLook.app/Contents/MacOS/directlook");
@@ -183,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn messages_to_rustyfiles() {
+    fn messages_to_Brysk() {
         for m in [ToApp::LookClosed, ToApp::OpenSettings, ToApp::Step(true), ToApp::Step(false)] {
             assert_eq!(ToApp::decode(&m.encode()), Some(m));
         }

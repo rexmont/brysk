@@ -1,5 +1,5 @@
 //! Arşiv görüntüleyici: içeriği ağaç olarak (klasörler açılır/kapanır), özet satırı
-//! ("ZIP arşivi, N klasör ve M dosya"), sıkıştırılmış/açılmış boyut; "rustyfiles'ta aç" Diğer'de.
+//! ("ZIP arşivi, N klasör ve M dosya"), sıkıştırılmış/açılmış boyut; "Brysk'ta aç" Diğer'de.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -44,13 +44,13 @@ impl Viewer for ArchiveViewer {
         self.view.as_ref().map_or_else(|| div().into_any_element(), |v| v.clone().into_any_element())
     }
     fn more_menu(&self) -> Vec<MoreItem> {
-        // DirectLook ayrı süreç: çıkarma rustyfiles'ın işlem merkezinde yapılır, arşiv oraya gönderilir.
+        // DirectLook ayrı süreç: çıkarma Brysk'ın işlem merkezinde yapılır, arşiv oraya gönderilir.
         let path = self.path.clone();
         vec![MoreItem {
-            label: t!("rustyfiles'ta aç").into(),
+            label: t!("Brysk'ta aç").into(),
             action: Rc::new(move |_, cx: &mut App| {
                 crate::look::LookManager::close(cx);
-                open_in_rustyfiles(path.clone());
+                open_in_Brysk(path.clone());
             }),
         }]
     }
@@ -59,9 +59,9 @@ impl Viewer for ArchiveViewer {
     }
 }
 
-/// rustyfiles'a gidecek ileti ve (çalışmıyorsa) başlatma argümanı: klasör gibi gezilebilen arşiv
+/// Brysk'a gidecek ileti ve (çalışmıyorsa) başlatma argümanı: klasör gibi gezilebilen arşiv
 /// kendisi açılır, ötekiler (.gz gibi) klasöründe seçili gösterilir.
-pub fn rustyfiles_launch(path: &Path) -> (String, String) {
+pub fn Brysk_launch(path: &Path) -> (String, String) {
     let p = path.display().to_string();
     if crate::archive_view::is_browsable(path) {
         (p.clone(), p)
@@ -70,9 +70,9 @@ pub fn rustyfiles_launch(path: &Path) -> (String, String) {
     }
 }
 
-fn open_in_rustyfiles(path: PathBuf) {
+fn open_in_Brysk(path: PathBuf) {
     std::thread::spawn(move || {
-        let (msg, arg) = rustyfiles_launch(&path);
+        let (msg, arg) = Brysk_launch(&path);
         rf_win::look::win::allow_any_foreground();
         if rf_win::single_instance::send_to(&rf_win::single_instance::instance_name(), &msg) {
             return;
@@ -81,7 +81,7 @@ fn open_in_rustyfiles(path: PathBuf) {
         match exe {
             Ok(exe) if exe.exists() => {
                 if let Err(e) = std::process::Command::new(exe).arg(arg).spawn() {
-                    log::warn!("rustyfiles başlatılamadı: {e}");
+                    log::warn!("Brysk başlatılamadı: {e}");
                 }
             }
             _ => log::warn!("rustyfiles.exe bulunamadı"),
@@ -385,17 +385,17 @@ impl Render for ArchiveView {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_tree, rows, rustyfiles_launch};
+    use super::{build_tree, rows, Brysk_launch};
 
     #[test]
-    fn archives_open_in_rustyfiles_as_folder_or_selected() {
+    fn archives_open_in_Brysk_as_folder_or_selected() {
         let zip = std::path::Path::new(r"C:\a b\x.zip");
-        assert_eq!(rustyfiles_launch(zip), (r"C:\a b\x.zip".to_string(), r"C:\a b\x.zip".to_string()));
+        assert_eq!(Brysk_launch(zip), (r"C:\a b\x.zip".to_string(), r"C:\a b\x.zip".to_string()));
         let gz = std::path::Path::new(r"C:\a\log.gz");
-        let (msg, arg) = rustyfiles_launch(gz);
+        let (msg, arg) = Brysk_launch(gz);
         assert_eq!(msg, format!("{}C:\\a\\log.gz", crate::workspace::SELECT_PREFIX));
         assert_eq!(arg, r"/select,C:\a\log.gz");
-        // ileti rustyfiles tarafında doğru çözülür
+        // ileti Brysk tarafında doğru çözülür
         assert_eq!(crate::workspace::parse_launch(&msg).1.as_deref(), Some("log.gz"));
     }
 

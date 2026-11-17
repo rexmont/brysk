@@ -101,8 +101,8 @@ pub fn problem_text(p: &Problem) -> String {
             reason,
             t!("Kurallar boş bir listeyle başlıyor.")
         ),
-        Problem::Corrupt { moved_to: None, reason } => format!("{} ({reason})", t!("Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.")),
-        Problem::Unreadable(reason) => format!("{} ({reason})", t!("Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. rustyfiles'ı yeniden başlatın.")),
+        Problem::Corrupt { moved_to: None, reason } => format!("{} ({reason})", t!("Kural dosyası okunamadı ve yan yana alınamadı; kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.")),
+        Problem::Unreadable(reason) => format!("{} ({reason})", t!("Kural dosyası şu an okunamıyor; yazmak onu ezebileceğinden kurallar kaydedilmeyecek. Brysk'ı yeniden başlatın.")),
     }
 }
 

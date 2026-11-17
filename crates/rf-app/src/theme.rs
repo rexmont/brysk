@@ -1,4 +1,4 @@
-//! rustyfiles palette: Windows 11 Fluent surfaces + SwiftUI-like softness
+//! Brysk palette: Windows 11 Fluent surfaces + SwiftUI-like softness
 //! (rounded corners, gentle fills, calm secondary text).
 
 use gpui_kit::*;
@@ -49,7 +49,7 @@ fn hexa(c: u32, a: f32) -> Hsla {
     h
 }
 
-/// The accent palette the app wears: the colour the user chose for rustyfiles (Settings > Appearance), else the user's Windows
+/// The accent palette the app wears: the colour the user chose for Brysk (Settings > Appearance), else the user's Windows
 /// accent palette, which is read once.
 fn system_accent() -> Option<rf_win::accent::AccentPalette> {
     static WINDOWS: std::sync::OnceLock<Option<rf_win::accent::AccentPalette>> = std::sync::OnceLock::new();

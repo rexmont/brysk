@@ -140,7 +140,7 @@ impl FolderSizeCache {
         let mut rows = rows;
         rows.sort_unstable_by_key(|r| r.0);
         let skip = rows.len().saturating_sub(limit);
-        let mut text = String::from("rustyfiles foldersizes 1\n");
+        let mut text = String::from("Brysk foldersizes 1\n");
         for (idx, (_, k, s)) in rows[skip..].iter().enumerate() {
             let _ = idx;
             text.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", s.bytes, s.files, s.dirs, s.allocated.unwrap_or(0), k));

@@ -1,6 +1,6 @@
 //! The "liquid" look of our own controls: the switch, the slider, the dropdown button and the rows of menus and dropdown lists, in the
 //! spirit of iOS 27's Liquid Glass (capsules, a thumb that turns into a glass lens while it is held, dense frosted panels). Nothing is
-//! copied from any kit; the numbers are the ones decided for rustyfiles.
+//! copied from any kit; the numbers are the ones decided for Brysk.
 //!
 //! WHEN: only in a window that shows glass and in the popups opened from one (`Palette::liquid`, decided by `glass::liquid`). In every
 //! other window and over Mica, Acrylic and Solid the controls are what they always were. The accent stays the user's Windows accent

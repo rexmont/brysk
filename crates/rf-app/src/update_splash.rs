@@ -89,10 +89,10 @@ fn play(send: impl Fn(Arc<RenderImage>) -> bool) {
 
 /// The installed rustyfiles.exe (the one the update replaces and restarts).
 fn installed_exe() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("rustyfiles").join("current").join("rustyfiles.exe"))
+    Some(PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Brysk").join("current").join("rustyfiles.exe"))
 }
 
-/// Taskbar windows of the installed rustyfiles, by process.
+/// Taskbar windows of the installed Brysk, by process.
 fn installed_windows() -> Vec<u32> {
     let Some(exe) = installed_exe() else { return Vec::new() };
     let exe = exe.to_string_lossy().to_lowercase();
@@ -103,7 +103,7 @@ fn installed_windows() -> Vec<u32> {
         .collect()
 }
 
-/// Shows the window until the updated rustyfiles has one of its own.
+/// Shows the window until the updated Brysk has one of its own.
 pub fn run() {
     let before = installed_windows();
     let started = Instant::now();
@@ -184,9 +184,9 @@ pub fn run() {
 /// None when it could not be started: the update then shows Velopack's own progress box.
 pub fn launch() -> Option<std::process::Child> {
     let me = std::env::current_exe().ok()?;
-    let dir = std::env::temp_dir().join("rustyfiles-update");
+    let dir = std::env::temp_dir().join("Brysk-update");
     let _ = std::fs::create_dir_all(&dir);
-    let copy = dir.join("rustyfiles-update.exe");
+    let copy = dir.join("Brysk-update.exe");
     std::fs::copy(&me, &copy).ok()?;
     // The copy's working directory is the temporary folder, said here and not inherited: a copy that stood in the installed folder
     // kept the updater from renaming it, and the update gave up after ten tries (`rf_win::ownfolder` has the whole story; the

@@ -1,4 +1,4 @@
-//! Persistent user settings (%APPDATA%\rustyfiles\settings.toml) as a GPUI global.
+//! Persistent user settings (%APPDATA%\Brysk\settings.toml) as a GPUI global.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -430,17 +430,17 @@ pub struct Settings {
     /// The drives that are not listed (the sidebar, the Home page, the address bar's list of drives), as letters ("V"). A drive
     /// Explorer hides by its own policy is hidden too, without being named here (`rf_win::drives::visible_drives`).
     pub hidden_drives: Vec<String>,
-    /// The accent colour of rustyfiles as "#RRGGBB"; empty: Windows' own accent (Settings > Appearance).
+    /// The accent colour of Brysk as "#RRGGBB"; empty: Windows' own accent (Settings > Appearance).
     pub accent_color: String,
     /// The user's own programs for kinds of files (Settings > File types; `rf_core::openrules`): the first program of a list opens
-    /// such a file on a double click, all of them stand first under "Open with". Only rustyfiles follows them.
+    /// such a file on a double click, all of them stand first under "Open with". Only Brysk follows them.
     pub open_rules: Vec<rf_core::openrules::OpenRule>,
-    /// Closing the last window keeps rustyfiles in the notification area (Files' "leave app
+    /// Closing the last window keeps Brysk in the notification area (Files' "leave app
     /// running in the background"): the next window opens instantly.
     pub run_in_background: bool,
     /// Status bar: listing time and the GPU/CPU renderer badge (developer info).
     pub show_perf_info: bool,
-    /// A notification when a long operation finishes while rustyfiles is not in front.
+    /// A notification when a long operation finishes while Brysk is not in front.
     pub notify_long_ops: bool,
     /// Updates (GitHub Releases) are looked for and downloaded in the background.
     pub auto_update: bool,
@@ -463,7 +463,7 @@ pub struct Settings {
     pub adaptive_offered: bool,
     pub show_extensions: bool,
     /// Custom shortcuts: keystroke → action, e.g. `"ctrl-k" = "NewFolder"` (names as in the
-    /// command palette's actions; `rustyfiles::` prefix optional). Applied at startup.
+    /// command palette's actions; `Brysk::` prefix optional). Applied at startup.
     pub keybindings: std::collections::BTreeMap<String, String>,
     /// Last window placement: [x, y, width, height, maximized (0/1)].
     pub window: Option<[f32; 5]>,
@@ -575,7 +575,7 @@ pub struct Settings {
     pub show_flatten: bool,
 
     // ---- DirectLook (Hızlı Bakış, ayrı program): ayarları kendi dosyasında (`look::config`)
-    /// DirectLook kullanılsın mı (kapalıyken rustyfiles onu başlatmaz, Boşluk bir şey yapmaz).
+    /// DirectLook kullanılsın mı (kapalıyken Brysk onu başlatmaz, Boşluk bir şey yapmaz).
     pub directlook_enabled: bool,
 
     // ---- Quick search (quick_search.rs)
@@ -590,8 +590,8 @@ pub struct Settings {
     /// "Add an option to show/hide recent searches").
     pub quick_search_recent: bool,
 
-    // ---- Dock (dock/: `rustyfiles --dock`, a separate process; experimental)
-    /// The dock runs: started with rustyfiles and when this is switched on, stopped when it is switched off.
+    // ---- Dock (dock/: `Brysk --dock`, a separate process; experimental)
+    /// The dock runs: started with Brysk and when this is switched on, stopped when it is switched off.
     pub dock_enabled: bool,
     /// The dock keeps other windows from going under it (it registers as an application desktop toolbar).
     pub dock_reserve: bool,
@@ -656,7 +656,7 @@ pub struct Settings {
     /// With a dock on every monitor: whether every dock shows every running app, or an app only where its window is.
     pub dock_apps_where: DockAppsWhere,
 
-    // ---- The dock's parts (shell/: `rustyfiles --shell`, the dock's process). ONE switch starts them all: `dock_enabled` (Settings ->
+    // ---- The dock's parts (shell/: `Brysk --shell`, the dock's process). ONE switch starts them all: `dock_enabled` (Settings ->
     // Dock). These five are the parts' own values, kept in the file under their old names as TROUBLESHOOTING OVERRIDES that the page
     // shows no switch for: a part runs when `dock_enabled` is on AND its own value is not false (`dock/parts.rs` is the rule). Their
     // default is true. Files written before the one switch hold `false` here (the old default was written into every saved file):
@@ -664,10 +664,10 @@ pub struct Settings {
     /// Our desktop (the wallpaper, the icons) is drawn over Explorer's, one window per monitor, while the shell host runs. Explorer's
     /// desktop stays underneath and is visible again when the host stops.
     pub shell_desktop_cover: bool,
-    /// A tap of the Windows key alone opens rustyfiles' Start panel instead of Windows' (the shell host listens to the keyboard with a
+    /// A tap of the Windows key alone opens Brysk' Start panel instead of Windows' (the shell host listens to the keyboard with a
     /// system-wide hook while this or `shell_own_switcher` runs; see `shell/keylayer.rs`).
     pub shell_win_key: bool,
-    /// Alt+Tab opens rustyfiles' window switcher instead of Windows' (same hook).
+    /// Alt+Tab opens Brysk' window switcher instead of Windows' (same hook).
     pub shell_own_switcher: bool,
     /// The shell host owns a window of class `Shell_TrayWnd` in front of Explorer's, takes the icons programs send to the notification
     /// area, and passes every message on to Explorer's own window unchanged (see `shell/trayhost.rs`, `docs/design/tray-host.md`).
@@ -1306,21 +1306,35 @@ show_hidden = true").unwrap();
     }
 }
 
-/// Where data that can be rebuilt lives (remembered folder sizes): `%LOCALAPPDATA%\rustyfiles`,
+/// Where data that can be rebuilt lives (remembered folder sizes): `%LOCALAPPDATA%\Brysk`,
 /// or `RUSTYFILES_CONFIG_DIR` when set, so test copies keep their data apart.
 pub fn local_data_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("RUSTYFILES_CONFIG_DIR").filter(|d| !d.is_empty()) {
         return Some(std::path::PathBuf::from(d));
     }
-    dirs::data_local_dir().map(|d| d.join("rustyfiles"))
+    dirs::data_local_dir().map(|d| product_dir(d, "Brysk"))
 }
 
-/// `%APPDATA%\rustyfiles`, or `RUSTYFILES_CONFIG_DIR` when set (portable use, tests).
+/// `base/Brysk`, moving a `base/rustyfiles` from before the rename out of the way once.
+fn product_dir(base: std::path::PathBuf, name: &str) -> std::path::PathBuf {
+    let dir = base.join(name);
+    #[cfg(target_os = "macos")]
+    {
+        let old = base.join("rustyfiles");
+        if !dir.exists() && old.exists() {
+            let _ = std::fs::rename(&old, &dir);
+        }
+    }
+    let _ = &base;
+    dir
+}
+
+/// `%APPDATA%\Brysk`, or `RUSTYFILES_CONFIG_DIR` when set (portable use, tests).
 pub fn app_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("RUSTYFILES_CONFIG_DIR").filter(|d| !d.is_empty()) {
         return Some(std::path::PathBuf::from(d));
     }
-    dirs::config_dir().map(|d| d.join("rustyfiles"))
+    dirs::config_dir().map(|d| product_dir(d, "Brysk"))
 }
 
 #[cfg(test)]
@@ -1433,7 +1447,7 @@ theme = \"dark\"
 /// so it never competes with opening the window.
 fn sync_name_index(on: bool, excluded: &[String]) {
     use std::sync::atomic::{AtomicU8, Ordering};
-    // DirectLook reads these settings too: the index is rustyfiles' (a second indexer would walk
+    // DirectLook reads these settings too: the index is Brysk' (a second indexer would walk
     // every drive again and write the same index files)
     if crate::background::side_process() {
         return;
@@ -1476,7 +1490,10 @@ fn sync_name_index(on: bool, excluded: &[String]) {
         // a copy with its own settings folder (tests, portable) keeps its index there too
         let dir = match std::env::var_os("RUSTYFILES_CONFIG_DIR") {
             Some(cfg) => std::path::PathBuf::from(cfg).join("index"),
-            None => std::env::var_os("LOCALAPPDATA").map_or_else(std::env::temp_dir, std::path::PathBuf::from).join("rustyfiles").join("index"),
+            #[cfg(target_os = "macos")]
+            None => crate::settings::app_dir().map(|d| d.join("index")).unwrap_or_else(|| std::env::temp_dir().join("Brysk").join("index")),
+            #[cfg(not(target_os = "macos"))]
+            None => std::env::var_os("LOCALAPPDATA").map_or_else(std::env::temp_dir, std::path::PathBuf::from).join("Brysk").join("index"),
         };
         // RUSTYFILES_INDEX_ROOTS="E:\;F:\" picks the roots (testing)
         let roots = match std::env::var("RUSTYFILES_INDEX_ROOTS") {

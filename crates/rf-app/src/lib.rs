@@ -1,4 +1,4 @@
-//! rustyfiles ve DirectLook'un ortak kodu; iki program da bu kütüphaneyi kullanır.
+//! Brysk ve DirectLook'un ortak kodu; iki program da bu kütüphaneyi kullanır.
 
 mod actions;
 mod aliases;
@@ -127,7 +127,7 @@ pub(crate) fn restored_bounds(cx: &App) -> Option<WindowBounds> {
     Some(if max > 0.5 { WindowBounds::Maximized(b) } else { WindowBounds::Windowed(b) })
 }
 
-/// Panics are written to %APPDATA%\rustyfiles\crash.log (the app has no console in release).
+/// Panics are written to %APPDATA%\Brysk\crash.log (the app has no console in release).
 pub(crate) fn install_panic_log() {
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -151,22 +151,22 @@ pub(crate) fn install_panic_log() {
     }));
 }
 
-/// Whether rustyfiles is registered as the default file manager (HKCU).
+/// Whether Brysk is registered as the default file manager (HKCU).
 pub static DEFAULT_FM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// rustyfiles answers other apps' Open/Save dialogs (registry state, read off the UI thread).
+/// Brysk answers other apps' Open/Save dialogs (registry state, read off the UI thread).
 pub static FILE_DIALOGS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The Open/Save dialog DLL to register: a copy of the one next to this exe, outside the
-/// install folder (`%LocalAppData%\rustyfiles\dialog\<build>\`). Apps keep the registered DLL
+/// install folder (`%LocalAppData%\Brysk\dialog\<build>\`). Apps keep the registered DLL
 /// loaded, and an update can't replace an install folder with a loaded DLL in it. Next to the
-/// copy, `rustyfiles-exe.txt` tells the DLL which rustyfiles to start. Older copies go once no
+/// copy, `Brysk-exe.txt` tells the DLL which Brysk to start. Older copies go once no
 /// app has them loaded.
 pub(crate) fn dialog_dll() -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let src = exe.with_file_name(rf_win::dialog_reg::DLL_NAME);
     let meta = std::fs::metadata(&src).ok()?;
     let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
-    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("rustyfiles").join("dialog");
+    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Brysk").join("dialog");
     let dir = root.join(format!("{}-{:x}-{:x}", env!("CARGO_PKG_VERSION"), meta.len(), stamp));
     let dst = dir.join(rf_win::dialog_reg::DLL_NAME);
     if !dst.exists() {
@@ -176,7 +176,7 @@ pub(crate) fn dialog_dll() -> Option<String> {
         std::fs::copy(&src, &part).ok()?;
         std::fs::rename(&part, &dst).ok()?;
     }
-    let _ = std::fs::write(dir.join("rustyfiles-exe.txt"), exe.display().to_string());
+    let _ = std::fs::write(dir.join("Brysk-exe.txt"), exe.display().to_string());
     if let Ok(rd) = std::fs::read_dir(&root) {
         for e in rd.flatten() {
             if e.path() != dir {
@@ -234,7 +234,7 @@ mod grant_tests {
     }
 }
 
-/// Opens a rustyfiles window. `start = None` restores the session (first window) or opens Home.
+/// Opens a Brysk window. `start = None` restores the session (first window) or opens Home.
 pub fn open_main_window(
     start: Option<Location>,
     ipc: Option<futures::channel::mpsc::UnboundedReceiver<String>>,
@@ -271,9 +271,9 @@ pub fn open_main_window_made(
 fn mac_onboarding(cx: &mut App) {
     use crate::prompt::{Button, Kind};
     let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
-    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time rustyfiles opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give rustyfiles Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).";
+    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time Brysk opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give Brysk Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).";
     let _ = w.update(cx, |_, window, cx| {
-        crate::prompt::show("Welcome to rustyfiles", Some(message.to_string()), None, vec![Button::new("Continue", Kind::Primary, |_, _, _| Ok(()))], window, cx);
+        crate::prompt::show("Welcome to Brysk", Some(message.to_string()), None, vec![Button::new("Continue", Kind::Primary, |_, _, _| Ok(()))], window, cx);
     });
 }
 
@@ -333,13 +333,13 @@ fn save_and_quit(cx: &mut App) {
     cx.quit();
 }
 
-/// The variable a restarted rustyfiles is started with: the process id of the one that is ending (see [`restart`]).
+/// The variable a restarted Brysk is started with: the process id of the one that is ending (see [`restart`]).
 const AFTER_EXIT_ENV: &str = "RUSTYFILES_AFTER_EXIT";
 
-/// Restarts rustyfiles: DirectLook and the dock are asked to stop, a new rustyfiles is started that waits for this one to end, and
+/// Restarts Brysk: DirectLook and the dock are asked to stop, a new Brysk is started that waits for this one to end, and
 /// this one quits the usual way (settings and session written). The new one opens its last session and brings the dock and
 /// DirectLook back as the settings say. WHY (the owner, 2026-11-17, after a morning where the dock came up empty: "bir de bir
-/// kısayol ekleyelim. rustyfiles'ı restart etsin"): there was no way to start everything afresh short of ending the processes by
+/// kısayol ekleyelim. Brysk'ı restart etsin"): there was no way to start everything afresh short of ending the processes by
 /// hand. Ctrl+Alt+Shift+R and the command palette.
 pub(crate) fn restart(cx: &mut App) {
     let Ok(me) = std::env::current_exe() else { return };
@@ -351,7 +351,7 @@ pub(crate) fn restart(cx: &mut App) {
         // (no folder: the new process opens the last session; its working directory is never the installation folder)
         let dir = std::env::temp_dir();
         if let Err(e) = std::process::Command::new(&me).env(AFTER_EXIT_ENV, &pid).current_dir(dir).spawn() {
-            log::warn!("restart: the new rustyfiles did not start: {e}");
+            log::warn!("restart: the new Brysk did not start: {e}");
         }
     });
     // (give the stops their moment, then quit; the new process waits for this one to be gone)
@@ -366,7 +366,7 @@ pub(crate) fn restart(cx: &mut App) {
     .detach();
 }
 
-/// A restarted rustyfiles: waits (up to ten seconds) for the one that started it to end, so that it does not hand its start to
+/// A restarted Brysk: waits (up to ten seconds) for the one that started it to end, so that it does not hand its start to
 /// that one as a second launch does.
 fn wait_for_the_old_one() {
     let Some(pid) = std::env::var(AFTER_EXIT_ENV).ok().and_then(|p| p.trim().parse::<u32>().ok()) else { return };
@@ -407,7 +407,7 @@ fn shell_place_bounded(arg: &str, limit: std::time::Duration) -> Option<rf_win::
     rx.recv_timeout(limit).ok().flatten().filter(|p| p.fs_path.is_none())
 }
 
-/// rustyfiles'ın girişi.
+/// Brysk'ın girişi.
 /// Start-up timing (`RUSTYFILES_TRACE_START=1`, logged at info): milliseconds since the process
 /// was created, at the steps before the first window.
 pub(crate) fn start_mark(step: &str) {
@@ -458,7 +458,7 @@ pub fn main() {
     rf_win::shell::suppress_critical_error_dialogs();
     // before any shell icon/thumbnail work: see keep_gdiplus_alive (loader-lock deadlock)
     rf_win::thumbs::keep_gdiplus_alive();
-    // Logs go to stderr and to rustyfiles.log in the settings folder; override the level with
+    // Logs go to stderr and to brysk.log in the settings folder; override the level with
     // RUST_LOG. The hybrid renderer (gpui_windows) logs its GPU/CPU switches at info level.
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,gpui_windows=info"))
         .target(env_logger::Target::Pipe(Box::new(logfile::Tee::new())))
@@ -498,7 +498,7 @@ pub fn main() {
     // `--quick-search`: the quick search window, as its hotkey opens it (a shortcut of the
     // user's own can run this)
     let quick_search = std::env::args().nth(1).as_deref() == Some(quick_search::LAUNCH_ARG);
-    // `--dock`: the dock (see dock/), a process of its own that lives beside the main rustyfiles. `--shell` is the same process under
+    // `--dock`: the dock (see dock/), a process of its own that lives beside the main Brysk. `--shell` is the same process under
     // its new name, the shell host (see shell/): the one with the desktop cover, the shell mode and the probe.
     #[cfg(windows)]
     let dock = shell::is_host_arg(std::env::args().nth(1).as_deref());
@@ -568,7 +568,7 @@ pub fn main() {
             } else {
                 is_dir_bounded(PathBuf::from(&arg), std::time::Duration::from_secs(2))
             };
-            // a browsable archive (DirectLook's "rustyfiles'ta aç") opens like a folder, here
+            // a browsable archive (DirectLook's "Brysk'ta aç") opens like a folder, here
             let archive = !shell_namespace && archive_view::is_browsable(std::path::Path::new(&arg));
             if is_dir == Some(false) && !archive {
                 // Explorer opens folders through the verb we took over: what we just handed it may

@@ -995,7 +995,7 @@ fn backdrop_card(p: &Palette, s: &Settings) -> AnyElement {
         // permission) they are not, and the line would be untrue. Before the engine has chosen (no window has glass yet) the mode is
         // Off and the line is left out; the page is drawn again once the glass is on the window.
         if rf_win::glass::capture_mode() == rf_win::glass::CaptureMode::Affinity {
-            notes.push(t!("Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken rustyfiles pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.").to_string());
+            notes.push(t!("Bu Windows sürümünde ya da ekran görüntüsü kenarlığı izni kapalıyken Brysk pencereleri ekran görüntülerinde, kayıtlarda ve ekran paylaşımında görünmez.").to_string());
         }
         if let Some(why) = crate::glass::failure() {
             notes.push(t!("Cam başlatılamadı: {reason}. Mica kullanılıyor.").replace("{reason}", &why));
@@ -2294,7 +2294,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         p,
         L::Eye,
         t!("DirectLook'u kullan"),
-        Some(t!("Boşluk ile önizleme. Ayrı bir program olarak çalışır: rustyfiles'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.")),
+        Some(t!("Boşluk ile önizleme. Ayrı bir program olarak çalışır: Brysk'ı yavaşlatmaz, biri kapanınca öteki etkilenmez.")),
         switch("dl-enabled", p, enabled, move |_, cx| {
             settings::update(cx, |s| s.directlook_enabled = !enabled);
             if enabled {
@@ -2311,7 +2311,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         p,
         L::Monitor,
         t!("Explorer ve masaüstünde de Boşluk ile önizle"),
-        Some(t!("DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); rustyfiles kapalıyken de")),
+        Some(t!("DirectLook arka planda çalışır ve Windows başladığında açılır (bildirim alanında simge); Brysk kapalıyken de")),
         switch("look-wide", p, l.look_system_wide, {
             let on = l.look_system_wide;
             move |_, cx| {
@@ -2364,7 +2364,7 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             p,
             L::AppWindow,
             t!("Bildirim alanında DirectLook simgesi"),
-            Some(t!("rustyfiles arka planda çalışırken gösterilmez: tek simge rustyfiles'ınkidir")),
+            Some(t!("Brysk arka planda çalışırken gösterilmez: tek simge Brysk'ınkidir")),
             lsw("look-tray", p, l.look_tray_icon, |s, v| s.look_tray_icon = v),
         ),
         card(p, L::MousePointerClick, t!("Açılınca pencereyi odakla"), Some(t!("Kapalıyken klavye Explorer'da kalır: oklarla dosyalar arasında gezinilir")), lsw("look-focus", p, l.look_focus_on_open, |s, v| s.look_focus_on_open = v)),
@@ -2513,14 +2513,14 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
     let dialogs_on = crate::FILE_DIALOGS.load(std::sync::atomic::Ordering::Relaxed);
     // (only looks: the copy is made when the switch is turned on)
     let has_dll = std::env::current_exe().is_ok_and(|e| e.with_file_name(rf_win::dialog_reg::DLL_NAME).exists());
-    // while rustyfiles is the default file manager: archives can be given to it too (only the
+    // while Brysk is the default file manager: archives can be given to it too (only the
     // user can pick the default app, in Windows' own page)
     let archives = dfm_on.then(|| {
         card(
             p,
             L::FileArchive,
-            t!("Arşivleri rustyfiles ile aç"),
-            Some(t!("Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada rustyfiles'ı varsayılan yapın.")),
+            t!("Arşivleri Brysk ile aç"),
+            Some(t!("Zip, 7z, rar, tar için varsayılan uygulama Windows'ta seçilir. Açılan sayfada Brysk'ı varsayılan yapın.")),
             button("dfm-arch", p, t!("Varsayılan uygulamalar"), |_, _| {
                 let page = format!("ms-settings:defaultapps?registeredAppUser={}", rf_win::default_fm::APP_NAME);
                 if let Err(e) = rf_win::shell::open(std::path::Path::new(&page)) {
@@ -2542,7 +2542,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
         card(
             p,
             L::Power,
-            t!("Windows başladığında rustyfiles'ı aç"),
+            t!("Windows başladığında Brysk'ı aç"),
             None,
             switch("start-win", p, start_on, move |window, _| {
                 if let Ok(exe) = std::env::current_exe() {
@@ -2564,7 +2564,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::Bell,
             t!("Uzun işlemler bitince bildirim göster"),
-            Some(t!("Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve rustyfiles önde değilse")),
+            Some(t!("Kopyalama, taşıma, sıkıştırma 10 saniyeden uzun sürdüyse ve Brysk önde değilse")),
             sw("notify-ops", p, s.notify_long_ops, |s, v| s.notify_long_ops = v),
         ),
         card(
@@ -2650,7 +2650,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::AppWindow,
             t!("Varsayılan dosya yöneticisi olarak ayarla"),
-            Some(t!("Klasörler ve Win+E rustyfiles ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.")),
+            Some(t!("Klasörler ve Win+E Brysk ile açılır. Yalnızca bu kullanıcı için; istediğiniz an geri alınır.")),
             switch("dfm", p, dfm_on, move |window, _| {
                 let exe = std::env::current_exe().map(|e| e.display().to_string()).unwrap_or_default();
                 std::thread::spawn(move || {
@@ -2666,15 +2666,15 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
         ),
     ];
     out.extend(archives);
-    // other apps' Open / Save / folder dialogs show rustyfiles (needs rustyfiles_dialog.dll)
+    // other apps' Open / Save / folder dialogs show Brysk (needs rustyfiles_dialog.dll)
     out.push(card(
         p,
         L::FolderOpen,
-        t!("Aç / Kaydet pencerelerinde rustyfiles"),
+        t!("Aç / Kaydet pencerelerinde Brysk"),
         Some(if has_dll {
-            t!("Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri rustyfiles ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.")
+            t!("Uygulamaların dosya açma, kaydetme ve klasör seçme pencereleri Brysk ile açılır. Pencereye kendi seçeneklerini ekleyen uygulamalarda Windows'un penceresi açılır. Açık uygulamalarda, yeniden başlatınca geçerli olur.")
         } else {
-            t!("rustyfiles_dialog.dll bulunamadı: rustyfiles'ı kurulum betiğiyle kurun.")
+            t!("rustyfiles_dialog.dll bulunamadı: Brysk'ı kurulum betiğiyle kurun.")
         }),
         switch("dlg", p, dialogs_on, move |window, _| {
             if !has_dll && !dialogs_on {
@@ -2707,7 +2707,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::ScrollText,
             t!("Günlük dosyası"),
-            Some(t!("Uyarılar ve hatalar rustyfiles.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.")),
+            Some(t!("Uyarılar ve hatalar brysk.log dosyasına yazılır (en çok 1 MB; dolunca eskisi .old olur). Bir sorunu bildirirken eklenebilir.")),
             button("log-open", p, t!("Klasörde göster"), |_, cx| {
                 if let Some(path) = crate::logfile::path() {
                     crate::workspace::route_ipc(format!("{}{}", crate::workspace::SELECT_PREFIX, path.display()), cx);
@@ -2735,7 +2735,7 @@ fn update_card(p: &Palette, s: &Settings) -> AnyElement {
         State::NotInstalled => t!("Bu kopya kurulum programıyla kurulmadı: güncellemeleri GitHub'dan indirin.").to_string(),
         State::Idle => t!("Güncellemeler GitHub'dan gelir.").to_string(),
         State::Checking => t!("Denetleniyor…").to_string(),
-        State::UpToDate => t!("rustyfiles güncel.").to_string(),
+        State::UpToDate => t!("Brysk güncel.").to_string(),
         State::Downloading(v, pct) => format!("{} {v} · %{pct}", t!("İndiriliyor:")),
         State::Ready(v) => format!("{} {v}. {}", t!("İndirildi:"), t!("Yeniden başlatınca uygulanır.")),
         State::Failed(e) => format!("{} {e}", t!("Denetlenemedi:")),
@@ -2825,7 +2825,7 @@ pub(crate) fn check_updates_now(cx: &mut App) {
 }
 
 const REPO_URL: &str = "https://github.com/gelenmedya/rustyfiles";
-const SITE_URL: &str = "https://rustyfiles.com";
+const SITE_URL: &str = "https://github.com/rexmont/brysk";
 const DISCORD_URL: &str = "https://discord.gg/K2banZ36zJ";
 const ISSUES_URL: &str = "https://github.com/gelenmedya/rustyfiles/issues/new";
 const RELEASES_URL: &str = "https://github.com/gelenmedya/rustyfiles/releases";
@@ -2839,9 +2839,9 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
         card(
             p,
             L::FolderOpen,
-            "rustyfiles",
+            "Brysk",
             Some(&version),
-            button("copy-ver", p, t!("Kopyala"), move |_, cx| cx.write_to_clipboard(ClipboardItem::new_string(format!("rustyfiles {ver}")))),
+            button("copy-ver", p, t!("Kopyala"), move |_, cx| cx.write_to_clipboard(ClipboardItem::new_string(format!("Brysk {ver}")))),
         ),
         update_card(p, &s),
         card(
@@ -2863,12 +2863,12 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             sw("beta-upd", p, s.beta_updates, |s, v| s.beta_updates = v),
         ),
         section(p, "GitHub"),
-        link_row(p, "gh-star", L::Star, t!("GitHub'da yıldız ver"), Some(t!("rustyfiles işinize yarıyorsa başkalarının da bulmasına yardım eder.")), |_, _| open_url(REPO_URL)),
-        link_row(p, "coffee", L::Coffee, t!("Geliştiriciye bir kahve ısmarla"), Some(t!("rustyfiles'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.")), |_, _| open_url(crate::installer::DONATE)),
+        link_row(p, "gh-star", L::Star, t!("GitHub'da yıldız ver"), Some(t!("Brysk işinize yarıyorsa başkalarının da bulmasına yardım eder.")), |_, _| open_url(REPO_URL)),
+        link_row(p, "coffee", L::Coffee, t!("Geliştiriciye bir kahve ısmarla"), Some(t!("Brysk'ı tek başıma geliştiriyorum; her destek, devam etmeme yardım eder.")), |_, _| open_url(crate::installer::DONATE)),
         link_row(p, "gh-issue", L::MessageSquare, t!("Hata bildir ya da öneride bulun"), None, |_, _| open_url(ISSUES_URL)),
         link_row(p, "gh-notes", L::ScrollText, t!("Sürüm notları"), None, |_, _| open_url(RELEASES_URL)),
         section(p, t!("Topluluk")),
-        link_row(p, "site", L::Globe, t!("Web sitesi"), Some("rustyfiles.com"), |_, _| open_url(SITE_URL)),
+        link_row(p, "site", L::Globe, t!("Web sitesi"), Some("github.com/rexmont/brysk"), |_, _| open_url(SITE_URL)),
         link_row(p, "discord", L::Users, t!("Discord sunucusu"), Some(t!("Soru sor, fikir paylaş, yeni sürümlerden haberdar ol.")), |_, _| open_url(DISCORD_URL)),
         div()
             .px_1()
@@ -2961,7 +2961,7 @@ fn pick_into(_window: &mut Window, cx: &mut App, title: &str, target: PickTarget
         let r = match kind {
             0 => pick(owner, &title, Pick::File { filters: &f(&images) }),
             1 => pick(owner, &title, Pick::File { filters: &f(&exe) }),
-            2 => pick(owner, &title, Pick::Save { filters: &f(&toml), default_name: "rustyfiles-ayarlar.toml" }),
+            2 => pick(owner, &title, Pick::Save { filters: &f(&toml), default_name: "Brysk-ayarlar.toml" }),
             _ => pick(owner, &title, Pick::File { filters: &f(&toml) }),
         };
         let _ = tx.send(r);

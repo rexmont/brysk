@@ -1,7 +1,7 @@
 //! Settings -> Dosya türleri: the user's own programs for kinds of files (`rf_core::openrules`). A list per group of extensions; its
 //! first program opens such a file on a double click, all of them stand first under "Open with". Everything is changed in place:
 //! the extensions are asked for in a small dialog, a program is chosen in a file dialog or typed as a path, and the order is changed
-//! with the arrows. Only rustyfiles follows the lists; Windows' own defaults are not touched.
+//! with the arrows. Only Brysk follows the lists; Windows' own defaults are not touched.
 
 use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
@@ -265,7 +265,7 @@ pub fn page(p: &Palette, s: &Settings) -> Vec<AnyElement> {
                 p,
                 L::AppWindow,
                 t!("Dosya türlerine göre programlar").into(),
-                Some(t!("Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca rustyfiles uyar, Windows'un varsayılan programları değişmez.").into()),
+                Some(t!("Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, Windows'un varsayılan programları değişmez.").into()),
                 Some(button("or-new", p, t!("Yeni tür"), |window, cx| ask_exts(None, window, cx))),
             ))
             .into_any_element(),

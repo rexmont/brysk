@@ -2,8 +2,8 @@
 //! ID, notarised) and updated by downloading a new one; the Velopack updater is Windows-only.
 //! The same names keep the About/Settings/Status Center code unchanged.
 
-pub const APP_ID: &str = "rustyfiles";
-pub const REPO: &str = "https://github.com/gelenmedya/rustyfiles";
+pub const APP_ID: &str = "brysk";
+pub const REPO: &str = "https://github.com/rexmont/brysk";
 pub const DONATE: &str = "https://www.buymeacoffee.com/ozerguzel";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

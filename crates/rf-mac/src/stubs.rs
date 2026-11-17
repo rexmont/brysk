@@ -533,7 +533,7 @@ pub mod bench {
     impl AppKind {
         pub fn name(self) -> &'static str {
             match self {
-                AppKind::Rustyfiles => "rustyfiles",
+                AppKind::Rustyfiles => "Brysk",
                 AppKind::Explorer => "Finder",
                 AppKind::Files => "Files",
                 AppKind::FilePilot => "FilePilot",
@@ -1233,7 +1233,7 @@ pub mod nameindex {
 
 pub mod dialog_reg {
     pub const CLASSES: &str = "";
-    pub const DLL_NAME: &str = "rustyfiles_dialog.dylib";
+    pub const DLL_NAME: &str = "Brysk_dialog.dylib";
 
     pub fn is_enabled(_classes_root: &str) -> bool {
         false
@@ -1253,7 +1253,7 @@ pub mod dialog_reg {
 }
 
 pub mod default_fm {
-    pub const APP_NAME: &str = "rustyfiles";
+    pub const APP_NAME: &str = "Brysk";
     pub const CLASSES: &str = "";
 
     /// macOS does not let an app become the Finder; the share of folder-opening goes through

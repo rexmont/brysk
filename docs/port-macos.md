@@ -247,6 +247,10 @@ Next (visible gaps, in order):
 * The menu-bar item exists (`NSStatusItem`: Open / New Window / Settings / Quit) and the
   name index (background walk + FSEvents) serves quick search; app menu bar and macOS
   Cmd shortcuts are installed alongside the Explorer Ctrl ones.
+* Share sheet (`NSSharingServicePicker`), PDFKit pages, Quick Look thumbnails, file
+  conflicts/verification, Finder Trash and a real menu bar are in. Universal build
+  (`UNIVERSAL=1`) and `scripts/notarize-macos.sh` are ready; notarisation needs the
+  Developer ID credentials.
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions
   written that way are read correctly) — the cause of "folder not found" on every tab.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).

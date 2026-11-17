@@ -219,9 +219,13 @@ Done:
   macOS 26 arm64; the process creates its 1280×800 window in ~290 ms (start-up trace:
   "first render at 259 ms", "window opened at 287 ms"), opens a folder given on the command
   line, writes `settings.toml`, and stays running.
-* Native `NSOpenPanel`/`NSSavePanel` pickers (dispatched to the main queue), a real Unix-socket
-  single-instance/launch hand-over, the Trash backend, and `rf-platform::input`
-  (Quartz cursor/modifiers) are in.
+* Native `NSOpenPanel`/`NSSavePanel` pickers (dispatched to the main queue), the Finder's icon
+  for every file type (`NSWorkspace`, so apps and documents look like they do in Finder), a
+  real Unix-socket single-instance/launch hand-over, the Trash backend, the global quick-search
+  hotkey (Carbon `RegisterEventHotKey`, Alt+Space registers successfully), and
+  `rf-platform::input` (Quartz cursor/modifiers) are in.
+* `scripts/build-macos.sh` builds `target/rustyfiles.app` (Info.plist with the TCC usage
+  texts, both binaries, ad-hoc signature); the bundled app launches and shows its window.
 * `cargo test -p rf-mac`: 32 pass; 6 fail — all Windows-fixture tests that came in with the
   included modules (`design` ZIPs, `git` path states, a watch timing test), not macOS code.
 
@@ -229,8 +233,8 @@ Next (visible gaps, in order):
 
 * Screenshot-verified theme pass (the shell has no Screen Recording permission, so the UI has
   only been verified through the window server: owner `rustyfiles`, 1280×800, layer 0).
-* Finder/Quick Look icons and thumbnails for non-image files (NSWorkspace/QLThumbnailGenerator);
-  today only images get a picture and the rest use the app's own icon set.
+* Real Quick Look thumbnails (image and video contents) — the Finder icon is there, the
+  thumbnails are not; `QLThumbnailGenerator` is the next step.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
 * NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
   Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).

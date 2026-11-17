@@ -43,14 +43,50 @@ fn rgba_to_bgra(img: &image::RgbaImage) -> Bgra {
     Bgra { width: w, height: h, data }
 }
 
-/// Decodes the picture `path` (an image file) to BGRA, at most `size` pixels on its longer
-/// side. `Icon` asks for the file type's picture: without Quick Look, only images have one.
+/// Decodes a picture file to BGRA, or asks the Finder for the item's icon.
 pub fn get_image(path: &Path, size: u32, kind: Kind) -> anyhow::Result<Bgra> {
-    let img = image::open(path)?;
-    let thumb = img.thumbnail(size.max(1), size.max(1)).to_rgba8();
-    match kind {
-        Kind::Thumbnail | Kind::Icon => Ok(rgba_to_bgra(&thumb)),
+    match image::open(path) {
+        Ok(img) => {
+            let thumb = img.thumbnail(size.max(1), size.max(1)).to_rgba8();
+            Ok(rgba_to_bgra(&thumb))
+        }
+        // Not a picture: the Finder's icon for the type (an app's own icon, a folder's, a
+        // document's), which is what Explorer shows for a file type too.
+        Err(e) => match icon_for(path, size) {
+            Ok(icon) => Ok(icon),
+            Err(_) => Err(e.into()),
+        },
     }
+}
+
+/// The icon the Finder draws for `path`, through `NSWorkspace` on the main thread.
+fn icon_for(path: &Path, size: u32) -> anyhow::Result<Bgra> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{MainThreadMarker, NSString};
+
+    let (tx, rx) = std::sync::mpsc::channel::<Option<Bgra>>();
+    let p = path.to_path_buf();
+    dispatch2::DispatchQueue::main().exec_async(move || {
+        let Some(mtm) = MainThreadMarker::new() else {
+            let _ = tx.send(None);
+            return;
+        };
+        let ws = NSWorkspace::sharedWorkspace();
+        let img = ws.iconForFile(&NSString::from_str(&p.to_string_lossy()));
+        // The Finder hands 32×32; ask for the size the list needs before drawing it.
+        let s = size.max(16) as f64;
+        img.setSize(objc2_foundation::NSSize::new(s, s));
+        let out = img
+            .TIFFRepresentation()
+            .and_then(|data| image::load_from_memory(&data.to_vec()).ok())
+            .map(|img| rgba_to_bgra(&img.to_rgba8()));
+        let _ = mtm;
+        let _ = tx.send(out);
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(10))
+        .ok()
+        .flatten()
+        .ok_or_else(|| anyhow::anyhow!("ikon alınamadı"))
 }
 // ------------------------------------------------------------------ the worker pool
 

@@ -1295,22 +1295,6 @@ pub mod nameindex {
     }
 }
 
-pub mod hotkey {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum HotkeyError {
-        Invalid,
-        Taken,
-    }
-
-    /// Global shortcuts need a Carbon hot key (which needs no special permission); until that
-    /// lands, registering one says it is unavailable rather than pretending it works.
-    pub fn set(_keys: Option<&str>) -> Result<(), HotkeyError> {
-        Err(HotkeyError::Taken)
-    }
-
-    pub fn set_handler(_f: impl Fn() + Send + 'static) {}
-}
-
 pub mod dialog_reg {
     pub const CLASSES: &str = "";
     pub const DLL_NAME: &str = "rustyfiles_dialog.dylib";

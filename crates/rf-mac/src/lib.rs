@@ -36,6 +36,7 @@ pub mod fileops;
 pub mod foldersize;
 pub mod glass;
 pub mod handover;
+pub mod hotkey;
 pub mod input;
 pub mod known;
 pub mod listing;

@@ -37,19 +37,18 @@ Two structural facts make the port much cheaper than a rewrite:
 ```
             rf-app
                │                    │
-     gpui_kit/gpui-pre      rf_platform::<module>
+     gpui_kit/gpui-pre      rf_win::<module>
                │                    │
-      [windows] gpui-pre-windows    [windows] crates/rf-win
-      [macos]   gpui-pre (apple)    [macos]   crates/rf-mac
+      [windows] gpui-pre-windows    [windows] crates/rf-win (the real platform layer)
+      [macos]   gpui-pre (apple)    [macos]   crates/rf-win → re-exports crates/rf-mac
 ```
 
-* `crates/rf-platform` is a one-line facade: `pub use rf_win::*` on Windows,
-  `pub use rf_mac::*` on macOS. The 1,657 `rf_win::` call sites in `rf-app` were renamed
-  mechanically to `rf_platform::` (no behavior change).
+* `rf-win` is the façade on both platforms: its Windows modules are `#[cfg(windows)]`, and on
+  macOS it re-exports `rf-mac` under the same module paths. `rf-app` keeps upstream's
+  `rf_win::` calls, so merging upstream stays cheap (38 files differ from `main`).
 * **Why not a dependency alias:** Cargo rejects the same dependency key pointing at two
-  packages from two target tables ("different source paths depending on the build target"),
-  and two crates with one lib name collide. Distinct package names behind a facade are the
-  supported form.
+  packages from two target tables ("different source paths depending on the build target").
+  Keeping one package that dispatches inside is the supported form.
 * **Reuse by path, not by copy.** Portable `rf-win` modules are included verbatim:
   `#[path = "../../rf-win/src/git.rs"] pub mod git;` (git, ftp, hash, encoding, design, elf, pe,
   datefmt, openrules, tree_watch, diskusage, foldersize, …), with small `cfg` shims where they
@@ -160,7 +159,7 @@ Architecture (review 1):
 * facade, not alias (above); `cargo check -p rf-app --bin rustyfiles` is the M0 gate, not
   `-p rustyfiles`.
 * `rf-app` is not untouched: ~100 direct `windows::`/`std::os::windows` uses remain and are
-  being replaced one by one (cursor/modifiers via `rf_platform::input`, `CommandExt` and
+  being replaced one by one (cursor/modifiers via `rf_win::input`, `CommandExt` and
   `MetadataExt` behind `cfg`, a real `flock` settings lock).
 * `rf-core` compiles on Unix but is not portable yet: drive letters, `C:\`, `$Recycle.Bin`
   and Windows attribute bits are in `Location`, history, navtree and 1,000+ tests.
@@ -202,8 +201,8 @@ macOS behavior (review 2), corrected in the module implementations:
 
 Done:
 
-* `rf-platform` facade and the mechanical rename; Cargo target wiring.
-* `rf-mac` compiles: known folders, `/Volumes` + `statfs` drives, `read_dir` listing with
+* `rf-win` as the façade on both platforms (Windows modules cfg-gated, macOS re-exports `rf-mac`); fork/upstream workflow in `docs/upstream.md`.
+* `rf-mac` compiles (through the `rf-win` façade): known folders, `/Volumes` + `statfs` drives, `read_dir` listing with
   symlink/hidden/cloud bits, recursive copy/move/rename/unique names (APFS `clonefile`),
   folder sizes, walk-based deep search, `~/.Trash` list/empty/restore, file info + xattrs +
   quarantine, NSPasteboard file clipboard, accent/appearance, localized folder labels,
@@ -223,7 +222,7 @@ Done:
   for every file type (`NSWorkspace`, so apps and documents look like they do in Finder), a
   real Unix-socket single-instance/launch hand-over, the Trash backend, the global quick-search
   hotkey (Carbon `RegisterEventHotKey`, Alt+Space registers successfully), and
-  `rf-platform::input` (Quartz cursor/modifiers) are in.
+  `rf_win::input` (Quartz cursor/modifiers) are in.
 * `scripts/build-macos.sh` builds `target/rustyfiles.app` (Info.plist with the TCC usage
   texts, ad-hoc signature) with DirectLook as a **nested agent app** under
   `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices

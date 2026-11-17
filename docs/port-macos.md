@@ -269,6 +269,14 @@ Next (visible gaps, in order):
   folder an item is already in is a no-op, a folder cannot be copied or moved into itself, and
   Cut + Paste inside Brysk moves the files (the pasteboard itself has no cut flag). Launches
   from Finder get Homebrew and the usual macOS tool folders on `PATH`, so `git` works.
+* The corner (tab actions) menu's New Window now opens focused above the window it came from;
+  the compact overlay and always-on-top use the native `NSWindow` (frame, min size, level)
+  instead of the Windows-only window calls. Menus, tooltips and the command palette show
+  `⌘`/`⌥`/`⇧` hints; the matching Command bindings are installed before the Explorer ones, so
+  the native menu bar shows them too. With "run in the background" on, closing the last window
+  keeps the app alive and Dock/status-bar activation reopens it (GPUI's reopen delegate);
+  File/App menu entries that make sense without a window open one. Settings pages no longer
+  show Windows-only material/search/start-up/default-manager/dialog rows or wording.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
 * NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
   Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).

@@ -229,9 +229,20 @@ mod tests {
 
     #[test]
     fn pretty_keys() {
-        assert_eq!(pretty("ctrl-shift-k"), "Ctrl+Shift+K");
-        assert_eq!(pretty("alt-f4"), "Alt+F4");
-        assert_eq!(pretty("ctrl-pageup"), "Ctrl+Pageup");
-        assert_eq!(pretty("ctrl--"), "Ctrl+-");
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(pretty("ctrl-shift-k"), "Cmd+Shift+K");
+            assert_eq!(pretty("alt-f4"), "Option+F4");
+            assert_eq!(pretty("ctrl-pageup"), "Cmd+Pageup");
+            assert_eq!(pretty("ctrl--"), "Cmd+-");
+            assert_eq!(pretty("cmd-k"), "Cmd+K");
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            assert_eq!(pretty("ctrl-shift-k"), "Ctrl+Shift+K");
+            assert_eq!(pretty("alt-f4"), "Alt+F4");
+            assert_eq!(pretty("ctrl-pageup"), "Ctrl+Pageup");
+            assert_eq!(pretty("ctrl--"), "Ctrl+-");
+        }
     }
 }

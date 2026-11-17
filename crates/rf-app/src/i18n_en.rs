@@ -1995,4 +1995,12 @@ pub const EN: &[(&str, &str)] = &[
         "Bu kısayol kullanılamıyor: Ctrl, Alt, Shift ya da Cmd ile bir tuş seçin",
         "This shortcut can't be used: choose a key with Control, Option, Shift or Command",
     ),
+    (
+        "Listeyi boşaltır; sistemin son kullanılanlar listesine dokunulmaz",
+        "Clears the list; the system's recent-items list is left alone",
+    ),
+    (
+        "Küçük resimler ve simgeler yalnızca bellekte tutulur; sınır her pencerenin kendi önbelleği içindir ve aşılınca en eskiden kullanılanlar atılır. Sistemin kendi küçük resim önbelleğine dokunulmaz.",
+        "Thumbnails and icons are kept in memory only; the limit is per window and the oldest are dropped when it is exceeded. The system's own thumbnail cache is left alone.",
+    ),
 ];

@@ -4252,7 +4252,12 @@ impl FolderView {
                                         .cursor_pointer()
                                         .hover(|s| s.bg(p.hover).text_color(p.text))
                                         .tooltip(|w, cx| {
-                                            gpui_kit::component::tooltip::Tooltip::new(t!("Listeyi boşaltır; Windows'un kendi son kullanılanlar listesine dokunulmaz")).build(w, cx)
+                                            gpui_kit::component::tooltip::Tooltip::new(if cfg!(target_os = "macos") {
+                                                t!("Listeyi boşaltır; sistemin son kullanılanlar listesine dokunulmaz")
+                                            } else {
+                                                t!("Listeyi boşaltır; Windows'un kendi son kullanılanlar listesine dokunulmaz")
+                                            })
+                                            .build(w, cx)
                                         })
                                         .child(t!("Temizle"))
                                         .on_click(cx.listener(|_, _, _, cx| {

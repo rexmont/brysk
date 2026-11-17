@@ -119,7 +119,11 @@ pub fn cards(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::Image,
             t!("Küçük resim önbelleği"),
-            Some(t!("Küçük resimler ve simgeler yalnızca bellekte tutulur; sınır her pencerenin kendi önbelleği içindir ve aşılınca en eskiden kullanılanlar atılır. Windows'un kendi küçük resim önbelleğine dokunulmaz.")),
+            Some(if cfg!(target_os = "macos") {
+                t!("Küçük resimler ve simgeler yalnızca bellekte tutulur; sınır her pencerenin kendi önbelleği içindir ve aşılınca en eskiden kullanılanlar atılır. Sistemin kendi küçük resim önbelleğine dokunulmaz.")
+            } else {
+                t!("Küçük resimler ve simgeler yalnızca bellekte tutulur; sınır her pencerenin kendi önbelleği içindir ve aşılınca en eskiden kullanılanlar atılır. Windows'un kendi küçük resim önbelleğine dokunulmaz.")
+            }),
             select_box("thumb-limit", p, format!("{current} MB"), move |_| {
                 choices
                     .iter()

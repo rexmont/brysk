@@ -612,25 +612,40 @@ pub fn main() {
             // a browsable archive (DirectLook's "Brysk'ta aç") opens like a folder, here
             let archive = !shell_namespace && archive_view::is_browsable(std::path::Path::new(&arg));
             if is_dir == Some(false) && !archive {
-                // Explorer opens folders through the verb we took over: what we just handed it may
-                // come straight back. Never ping-pong; a path is then shown here (with its error).
-                rf_win::handover::trace("main: not a folder for us (or a namespace we do not list): to Explorer unless it just came from there");
-                if !rf_win::default_fm::forwarded_recently(&arg) {
-                    rf_win::default_fm::note_forward(&arg);
-                    rf_win::handover::trace("main: handed to Explorer, this process ends");
-                    let _ = std::process::Command::new("explorer.exe").arg(&arg).spawn();
-                    return;
+                // macOS has no Explorer to hand a file back to: open its folder with the file
+                // selected, which is what the Finder does for "Reveal in Finder".
+                #[cfg(target_os = "macos")]
+                {
+                    let p = PathBuf::from(&arg);
+                    if p.is_file()
+                        && let (Some(dir), Some(name)) = (p.parent(), p.file_name())
+                    {
+                        start = Some(Location::Path(dir.to_path_buf()));
+                        *workspace::START_SELECT.lock().unwrap() = Some(name.to_string_lossy().into_owned());
+                    }
                 }
-                if shell_namespace {
-                    return;
-                }
-                // a file that came back (an archive type Windows browses but we don't, e.g. .cpio):
-                // its folder, with the file selected
-                let p = PathBuf::from(&arg);
-                if let (Some(dir), Some(name)) = (p.parent().filter(|_| p.is_file()), p.file_name()) {
-                    start = Some(Location::Path(dir.to_path_buf()));
-                    *workspace::START_SELECT.lock().unwrap() = Some(name.to_string_lossy().into_owned());
-                    select = Some(arg.clone());
+                #[cfg(not(target_os = "macos"))]
+                {
+                    // Explorer opens folders through the verb we took over: what we just handed it may
+                    // come straight back. Never ping-pong; a path is then shown here (with its error).
+                    rf_win::handover::trace("main: not a folder for us (or a namespace we do not list): to Explorer unless it just came from there");
+                    if !rf_win::default_fm::forwarded_recently(&arg) {
+                        rf_win::default_fm::note_forward(&arg);
+                        rf_win::handover::trace("main: handed to Explorer, this process ends");
+                        let _ = std::process::Command::new("explorer.exe").arg(&arg).spawn();
+                        return;
+                    }
+                    if shell_namespace {
+                        return;
+                    }
+                    // a file that came back (an archive type Windows browses but we don't, e.g. .cpio):
+                    // its folder, with the file selected
+                    let p = PathBuf::from(&arg);
+                    if let (Some(dir), Some(name)) = (p.parent().filter(|_| p.is_file()), p.file_name()) {
+                        start = Some(Location::Path(dir.to_path_buf()));
+                        *workspace::START_SELECT.lock().unwrap() = Some(name.to_string_lossy().into_owned());
+                        select = Some(arg.clone());
+                    }
                 }
             }
             if start.is_none() {

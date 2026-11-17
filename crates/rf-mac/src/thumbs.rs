@@ -43,20 +43,93 @@ fn rgba_to_bgra(img: &image::RgbaImage) -> Bgra {
     Bgra { width: w, height: h, data }
 }
 
-/// Decodes a picture file to BGRA, or asks the Finder for the item's icon.
+/// Decodes a picture file to BGRA, or asks Quick Look / the Finder for a picture of it.
 pub fn get_image(path: &Path, size: u32, kind: Kind) -> anyhow::Result<Bgra> {
+    if path.is_dir() {
+        return icon_for(path, size);
+    }
+    // Thumbnails: Quick Look has providers for video, PDF, Office, HEIC/RAW and the rest, and
+    // draws them the way the Finder does. Icons: the picture of the type is enough.
+    if kind == Kind::Thumbnail
+        && let Ok(t) = quick_look(path, size)
+    {
+        return Ok(t);
+    }
     match image::open(path) {
         Ok(img) => {
             let thumb = img.thumbnail(size.max(1), size.max(1)).to_rgba8();
             Ok(rgba_to_bgra(&thumb))
         }
-        // Not a picture: the Finder's icon for the type (an app's own icon, a folder's, a
+        // Not a picture this crate knows: the Finder's icon for the type (an app's own icon, a
         // document's), which is what Explorer shows for a file type too.
         Err(e) => match icon_for(path, size) {
             Ok(icon) => Ok(icon),
             Err(_) => Err(e.into()),
         },
     }
+}
+
+/// A Quick Look thumbnail: PDF pages, video frames, Office documents, HEIC/RAW pictures, and
+/// anything with a Quick Look provider of its own.
+fn quick_look(path: &Path, size: u32) -> anyhow::Result<Bgra> {
+    use block2::RcBlock;
+    use objc2::AnyThread;
+    use objc2_foundation::{NSString, NSURL};
+    use objc2_quick_look_thumbnailing::{
+        QLThumbnailGenerationRequest, QLThumbnailGenerationRequestRepresentationTypes, QLThumbnailGenerator, QLThumbnailRepresentation,
+    };
+
+    let (tx, rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+    // 2x: Retina. The size is in points, the picture comes back in pixels.
+    let points = size.max(16) as f64;
+    let request = unsafe {
+        QLThumbnailGenerationRequest::initWithFileAtURL_size_scale_representationTypes(
+            QLThumbnailGenerationRequest::alloc(),
+            &url,
+            objc2_foundation::NSSize::new(points, points),
+            2.0,
+            QLThumbnailGenerationRequestRepresentationTypes::All,
+        )
+    };
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let block = RcBlock::new(move |rep: *mut QLThumbnailRepresentation, _err: *mut objc2_foundation::NSError| {
+        let Some(tx) = tx.lock().unwrap().take() else { return };
+        if rep.is_null() {
+            let _ = tx.send(None);
+            return;
+        }
+        let rep = unsafe { &*rep };
+        // NSImage is main-thread AppKit: its bytes are made there (the image itself is only
+        // carried across as an owned pointer and taken back on the main thread).
+        let img = unsafe { rep.NSImage() };
+        let img_ptr = objc2::rc::Retained::into_raw(img) as usize;
+        let (tx2, rx2) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+        dispatch2::DispatchQueue::main().exec_async(move || {
+            let img = unsafe { objc2::rc::Retained::from_raw(img_ptr as *mut objc2_app_kit::NSImage) };
+            let data = img.and_then(|i| i.TIFFRepresentation()).map(|d| d.to_vec());
+            let _ = tx2.send(data);
+        });
+        let out = rx2.recv_timeout(std::time::Duration::from_secs(5)).ok().flatten();
+        let _ = tx.send(out);
+    });
+    unsafe {
+        QLThumbnailGenerator::sharedGenerator().generateBestRepresentationForRequest_completionHandler(&request, &block);
+    }
+    let data = match rx.recv_timeout(std::time::Duration::from_secs(15)) {
+        Ok(Some(d)) => d,
+        Ok(None) => {
+            log::debug!("quicklook: no representation for {}", path.display());
+            anyhow::bail!("Quick Look tanıtımı yok")
+        }
+        Err(_) => {
+            log::debug!("quicklook: no answer for {} within 15 s", path.display());
+            anyhow::bail!("Quick Look yanıt vermedi")
+        }
+    };
+    let img = image::load_from_memory(&data)?;
+    let thumb = img.thumbnail(size.max(1), size.max(1)).to_rgba8();
+    Ok(rgba_to_bgra(&thumb))
 }
 
 /// The icon the Finder draws for `path`, through `NSWorkspace` on the main thread.

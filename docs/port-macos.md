@@ -240,8 +240,15 @@ Next (visible gaps, in order):
 
 * Screenshot-verified theme pass (the shell has no Screen Recording permission, so the UI has
   only been verified through the window server: owner `rustyfiles`, 1280×800, layer 0).
-* Real Quick Look thumbnails (image and video contents) — the Finder icon is there, the
-  thumbnails are not; `QLThumbnailGenerator` is the next step.
+* Quick Look thumbnails are in (PDF pages, video frames, Office/HEIC through
+  `QLThumbnailGenerator`); the list shows them wherever thumbnails are on.
+* The PDF viewer renders through PDFKit; DirectLook video plays through the FilmCraft
+  decoders (silent: CoreAudio output is the one missing piece).
+* The menu-bar item exists (`NSStatusItem`: Open / New Window / Settings / Quit) and the
+  name index (background walk + FSEvents) serves quick search; app menu bar and macOS
+  Cmd shortcuts are installed alongside the Explorer Ctrl ones.
+* Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions
+  written that way are read correctly) — the cause of "folder not found" on every tab.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
 * NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
   Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).

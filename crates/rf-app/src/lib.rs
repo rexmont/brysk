@@ -45,6 +45,8 @@ mod logfile;
 mod layouts;
 pub mod look;
 mod image_cache;
+#[cfg(target_os = "macos")]
+mod menu_mac;
 #[cfg(windows)]
 mod installer;
 #[cfg(not(windows))]
@@ -419,6 +421,22 @@ pub fn main() {
     // the id Velopack gives the Start menu / taskbar shortcuts: a pin survives updates
     rf_platform::window::set_app_id(installer::APP_ID);
     install_panic_log();
+    // developer probe for the thumbnail pipeline (`RUSTYFILES_THUMB_PROBE=<file>`)
+    if let Some(probe) = std::env::var_os("RUSTYFILES_THUMB_PROBE") {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            match rf_platform::thumbs::get_image(std::path::Path::new(&probe), 128, rf_platform::thumbs::Kind::Thumbnail) {
+                Ok(b) => log::warn!("thumb probe ok: {}x{}", b.width, b.height),
+                Err(e) => log::warn!("thumb probe failed: {e:#}"),
+            }
+            if std::path::Path::new(&probe).extension().is_some_and(|e| e == "pdf") {
+                match rf_platform::look::pdf::Pdf::open(std::path::Path::new(&probe), None).and_then(|p| p.render(0, 256)) {
+                    Ok(b) => log::warn!("pdf probe ok: {}x{}", b.width, b.height),
+                    Err(e) => log::warn!("pdf probe failed: {e:#}"),
+                }
+            }
+        });
+    }
     rf_platform::shell::suppress_critical_error_dialogs();
     // before any shell icon/thumbnail work: see keep_gdiplus_alive (loader-lock deadlock)
     rf_platform::thumbs::keep_gdiplus_alive();
@@ -729,6 +747,8 @@ pub fn main() {
         cx.set_global(status_center::OpsGlobal(ops));
         actions::bind(cx);
         actions::bind_user(cx);
+        #[cfg(target_os = "macos")]
+        menu_mac::install(cx);
         keymap_editor::init(cx);
         if let Some(page) = &settings_arg {
             settings_view::open_page(

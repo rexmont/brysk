@@ -37,6 +37,7 @@ pub mod foldersize;
 pub mod glass;
 pub mod handover;
 pub mod hotkey;
+pub mod indexer;
 pub mod input;
 pub mod known;
 pub mod listing;
@@ -50,6 +51,7 @@ pub mod shell;
 pub mod single_instance;
 pub mod sta;
 pub mod thumbs;
+pub mod tray;
 pub mod window;
 
 #[path = "../../rf-win/src/watch.rs"]

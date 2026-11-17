@@ -378,11 +378,14 @@ mod tests {
     }
 }
 
-/// Tidies a path typed, pasted or passed in, the way Explorer reads it: `/` becomes a
-/// backslash, doubled separators collapse, `.` and `..` resolve lexically, the drive letter
-/// is upper case, and there's no trailing separator except on a root. URLs (`ftp://…`),
-/// shell names (`shell:…`, `::{…}`), device / verbatim paths and relative paths are left
-/// as they are.
+/// Tidies a path typed, pasted or passed in, the way the platform's own file manager reads
+/// it. Windows: `/` becomes a backslash, doubled separators collapse, `.` and `..` resolve
+/// lexically, the drive letter is upper case, and there is no trailing separator except on a
+/// root. Unix: the same with `/`, and a path written the Windows way (`\Users\x`, from an old
+/// session or a pasted Windows path) is read with `/` when no file of that name exists. URLs
+/// (`ftp://…`), shell names (`shell:…`, `::{…}`), device / verbatim paths and relative paths
+/// are left as they are.
+#[cfg(windows)]
 pub fn clean_path(p: &Path) -> PathBuf {
     const B: char = '\\';
     let Some(s) = p.to_str() else { return p.to_path_buf() };
@@ -430,7 +433,41 @@ pub fn clean_path(p: &Path) -> PathBuf {
     PathBuf::from(out)
 }
 
-#[cfg(test)]
+#[cfg(unix)]
+pub fn clean_path(p: &Path) -> PathBuf {
+    let Some(s) = p.to_str() else { return p.to_path_buf() };
+    let lower = s.to_ascii_lowercase();
+    if s.contains("://") || lower.starts_with("shell:") || s.starts_with("::") {
+        return p.to_path_buf();
+    }
+    // A Windows-style path from an old session or a paste (`\Users\x`): read it as a Unix
+    // path when the literal name does not exist.
+    let s: std::borrow::Cow<'_, str> = if s.starts_with('\\') && !p.exists() { std::borrow::Cow::Owned(s.replace('\\', "/")) } else { std::borrow::Cow::Borrowed(s) };
+    if !s.starts_with('/') {
+        // relative: nothing to anchor `..` to, as on Windows
+        return PathBuf::from(s.as_ref());
+    }
+    let mut parts: Vec<&str> = Vec::new();
+    for c in s[1..].split('/') {
+        match c {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            c => parts.push(c),
+        }
+    }
+    let mut out = String::from("/");
+    for (i, c) in parts.iter().enumerate() {
+        if i > 0 {
+            out.push('/');
+        }
+        out.push_str(c);
+    }
+    PathBuf::from(out)
+}
+
+#[cfg(all(test, windows))]
 mod clean_tests {
     use super::*;
 
@@ -451,6 +488,30 @@ mod clean_tests {
         assert_eq!(c("||?|C:|a/b".replace('|', "\\").as_str()), "||?|C:|a/b");
         assert_eq!(c("C:/Fotoğraflar/Tatil"), "C:|Fotoğraflar|Tatil");
         assert_eq!(c("klasör/alt"), "klasör|alt");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod clean_tests_unix {
+    use super::*;
+
+    #[test]
+    fn clean_paths_unix() {
+        let c = |s: &str| clean_path(Path::new(s)).to_string_lossy().into_owned();
+        assert_eq!(c("/Users/x/./y/../z/"), "/Users/x/z");
+        assert_eq!(c("//Users//x"), "/Users/x");
+        assert_eq!(c("/"), "/");
+        assert_eq!(c("/../.."), "/");
+        assert_eq!(c("relative/./path"), "relative/./path");
+        assert_eq!(c("ftp://host/a/b"), "ftp://host/a/b");
+        assert_eq!(c("shell:Downloads"), "shell:Downloads");
+        assert_eq!(c("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"), "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}");
+    }
+
+    #[test]
+    fn a_windows_session_path_is_read_as_a_unix_one() {
+        // from a settings file written before the Unix path cleaner existed
+        assert_eq!(clean_path(Path::new(r"\Users\uygar\Desktop")), PathBuf::from("/Users/uygar/Desktop"));
     }
 }
 

@@ -1356,7 +1356,10 @@ impl FolderView {
                         let _ = tx.unbounded_send(Msg::Batch(es));
                         n
                     });
-                    let _ = tx.unbounded_send(Msg::Done(r.map_err(|e| e.to_string())));
+                    if let Err(e) = &r {
+                    log::warn!("list {}: {e}", path.display());
+                }
+                let _ = tx.unbounded_send(Msg::Done(r.map_err(|e| e.to_string())));
                 })
                 .ok();
         } else if let Some(server) = rf_platform::network::server_root(&path) {
@@ -1372,7 +1375,10 @@ impl FolderView {
                         let _ = tx.unbounded_send(Msg::Batch(es));
                         n
                     });
-                    let _ = tx.unbounded_send(Msg::Done(r.map_err(|e| e.to_string())));
+                    if let Err(e) = &r {
+                    log::warn!("list {}: {e}", path.display());
+                }
+                let _ = tx.unbounded_send(Msg::Done(r.map_err(|e| e.to_string())));
                 })
                 .ok();
         } else if let Location::Search { root, query } = self.location().clone() {
@@ -1514,6 +1520,9 @@ impl FolderView {
                 // made here would be thrown away)
                 if r.is_ok() && !cancel.load(Ordering::Relaxed) && !spec.1.key.needs_ranks() {
                     let _ = tx.unbounded_send(Msg::View(compute_view(&all, &spec.0, spec.1, spec.2, None)));
+                }
+                if let Err(e) = &r {
+                    log::warn!("list {}: {e}", path.display());
                 }
                 let _ = tx.unbounded_send(Msg::Done(r.map_err(|e| e.to_string())));
             })

@@ -93,6 +93,7 @@ gpui_kit::actions!(
         OpenInNewWindow,
         OpenTerminalAdmin,
         OrganizeFolder,
+        Quit,
     ]
 );
 
@@ -209,6 +210,48 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("ctrl-shift-`", OpenTerminal, None),
     ]);
     bind_layout_shifted(cx);
+    #[cfg(target_os = "macos")]
+    {
+        // macOS conventions, alongside the Explorer shortcuts: both work.
+        let f = Some(FOLDER_CTX);
+        cx.bind_keys([
+            KeyBinding::new("cmd-q", Quit, None),
+            KeyBinding::new("cmd-c", CopyItems, f),
+            KeyBinding::new("cmd-x", CutItems, f),
+            KeyBinding::new("cmd-v", PasteItems, f),
+            KeyBinding::new("cmd-alt-v", PasteIntoSelected, f),
+            KeyBinding::new("cmd-a", SelectAll, f),
+            KeyBinding::new("cmd-z", Undo, f),
+            KeyBinding::new("cmd-shift-z", Redo, f),
+            KeyBinding::new("cmd-backspace", DeleteItems, f),
+            KeyBinding::new("cmd-delete", DeleteItems, f),
+            KeyBinding::new("cmd-f", FocusSearch, None),
+            KeyBinding::new("cmd-l", FocusAddress, None),
+            KeyBinding::new("cmd-t", NewTab, None),
+            KeyBinding::new("cmd-w", CloseTab, None),
+            KeyBinding::new("cmd-shift-t", ReopenClosedTab, None),
+            KeyBinding::new("cmd-n", NewWindow, None),
+            KeyBinding::new("cmd-o", OpenSelected, f),
+            KeyBinding::new("cmd-i", Properties, f),
+            KeyBinding::new("cmd-shift-.", ToggleHidden, None),
+            KeyBinding::new("cmd-[", GoBack, None),
+            KeyBinding::new("cmd-]", GoForward, None),
+            KeyBinding::new("cmd-up", GoUp, None),
+            KeyBinding::new("cmd-shift-g", GoHome, None),
+            KeyBinding::new("cmd-r", Refresh, None),
+            KeyBinding::new("cmd-shift-n", NewFolder, f),
+            KeyBinding::new("cmd-alt-p", TogglePreview, None),
+            KeyBinding::new("cmd-alt-b", ToggleSidebar, None),
+            KeyBinding::new("cmd-shift-1", ViewDetails, None),
+            KeyBinding::new("cmd-shift-2", ViewGrid, None),
+            KeyBinding::new("cmd-shift-3", ViewColumns, None),
+            KeyBinding::new("cmd-,", GoSettings, None),
+            KeyBinding::new("cmd-1", NextTab, None),
+            KeyBinding::new("cmd-shift-[", PrevTab, None),
+            KeyBinding::new("cmd-shift-]", NextTab, None),
+            KeyBinding::new("cmd-enter", OpenInNewWindow, f),
+        ]);
+    }
 }
 
 /// GPUI reports Shift+digit as the layout's shifted character without Shift (Turkish Q:

@@ -44,7 +44,9 @@ fn resolve_in(text: &str, list: &[(String, PathBuf)]) -> Option<String> {
     let (_, path) = list.iter().find(|(n, _)| n.eq_ignore_ascii_case(name) || n.to_lowercase() == name.to_lowercase())?;
     let base = path.to_string_lossy();
     let base = base.trim_end_matches(['\\', '/']);
-    Some(if sub.is_empty() { format!("{base}\\") } else { format!("{base}{}", sub.replace('/', "\\")) })
+    let sep = std::path::MAIN_SEPARATOR;
+    let sub = sub.trim_start_matches(['\\', '/']);
+    Some(if sub.is_empty() { format!("{base}{sep}") } else { format!("{base}{sep}{}", sub.replace(['\\'], &sep.to_string())) })
 }
 
 /// Aliases starting with the typed name, while only the name is typed (`@pro`).

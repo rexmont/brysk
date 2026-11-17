@@ -5,35 +5,6 @@
 
 // ------------------------------------------------------------------ tray icon (status bar)
 
-pub mod tray {
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum TrayEvent {
-        Open,
-        NewWindow,
-        Settings,
-        Quit,
-    }
-
-    #[derive(Clone)]
-    pub struct Labels {
-        pub tooltip: String,
-        pub open: String,
-        pub new_window: String,
-        pub settings: String,
-        pub quit: String,
-    }
-
-    /// The status-bar item is part of the macOS milestone after the file manager itself; the
-    /// app keeps running with its windows.
-    pub fn show(_labels: Labels) {}
-
-    pub fn hide() {}
-
-    pub fn set_handler(_f: impl Fn(TrayEvent) + Send + 'static) {}
-
-    pub fn notify(_title: &str, _body: &str) {}
-}
-
 // ------------------------------------------------------------------ taskbar progress
 
 pub mod taskbar_progress {
@@ -1080,45 +1051,6 @@ pub mod shortcut {
     }
 }
 
-pub mod indexer {
-    use std::path::{Path, PathBuf};
-
-    /// The name index on macOS is the walk-based search until the FSEvents indexer lands.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum State {
-        Building,
-        Ready,
-        Failed,
-    }
-
-    pub fn start(_roots: Vec<PathBuf>, _dir: PathBuf) {}
-
-    pub fn stop() {}
-
-    /// `None`: no index, the caller walks the disk ([`crate::search`]).
-    pub fn search(_pattern: &str, _under: &Path, _include_hidden: bool, _max: usize) -> Option<Vec<PathBuf>> {
-        None
-    }
-
-    pub fn search_ranked(
-        _pattern: &str,
-        _under: &Path,
-        _include_hidden: bool,
-        _max: usize,
-        _rank: &(dyn Fn(&str) -> Option<i32> + Sync),
-    ) -> Option<Vec<(i32, PathBuf)>> {
-        None
-    }
-
-    pub fn status() -> Vec<(PathBuf, State, usize, usize)> {
-        Vec::new()
-    }
-
-    pub fn local_roots() -> Vec<PathBuf> {
-        crate::drives::list_drives().into_iter().map(|d| d.root).collect()
-    }
-}
-
 pub mod wsearch {
     use std::path::Path;
 
@@ -1274,24 +1206,28 @@ pub mod sysparams {
 pub mod nameindex {
     use std::path::{Path, PathBuf};
 
-    /// The Windows name index is replaced by the walk + FSEvents index; until that lands the
-    /// walk in `search` answers, so no exclusion list is kept.
-    pub fn set_excluded(_dirs: &[PathBuf]) {}
+    pub fn set_excluded(dirs: &[PathBuf]) {
+        crate::indexer::set_excluded(dirs);
+    }
 
     pub fn default_excluded_names() -> &'static [&'static str] {
-        &["node_modules", ".git", "target", "Library", ".Trash", ".cache"]
+        crate::indexer::default_excluded_names()
     }
 
     pub fn status() -> Vec<(PathBuf, u8, usize)> {
-        Vec::new()
+        crate::indexer::status().into_iter().map(|(root, state, live, _)| (root, state as u8, live)).collect()
     }
 
-    pub fn start(_roots: Vec<PathBuf>, _dir: PathBuf) {}
+    pub fn start(roots: Vec<PathBuf>, dir: PathBuf) {
+        crate::indexer::start(roots, dir);
+    }
 
-    pub fn stop() {}
+    pub fn stop() {
+        crate::indexer::stop();
+    }
 
-    pub fn search(_pattern: &str, _under: &Path, _include_hidden: bool, _max: usize) -> Option<Vec<PathBuf>> {
-        None
+    pub fn search(pattern: &str, under: &Path, include_hidden: bool, max: usize) -> Option<Vec<PathBuf>> {
+        crate::indexer::search(pattern, under, include_hidden, max)
     }
 }
 

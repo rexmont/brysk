@@ -242,12 +242,14 @@ Next (visible gaps, in order):
 * Quick Look thumbnails are in (PDF pages, video frames, Office/HEIC through
   `QLThumbnailGenerator`); the list shows them wherever thumbnails are on.
 * The PDF viewer renders through PDFKit; DirectLook video plays through the FilmCraft
-  decoders (silent: CoreAudio output is the one missing piece).
+  decoders with CoreAudio output (48 kHz stereo, the rendered-frame clock).
 * The menu-bar item exists (`NSStatusItem`: Open / New Window / Settings / Quit) and the
   name index (background walk + FSEvents) serves quick search; app menu bar and macOS
   Cmd shortcuts are installed alongside the Explorer Ctrl ones.
 * Share sheet (`NSSharingServicePicker`), PDFKit pages, Quick Look thumbnails, file
-  conflicts/verification, Finder Trash and a real menu bar are in. Universal build
+  conflicts/verification, Finder Trash with an own origin journal (restore and undo put items
+  back under their original name and folder), Open With chooser, a persistent name index
+  (cache loads in ~1.7 s for 480k names), and a real menu bar are in. Universal build
   (`UNIVERSAL=1`) and `scripts/notarize-macos.sh` are ready; notarisation needs the
   Developer ID credentials.
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions

@@ -1,0 +1,16 @@
+[package]
+name = "rf-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The platform layer the interface links against: the Windows implementation on Windows, the
+# macOS one on macOS. `rf-app` only ever says `rf_platform::<module>` (see docs/port-macos.md).
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+rf-win.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rf-mac = { path = "../rf-mac" }

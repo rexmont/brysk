@@ -1,4 +1,4 @@
-//! PDF: Windows' own PDF engine (`rf_win::look::pdf`) on a worker thread. Pages are laid out at
+//! PDF: Windows' own PDF engine (`rf_platform::look::pdf`) on a worker thread. Pages are laid out at
 //! their real proportions right away and rendered as they scroll into view, at the window's
 //! width; only the pages near the view are kept in memory.
 
@@ -12,8 +12,8 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::look::pdf::{Pdf, PdfError};
-use rf_win::thumbs::Bgra;
+use rf_platform::look::pdf::{Pdf, PdfError};
+use rf_platform::thumbs::Bgra;
 
 use crate::look::viewer::{Prepared, Probe, ThemeChoice, Viewer};
 use crate::t;

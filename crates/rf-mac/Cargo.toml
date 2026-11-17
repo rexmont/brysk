@@ -1,0 +1,39 @@
+[package]
+name = "rf-mac"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The macOS half of the platform layer behind rf-platform; see docs/port-macos.md.
+[dependencies]
+rf-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+notify.workspace = true
+crossbeam-channel.workspace = true
+rayon.workspace = true
+image.workspace = true
+md-5.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+crc32fast.workspace = true
+zip = { version = "9.3", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "aes-crypto"] }
+resvg = { version = "0.46", default-features = false, features = ["text", "system-fonts", "memmap-fonts", "raster-images"] }
+kamadak-exif = "0.6"
+psd = "0.3"
+roxmltree = "0.20"
+encoding_rs = "0.8"
+libc = "0.2"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSFileManager", "NSFileCoordinator", "NSItemProvider", "NSProgress", "NSOperation", "NSDate", "NSError", "NSData", "NSValue", "NSThread"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSImage", "NSBitmapImageRep", "NSScreen", "NSApplication", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSOpenPanel", "NSSavePanel", "NSAlert", "NSEvent", "NSWindow", "NSResponder", "NSGraphicsContext", "NSColor", "NSFont", "NSView"] }
+block2 = "0.6"
+core-foundation = "0.10"
+core-graphics = "0.24"

@@ -9,7 +9,7 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::snip::model::Mode;
+use rf_platform::snip::model::Mode;
 
 use super::State;
 use crate::dock::look::Palette;
@@ -34,7 +34,7 @@ pub struct ToolbarView {
 impl ToolbarView {
     pub fn new(state: Entity<State>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let sub = cx.observe(&state, |_, _, cx| cx.notify());
-        ToolbarView { state, hwnd: crate::look::window::hwnd_of(window), dark: rf_win::accent::system_is_dark(), popup: None, _watch: None, _sub: sub }
+        ToolbarView { state, hwnd: crate::look::window::hwnd_of(window), dark: rf_platform::accent::system_is_dark(), popup: None, _watch: None, _sub: sub }
     }
 
     /// The window has its place and is shown: the glass goes behind it. A window that cannot get glass keeps the plain fill.

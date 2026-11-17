@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/rf-core", "crates/rf-win", "crates/rf-app", "crates/rf-archive", "crates/rf-dialog", "crates/rf-shellguard", "crates/rf-player", "crates/rustdecoder", "tools/gpustress"]
+members = ["crates/rf-core", "crates/rf-win", "crates/rf-mac", "crates/rf-platform", "crates/rf-app", "crates/rf-archive", "crates/rf-dialog", "crates/rf-shellguard", "crates/rf-player", "crates/rustdecoder", "crates/gpui-windows-shim", "tools/gpustress"]
 
 [workspace.package]
 version = "0.8.8"
@@ -11,6 +11,9 @@ publish = false
 [workspace.dependencies]
 rf-core = { path = "crates/rf-core" }
 rf-win = { path = "crates/rf-win" }
+rf-mac = { path = "crates/rf-mac" }
+rf-platform = { path = "crates/rf-platform" }
+gpui-windows-shim = { path = "crates/gpui-windows-shim" }
 rf-player = { path = "crates/rf-player" }
 rustdecoder = { path = "crates/rustdecoder" }
 # FilmCraft (MIT OR Apache-2.0): saf Rust kapsayıcı ve kodek çözücüleri, sabit commit.

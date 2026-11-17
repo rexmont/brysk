@@ -9,7 +9,7 @@ use std::sync::Arc;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::tasklist::{self, Task};
+use rf_platform::tasklist::{self, Task};
 
 use crate::theme::{self, Palette};
 
@@ -24,7 +24,7 @@ pub struct BarPreview {
     icons: HashMap<PathBuf, Option<Arc<RenderImage>>>,
     own: isize,
     front: isize,
-    _watch: Option<rf_win::tasklist::TaskWatch>,
+    _watch: Option<rf_platform::tasklist::TaskWatch>,
 }
 
 /// Opens the preview window at the bottom of the screen.
@@ -45,7 +45,7 @@ pub fn open(cx: &mut App) {
         let own = crate::look::window::hwnd_of(window);
         cx.new(|cx| {
             let (tx, mut rx) = futures::channel::mpsc::unbounded::<()>();
-            let watch = rf_win::tasklist::watch(move |_| {
+            let watch = rf_platform::tasklist::watch(move |_| {
                 let _ = tx.unbounded_send(());
             })
             .map_err(|e| log::warn!("bar watch: {e:#}"))
@@ -93,7 +93,7 @@ impl BarPreview {
                     self.icons.insert(exe.clone(), None);
                     let task = cx.background_executor().spawn({
                         let exe = exe.clone();
-                        async move { rf_win::thumbs::get_image(&exe, 32, rf_win::thumbs::Kind::Icon).ok() }
+                        async move { rf_platform::thumbs::get_image(&exe, 32, rf_platform::thumbs::Kind::Icon).ok() }
                     });
                     cx.spawn(async move |this, cx| {
                         let Some(bgra) = task.await else { return };
@@ -131,7 +131,7 @@ impl BarPreview {
                     if minimized {
                         let _ = ShowWindowAsync(h, SW_RESTORE);
                     }
-                    rf_win::window::bring_to_front(hwnd);
+                    rf_platform::window::bring_to_front(hwnd);
                 }
             }
             let _ = this.update(cx, |v, cx| v.refresh(cx));

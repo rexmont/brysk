@@ -5,7 +5,7 @@
 //! windows and their glass, its widths, its pointer region, what it holds, whether it is hidden for a full-screen program there). The first
 //! one, [`MonId::HOME`], is the dock the process always had: it follows the primary monitor, takes its band and holds everything (the
 //! weather, the tray strip, the network and volume buttons). The others are the secondary monitors' docks, found by the monitors'
-//! DEVICE NAMES (`rf_win::dock::monitors`), opened and closed as monitors come and go, and only there while "Dock'u her ekranda göster"
+//! DEVICE NAMES (`rf_platform::dock::monitors`), opened and closed as monitors come and go, and only there while "Dock'u her ekranda göster"
 //! is on. Everything else (the settings, the glass engine, the system watcher, the panels, the icon cache) is shared. With one monitor, or
 //! the switch off, the list holds the home dock only and the code below does exactly what it did before the list existed.
 //!
@@ -17,7 +17,7 @@
 //! THE WINDOWS ARE BIGGER THAN THE GLASS. Each island's window holds its glass plus a transparent margin (a few px; room for the shadow only with `RUSTYFILES_DOCK_SHADOW=1`; for the middle
 //! island also headroom for the icons that grow out of the glass and room for the glass to widen). `layout::placements` works out
 //! both rectangles; the host keeps the result (`Dock::geo`) for the views, tells the glass engine where the glass is inside its window
-//! (`IslandGlass::set_shape`) and gives every window a REGION (`rf_win::dock::hit`) so that the margin lets the pointer through to
+//! (`IslandGlass::set_shape`) and gives every window a REGION (`rf_platform::dock::hit`) so that the margin lets the pointer through to
 //! other programs' windows.
 //!
 //! WHY WIN32 CALLS GO THROUGH A TASK. Moving or styling a GPUI window sends it messages (`WM_SIZE`, `WM_WINDOWPOSCHANGED`) that GPUI
@@ -34,13 +34,13 @@ use futures::StreamExt;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::hit;
-use rf_win::dock::island;
-use rf_win::dock::layout::{self, Islands, Placement, Placements, RADIUS, Rect, Widths};
-use rf_win::dock::monitors::{self, Change, Content, Search, Wants};
-use rf_win::dock::size_live::{self, Act, File as SizeFile, Live as SizeLive, Msg as SizeMsg, Redo, Step};
-use rf_win::dock::thin::Squeeze;
-use rf_win::dock::{DockSystem, MonitorInfo, SystemEvent};
+use rf_platform::dock::hit;
+use rf_platform::dock::island;
+use rf_platform::dock::layout::{self, Islands, Placement, Placements, RADIUS, Rect, Widths};
+use rf_platform::dock::monitors::{self, Change, Content, Search, Wants};
+use rf_platform::dock::size_live::{self, Act, File as SizeFile, Live as SizeLive, Msg as SizeMsg, Redo, Step};
+use rf_platform::dock::thin::Squeeze;
+use rf_platform::dock::{DockSystem, MonitorInfo, SystemEvent};
 
 use super::backdrop::{self, IslandGlass};
 use super::control::{self, Command};
@@ -254,7 +254,7 @@ struct Dock {
     widths: Widths,
     /// The last layout (see [`Geo`]); `None` until a monitor has been seen.
     geo: Option<Geo>,
-    /// What the islands hold at this width (see `rf_win::dock::monitors::content`).
+    /// What the islands hold at this width (see `rf_platform::dock::monitors::content`).
     content: Content,
     /// A full-screen program is in front on this monitor: the islands are hidden.
     fullscreen: bool,
@@ -293,7 +293,7 @@ pub struct Host {
     /// ([`switch_stops`]).
     switch_on: bool,
     started: Instant,
-    /// The size the Dock page's slider gives while it is dragged (see `rf_win::dock::size_live`): the dock follows the slider's messages
+    /// The size the Dock page's slider gives while it is dragged (see `rf_platform::dock::size_live`): the dock follows the slider's messages
     /// and keeps the settings file from overruling it until the drag is over.
     live: SizeLive,
     /// Looks for a full-screen program on the secondary monitors; there only while one exists.
@@ -334,7 +334,7 @@ impl Host {
     /// there (while Explorer's taskbar is hidden by us) put back (`monitors::placement_area`).
     fn area_of(&self, dock: &Dock) -> Option<(MonitorInfo, Rect)> {
         if dock.id.is_home() {
-            self.system.as_ref().and_then(|s| s.placement_area()).or_else(|| rf_win::dock::primary_monitor().map(|m| (m, m.work)))
+            self.system.as_ref().and_then(|s| s.placement_area()).or_else(|| rf_platform::dock::primary_monitor().map(|m| (m, m.work)))
         } else {
             let told: &[i32] = if self.hide_in_force { &dock.told_bands } else { &[] };
             Some((dock.monitor, monitors::placement_area(dock.monitor.rect, dock.monitor.work, told)))
@@ -364,7 +364,7 @@ impl Host {
             return Content::HOME;
         }
         let Some((mon, area)) = self.area_of(dock) else { return dock.content };
-        let unit = rf_win::dock::size::unit(mon.scale(), fitted_factor(self.prefs.size, &mon)).max(0.01);
+        let unit = rf_platform::dock::size::unit(mon.scale(), fitted_factor(self.prefs.size, &mon)).max(0.01);
         monitors::content(
             false,
             &Wants {
@@ -389,7 +389,7 @@ impl Host {
 /// `side_tall`: the side islands are as tall as the middle one (the setting); the layout then gives them that height at rest.
 fn geo_for(mon: &MonitorInfo, area: Rect, widths: Widths, size: f32, side_tall: bool) -> Geo {
     let scale = mon.scale();
-    let unit = rf_win::dock::size::unit(scale, size);
+    let unit = rf_platform::dock::size::unit(scale, size);
     let islands = layout::islands_with(area, unit, widths, layout::side_height(side_tall));
     Geo { scale, unit, islands, placements: layout::placements(&islands, mon.rect, unit, layout::shadow_on()), growth_px: layout::growth_room(&islands, unit), area_width: area.width() }
 }
@@ -436,7 +436,7 @@ pub fn current_glass_rect_on(mon: MonId, kind: Kind, cx: &App) -> Option<Rect> {
 }
 
 /// The glass of this monitor's dock that is FULL height, as one rectangle: what a window docked to the band's edge is measured against
-/// (`rf_win::dock::thin::docked_under`: a window that lies under it makes the dock thin, because the full glass reaches into the work
+/// (`rf_platform::dock::thin::docked_under`: a window that lies under it makes the dock thin, because the full glass reaches into the work
 /// area). The middle island's glass; with side islands as tall as the dock it reaches from the left island's left edge to the right
 /// island's right edge, so a window snapped beside the middle island counts too (a tall side island would lie on its lowest rows).
 pub fn full_glass_span_on(mon: MonId, cx: &App) -> Option<Rect> {
@@ -575,7 +575,7 @@ pub fn env_on(mon: MonId, cx: &App) -> Env {
     }
     let Some(h) = cx.try_global::<Host>() else { return env };
     match h.dock(mon).and_then(|d| h.scale_size_of(d)) {
-        Some((scale, size)) => Env { scale: if scale > 0.0 { scale } else { 1.0 }, size: rf_win::dock::size::sane(size), ..env },
+        Some((scale, size)) => Env { scale: if scale > 0.0 { scale } else { 1.0 }, size: rf_platform::dock::size::sane(size), ..env },
         None => env,
     }
 }
@@ -601,7 +601,7 @@ pub fn dock_count(cx: &App) -> usize {
 
 /// The dock whose monitor the pointer is on (the home dock when it is on none).
 pub fn monitor_at_pointer(cx: &App) -> MonId {
-    let pointer = rf_win::dock::zoomwatch::pointer().map(|(x, y, _)| (x, y));
+    let pointer = rf_platform::dock::zoomwatch::pointer().map(|(x, y, _)| (x, y));
     let rects: Vec<(MonId, Rect)> = dock_monitors(cx).into_iter().map(|(id, m)| (id, m.rect)).collect();
     monitors::panel_target(None, pointer, &rects, &MonId::HOME)
 }
@@ -741,7 +741,7 @@ pub fn side_drop(tall: bool, full_px: i32, unit: f32, sq: &Squeeze) -> i32 {
     if !tall || sq.is_full() {
         return 0;
     }
-    let now = rf_win::dock::thin::glass_height_px(sq, unit, full_px as f32).round() as i32;
+    let now = rf_platform::dock::thin::glass_height_px(sq, unit, full_px as f32).round() as i32;
     (full_px - now).clamp(0, full_px.max(0))
 }
 
@@ -887,7 +887,7 @@ fn apply_visibility(mon: MonId, cx: &mut App) {
     });
     // a panel above a hidden island would float on its own
     if !visible && panel_here {
-        super::panel::close(rf_win::dock::panel::CloseCause::FullScreen, cx);
+        super::panel::close(rf_platform::dock::panel::CloseCause::FullScreen, cx);
     }
 }
 
@@ -900,7 +900,7 @@ fn publish_env(scale: f32, cx: &mut App) {
     if let Some(host) = cx.try_global::<Host>() {
         for d in &host.docks {
             // (the glass's corner radius is in device px: it follows the monitor's scale AND the dock's size)
-            let unit = if d.id.is_home() { env.unit() } else { host.scale_size_of(d).map_or(env.unit(), |(s, z)| rf_win::dock::size::unit(s, z)) };
+            let unit = if d.id.is_home() { env.unit() } else { host.scale_size_of(d).map_or(env.unit(), |(s, z)| rf_platform::dock::size::unit(s, z)) };
             for p in &d.placed {
                 p.glass.borrow_mut().sync(env.dark, unit, backdrop::now_ms());
             }
@@ -935,8 +935,8 @@ pub(super) fn apply_secondary_bands(cx: &mut App) {
                 .filter_map(|d| {
                     let name = d.name.clone()?;
                     let (scale, size) = host.scale_size_of(d)?;
-                    let unit = rf_win::dock::size::unit(scale, size);
-                    Some((name, rf_win::dock::thin::reserved_thickness(unit, super::thin::band_is_thin_on(d.id, cx))))
+                    let unit = rf_platform::dock::size::unit(scale, size);
+                    Some((name, rf_platform::dock::thin::reserved_thickness(unit, super::thin::band_is_thin_on(d.id, cx))))
                 })
                 .collect()
         }
@@ -968,9 +968,9 @@ fn apply_home_reserve(cx: &mut App) {
     let Some(system) = host.system.as_ref() else { return };
     let band = if host.prefs.reserve {
         // the band is the dock's own height and margins: it follows the size too
-        let unit = host.area().map_or(1.0, |(m, _)| rf_win::dock::size::unit(m.scale(), fitted_factor(host.prefs.size, &m)));
+        let unit = host.area().map_or(1.0, |(m, _)| rf_platform::dock::size::unit(m.scale(), fitted_factor(host.prefs.size, &m)));
         // (the thin band while the thin dock's setting is on, whatever the windows do: see thin.rs)
-        let thickness = rf_win::dock::thin::reserved_thickness(unit, super::thin::band_is_thin(cx));
+        let thickness = rf_platform::dock::thin::reserved_thickness(unit, super::thin::band_is_thin(cx));
         system.reserve(thickness);
         Some(thickness)
     } else {
@@ -1001,11 +1001,11 @@ fn on_system_event(ev: SystemEvent, cx: &mut App) {
             // the islands move; a panel that is open would be left where they were - the panel of a dock that moved, that is: a change of
             // another monitor does not move the island a panel on this monitor grew from
             let home_moved = host_mut(cx).is_none_or(|h| {
-                let now = rf_win::dock::primary_monitor();
+                let now = rf_platform::dock::primary_monitor();
                 std::mem::replace(&mut h.last_primary, now) != now
             });
             if panel_is_hit(active(cx), home_moved, &moved) {
-                super::panel::close(rf_win::dock::panel::CloseCause::LayoutChanged, cx);
+                super::panel::close(rf_platform::dock::panel::CloseCause::LayoutChanged, cx);
             }
             // the tray strip's room is a quarter of the new work area
             super::tray_strip::layout_changed(cx);
@@ -1038,7 +1038,7 @@ fn on_system_event(ev: SystemEvent, cx: &mut App) {
 
 // ---------------------------------------------------------------- the other monitors' docks
 
-/// Brings the list of secondary docks in line with the monitors and the switch (`rf_win::dock::monitors::reconcile` decides what to do;
+/// Brings the list of secondary docks in line with the monitors and the switch (`rf_platform::dock::monitors::reconcile` decides what to do;
 /// this does it). Closes first, so a monitor that went does not keep a window while the next is built.
 ///
 /// Costs, by case: the switch off and no secondary dock: nothing (no list is read). The switch on (the default) and one monitor: one read
@@ -1051,12 +1051,12 @@ fn sync_docks(cx: &mut App) -> Vec<MonId> {
     let have_any = host.has_secondary();
     if !switch && !have_any {
         // today's single dock: no list of monitors is read at all
-        rf_win::dock::system::watch_all_monitors(false);
+        rf_platform::dock::system::watch_all_monitors(false);
         return Vec::new();
     }
     let displays = if switch { monitors::displays() } else { Vec::new() };
     // (the 2 s look at the other monitors runs only while there is one to look at; a monitor that is plugged in is the system's message)
-    rf_win::dock::system::watch_all_monitors(monitors::watch_ticks(switch, have_any, &displays));
+    rf_platform::dock::system::watch_all_monitors(monitors::watch_ticks(switch, have_any, &displays));
     let current: Vec<(String, MonitorInfo)> = host.docks.iter().filter_map(|d| d.name.clone().map(|n| (n, d.monitor))).collect();
     let changes = monitors::reconcile(&current, &displays, switch);
     if changes.is_empty() {
@@ -1108,7 +1108,7 @@ fn resync_glass_of(id: MonId, cx: &mut App) {
     let Some(host) = cx.try_global::<Host>() else { return };
     let Some(dock) = host.dock(id) else { return };
     let Some((scale, size)) = host.scale_size_of(dock) else { return };
-    let unit = rf_win::dock::size::unit(scale, size);
+    let unit = rf_platform::dock::size::unit(scale, size);
     for p in &dock.placed {
         p.glass.borrow_mut().sync(dark, unit, backdrop::now_ms());
     }
@@ -1124,7 +1124,7 @@ fn panel_is_hit(panel_on: MonId, home_moved: bool, moved: &[MonId]) -> bool {
 fn open_dock(d: &monitors::Display, cx: &mut App) {
     let Some(host) = cx.try_global::<Host>() else { return };
     let id = MonId(host.next_id);
-    let lines = rf_win::dock::clock::system_lines();
+    let lines = rf_platform::dock::clock::system_lines();
     let widths = Widths { left: plan::left_width_secondary(Search::Field), middle: plan::middle_width_at_rest(2, 1), right: plan::right_width_secondary(plan::clock_width(&lines), true) };
     let mut dock = Dock {
         id,
@@ -1157,7 +1157,7 @@ fn open_dock(d: &monitors::Display, cx: &mut App) {
     }
     log::info!("dock: a dock on {} ({}x{} at {} %)", d.name, d.info.rect.width(), d.info.rect.height(), d.info.dpi * 100 / 96);
     let setup = setup_jobs(&dock, &geo);
-    let unit = rf_win::dock::size::unit(scale, size);
+    let unit = rf_platform::dock::size::unit(scale, size);
     if let Some(h) = host_mut(cx) {
         h.next_id += 1;
         h.docks.push(dock);
@@ -1179,7 +1179,7 @@ fn close_dock(name: &str, cx: &mut App) {
     // on another monitor's dock is not this dock's business
     let id = host.docks[ix].id;
     if host.active == id {
-        super::panel::close(rf_win::dock::panel::CloseCause::LayoutChanged, cx);
+        super::panel::close(rf_platform::dock::panel::CloseCause::LayoutChanged, cx);
     }
     let Some(host) = host_mut(cx) else { return };
     let Some(ix) = host.docks.iter().position(|d| d.id == id) else { return };
@@ -1234,7 +1234,7 @@ fn start_windows(setup: Vec<Setup>, dark: bool, unit: f32) {
 
 /// Opens the three windows of a dock. The home dock gets the weather source; a secondary one has no weather. False when no island could
 /// be opened.
-fn make_islands(dock: &mut Dock, geo: &Geo, scale: f32, lines: &rf_win::dock::clock::ClockLines, city: &str, locate: bool, cx: &mut App) -> bool {
+fn make_islands(dock: &mut Dock, geo: &Geo, scale: f32, lines: &rf_platform::dock::clock::ClockLines, city: &str, locate: bool, cx: &mut App) -> bool {
     let mon = dock.id;
     let content = dock.content;
     let display = cx.primary_display().map(|d| d.id());
@@ -1339,8 +1339,8 @@ fn end_peek(id: MonId, cx: &mut App) {
         return;
     }
     d.peek_until = None;
-    let fg = rf_win::dock::fullscreen::foreground();
-    let on = rf_win::dock::fullscreen::is_fullscreen(fg.as_ref(), d.monitor.rect);
+    let fg = rf_platform::dock::fullscreen::foreground();
+    let on = rf_platform::dock::fullscreen::is_fullscreen(fg.as_ref(), d.monitor.rect);
     if on != d.fullscreen {
         d.fullscreen = on;
         apply_visibility(id, cx);
@@ -1354,10 +1354,10 @@ fn look_for_fullscreen(cx: &mut App) -> bool {
         return true;
     }
     // (one read of the window in front serves every monitor)
-    let fg = rf_win::dock::fullscreen::foreground();
+    let fg = rf_platform::dock::fullscreen::foreground();
     let now = Instant::now();
     let verdicts: Vec<(MonId, bool)> =
-        host.docks.iter().filter(|d| !d.id.is_home()).map(|d| (d.id, hidden_for_fullscreen(rf_win::dock::fullscreen::is_fullscreen(fg.as_ref(), d.monitor.rect), d.peek_until, now))).collect();
+        host.docks.iter().filter(|d| !d.id.is_home()).map(|d| (d.id, hidden_for_fullscreen(rf_platform::dock::fullscreen::is_fullscreen(fg.as_ref(), d.monitor.rect), d.peek_until, now))).collect();
     let mut changed = Vec::new();
     if let Some(h) = host_mut(cx) {
         for (id, on) in verdicts {
@@ -1455,7 +1455,7 @@ fn apply_reloaded(fresh: Option<Settings>, stamp: Option<SystemTime>, cx: &mut A
     cx.set_global(fresh);
     // the accent the user chose for rustyfiles is the dock's too: its colours are read again when it changed
     if let Some(env) = cx.try_global::<Env>()
-        && env.accent != rf_win::accent::color()
+        && env.accent != rf_platform::accent::color()
     {
         let scale = env.scale;
         publish_env(scale, cx);
@@ -1544,7 +1544,7 @@ fn perform(redo: Redo, cx: &mut App) {
                 let scale = cx.try_global::<Env>().map_or(1.0, |e| e.scale);
                 publish_env(scale, cx);
             }
-            Step::ClosePanels => super::panel::close(rf_win::dock::panel::CloseCause::LayoutChanged, cx),
+            Step::ClosePanels => super::panel::close(rf_platform::dock::panel::CloseCause::LayoutChanged, cx),
             Step::TrayStrip => super::tray_strip::layout_changed(cx),
             Step::Windows => request_layout(cx),
             Step::ReservedBand => apply_reserve(cx),
@@ -1617,7 +1617,7 @@ pub fn shutdown(cx: &mut App) {
     crate::shell::cover::stop(cx);
     super::thin::shutdown(cx);
     super::panel::shutdown(cx);
-    rf_win::dock::system::watch_all_monitors(false);
+    rf_platform::dock::system::watch_all_monitors(false);
     host.secondary_watch = None;
     for dock in &mut host.docks {
         close_windows(dock, cx);
@@ -1691,7 +1691,7 @@ pub fn run(messages: Option<UnboundedReceiver<String>>, cx: &mut App) {
             None
         }
     };
-    let area = system.as_ref().and_then(|s| s.placement_area()).or_else(|| rf_win::dock::primary_monitor().map(|m| (m, m.work)));
+    let area = system.as_ref().and_then(|s| s.placement_area()).or_else(|| rf_platform::dock::primary_monitor().map(|m| (m, m.work)));
     let Some((monitor, area)) = area else {
         log::error!("dock: this session has no monitor to put the dock on");
         crate::shell::exits::log_exit(crate::shell::exits::Exit::NoMonitor, "");
@@ -1703,7 +1703,7 @@ pub fn run(messages: Option<UnboundedReceiver<String>>, cx: &mut App) {
     let env = Env::read_sized(scale, size);
     cx.set_global(env);
 
-    let lines = rf_win::dock::clock::system_lines();
+    let lines = rf_platform::dock::clock::system_lines();
     let widths = Widths { left: plan::left_width(None), middle: plan::middle_width_at_rest(2, 1), right: plan::right_width(&lines) };
     let geo = geo_for(&monitor, area, widths, size, prefs.side_tall);
 
@@ -1751,7 +1751,7 @@ pub fn run(messages: Option<UnboundedReceiver<String>>, cx: &mut App) {
         started: Instant::now(),
         live: SizeLive::new(prefs.size.permille()),
         secondary_watch: None,
-        last_primary: rf_win::dock::primary_monitor(),
+        last_primary: rf_platform::dock::primary_monitor(),
         hide_in_force: false,
     };
     // the first styling, placing, region and glass, from the message loop (the windows exist now but are still being set up). Each glass
@@ -1934,9 +1934,9 @@ mod tests {
         assert!(super::hidden_for_fullscreen(true, Some(until), until), "the moment is over");
         assert!(!super::hidden_for_fullscreen(false, Some(until), now), "nothing full-screen in front: shown either way");
     }
-    use rf_win::dock::hit::{self, Part};
-    use rf_win::dock::layout::{self, Rect, Widths};
-    use rf_win::dock::panel::{self as panel_geo, Side};
+    use rf_platform::dock::hit::{self, Part};
+    use rf_platform::dock::layout::{self, Rect, Widths};
+    use rf_platform::dock::panel::{self as panel_geo, Side};
     use std::time::{Duration, UNIX_EPOCH};
 
 
@@ -2019,8 +2019,8 @@ mod tests {
         let d = Prefs::of(&Settings::default());
         assert!(d.all_monitors, "the user asked for it: on by default");
         assert_eq!(d.apps_where, crate::settings::DockAppsWhere::All);
-        assert_eq!(d.apps_where.rule(), rf_win::dock::monitors::AppsWhere::Everywhere);
-        assert_eq!(crate::settings::DockAppsWhere::Window.rule(), rf_win::dock::monitors::AppsWhere::WindowMonitor);
+        assert_eq!(d.apps_where.rule(), rf_platform::dock::monitors::AppsWhere::Everywhere);
+        assert_eq!(crate::settings::DockAppsWhere::Window.rule(), rf_platform::dock::monitors::AppsWhere::WindowMonitor);
     }
 
     #[test]
@@ -2053,7 +2053,7 @@ mod tests {
     /// ones never move.
     #[test]
     fn tall_side_islands_are_as_low_as_the_middle_one_while_the_dock_is_thin() {
-        use rf_win::dock::thin::{self, Squeeze};
+        use rf_platform::dock::thin::{self, Squeeze};
         for unit in [1.0f32, 1.25, 1.5, 1.75, 2.0, 0.9, 1.4] {
             let full = layout::px(layout::MIDDLE_HEIGHT, unit);
             let thin_px = layout::px(layout::SIDE_HEIGHT, unit);
@@ -2079,7 +2079,7 @@ mod tests {
     /// side island, so with tall side islands it makes the dock thin like any window under the full glass.
     #[test]
     fn with_tall_side_islands_a_window_beside_the_middle_island_is_under_the_full_glass_too() {
-        use rf_win::dock::thin::docked_under;
+        use rf_platform::dock::thin::docked_under;
         let work = Rect::new(0, 0, 2560, 1392);
         let widths = Widths { left: 330.0, middle: 600.0, right: 280.0 };
         let usual = layout::islands(work, 1.0, widths);
@@ -2130,7 +2130,7 @@ mod tests {
     /// inside it, and no window reaches into the neighbour.
     #[test]
     fn a_secondary_monitors_islands_stand_on_its_own_bottom_inside_it() {
-        use rf_win::dock::monitors::Search;
+        use rf_platform::dock::monitors::Search;
         let monitor = Rect::new(2560, -618, 4000, 1942);
         let work = monitor;
         let widths = Widths { left: crate::dock::plan::left_width_secondary(Search::Field), middle: 600.0, right: crate::dock::plan::right_width_secondary(80.0, true) };

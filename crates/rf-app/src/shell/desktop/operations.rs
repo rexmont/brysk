@@ -1,5 +1,5 @@
 //! What the desktop does to files: open, copy, cut, paste, delete, new, rename, move into a folder. The ENGINES are the file manager's
-//! own (`status_center::transfer` / `delete`, `fileops`, `undo`, `rf_win::clipboard`, `rf_win::dnd`, `prompt`): the desktop only
+//! own (`status_center::transfer` / `delete`, `fileops`, `undo`, `rf_platform::clipboard`, `rf_platform::dnd`, `prompt`): the desktop only
 //! decides what to hand them. The file list's methods for the same things are bound to the file list's own selection and entries,
 //! which is why this is glue of its own and not a call into them.
 //!
@@ -21,7 +21,7 @@ use gpui_kit::*;
 use rf_core::Location;
 use rf_core::desktop::items::{ItemId, Origin};
 use rf_core::desktop::store::{SortName, SortPref};
-use rf_win::fileops::{self, Transfer};
+use rf_platform::fileops::{self, Transfer};
 
 use super::drop::Accepts;
 use super::menupoint::Via;
@@ -61,7 +61,7 @@ impl DesktopView {
     /// Desktop, copy or move (`policy::into_folder`). One answer for the pointer while dragging and for the drop itself.
     pub(super) fn drop_target_folder(&self, target: &ItemId, sources: &[PathBuf], ctrl: bool, shift: bool) -> Option<(PathBuf, Result<Transfer, Refusal>)> {
         let dest = self.path_of(target)?;
-        let default = rf_win::dnd::default_transfer(sources, &dest, ctrl, shift);
+        let default = rf_platform::dnd::default_transfer(sources, &dest, ctrl, shift);
         let dest_public = self.public_dir().is_some_and(|p| policy::is_under(&dest, &p));
         let verdict = policy::into_folder(self.read_only(), self.under_public(sources), dest_public, default);
         Some((dest, verdict))
@@ -211,8 +211,8 @@ impl DesktopView {
             return;
         }
         // OpenClipboard can wait on other apps: never on the UI thread
-        rf_win::sta::run(move |owner| {
-            if let Err(e) = rf_win::clipboard::set_files(owner, &paths, kind) {
+        rf_platform::sta::run(move |owner| {
+            if let Err(e) = rf_platform::clipboard::set_files(owner, &paths, kind) {
                 log::warn!("desktop clipboard: {e:#}");
             }
         });
@@ -234,13 +234,13 @@ impl DesktopView {
         let at = self.take_menu_point(via);
         // GetClipboardData can block on a slow source app
         let (tx, rx) = oneshot::channel();
-        rf_win::sta::run(move |owner| {
-            let _ = tx.send(rf_win::clipboard::get_files(owner).map_err(|e| log::warn!("desktop paste: {e:#}")).ok().flatten());
+        rf_platform::sta::run(move |owner| {
+            let _ = tx.send(rf_platform::clipboard::get_files(owner).map_err(|e| log::warn!("desktop paste: {e:#}")).ok().flatten());
         });
         cx.spawn(async move |this, cx| {
             let clip = rx.await.ok().flatten();
-            // (no files with paths: another program's virtual files, see `rf_win::vfiles`)
-            if clip.is_none() && !rf_win::vfiles::clipboard_has() {
+            // (no files with paths: another program's virtual files, see `rf_platform::vfiles`)
+            if clip.is_none() && !rf_platform::vfiles::clipboard_has() {
                 return;
             }
             cx.update(|cx| match clip {
@@ -258,11 +258,11 @@ impl DesktopView {
             return self.refuse(why, cx);
         }
         let Some(dir) = self.backend.as_ref().and_then(|b| b.target_dir()) else { return };
-        if paths.is_empty() || rf_win::dnd::is_invalid_drop(&paths, &dir) {
+        if paths.is_empty() || rf_platform::dnd::is_invalid_drop(&paths, &dir) {
             return;
         }
         let m = window.modifiers();
-        let kind = rf_win::dnd::default_transfer(&paths, &dir, m.control, m.shift);
+        let kind = rf_platform::dnd::default_transfer(&paths, &dir, m.control, m.shift);
         let this = cx.entity().downgrade();
         crate::status_center::transfer_then(cx, kind, paths, dir, move |arrived, cx| select_arrived(&this, arrived, Some(at), cx));
     }
@@ -521,7 +521,7 @@ impl DesktopView {
             Accepts::Folder => {
                 let m = window.modifiers();
                 let Some((dest, verdict)) = self.drop_target_folder(target, &sources, m.control, m.shift) else { return };
-                if rf_win::dnd::is_invalid_drop(&sources, &dest) {
+                if rf_platform::dnd::is_invalid_drop(&sources, &dest) {
                     return;
                 }
                 // read-only: no; into the Public Desktop: no; the Public Desktop's own files are copied, never moved out
@@ -641,7 +641,7 @@ fn give_to_program(program: PathBuf, files: Vec<PathBuf>, rules: FolderRules, cx
         let (exe, extra, cwd) = if is_link {
             // reading a shortcut is shell work: on the shell thread, never on a worker
             let link = program.clone();
-            match rf_win::sta::call(std::time::Duration::from_secs(5), move || rf_win::shortcut::resolve(&link).map_err(|e| format!("{e:#}"))) {
+            match rf_platform::sta::call(std::time::Duration::from_secs(5), move || rf_platform::shortcut::resolve(&link).map_err(|e| format!("{e:#}"))) {
                 Some(Ok(info)) if info.target.is_dir() => return Outcome::IntoFolder(info.target),
                 Some(Ok(info)) if !info.target.as_os_str().is_empty() => (info.target, info.args, info.working_dir),
                 Some(Ok(_)) => return Outcome::Failed("the shortcut does not point at a program".into()),
@@ -675,10 +675,10 @@ fn give_to_program(program: PathBuf, files: Vec<PathBuf>, rules: FolderRules, cx
     cx.spawn(async move |this, cx| match rx.await.unwrap_or(Outcome::Failed("cancelled".into())) {
         Outcome::Started => {}
         Outcome::IntoFolder(dest) => {
-            if rf_win::dnd::is_invalid_drop(&files_for_folder, &dest) {
+            if rf_platform::dnd::is_invalid_drop(&files_for_folder, &dest) {
                 return;
             }
-            let default = rf_win::dnd::default_transfer(&files_for_folder, &dest, rules.ctrl, rules.shift);
+            let default = rf_platform::dnd::default_transfer(&files_for_folder, &dest, rules.ctrl, rules.shift);
             let dest_public = rules.public_dir.as_deref().is_some_and(|p| policy::is_under(&dest, p));
             match policy::into_folder(rules.read_only, rules.sources_public, dest_public, default) {
                 Ok(kind) => {

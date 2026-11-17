@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use gpui_kit::RenderImage;
 use rf_core::desktop::geom::Rect;
-use rf_win::snip::clip::{ClipApi, SystemClipboard, write};
-use rf_win::snip::encode::Formats;
-use rf_win::snip::frame::{Part, crop_parts};
-use rf_win::snip::save::{LocalTime, save_png};
+use rf_platform::snip::clip::{ClipApi, SystemClipboard, write};
+use rf_platform::snip::encode::Formats;
+use rf_platform::snip::frame::{Part, crop_parts};
+use rf_platform::snip::save::{LocalTime, save_png};
 
 use super::plan::Outcome;
 
@@ -28,7 +28,7 @@ pub struct Source {
 impl Source {
     /// The captured monitor as the overlay holds it. The bytes move into the picture (no second copy of a screen). `None` when the
     /// frame's bytes are not its size.
-    pub fn from_frame(rect: Rect, f: rf_win::snip::frame::Frame) -> Option<Source> {
+    pub fn from_frame(rect: Rect, f: rf_platform::snip::frame::Frame) -> Option<Source> {
         let (width, height) = (f.width, f.height);
         let buf = image::RgbaImage::from_raw(width, height, f.bgra)?;
         Some(Source { rect, width, height, image: Arc::new(RenderImage::new(vec![image::Frame::new(buf)])) })
@@ -80,7 +80,7 @@ impl ClipApi for NoClipboard {
     fn empty(&mut self) -> Result<(), String> {
         Err(self.0.clone())
     }
-    fn set(&mut self, _: rf_win::snip::clip::Format, _: &[u8]) -> Result<(), String> {
+    fn set(&mut self, _: rf_platform::snip::clip::Format, _: &[u8]) -> Result<(), String> {
         Err(self.0.clone())
     }
     fn close(&mut self) {}
@@ -89,8 +89,8 @@ impl ClipApi for NoClipboard {
 /// The real thing, for a thread of its own: the clipboard, the folder and the clock are the system's.
 pub fn run(sources: &[Source], region: Rect, autosave: bool) -> Made {
     let parts: Vec<Part<'_>> = sources.iter().map(Source::part).collect();
-    let dir = if autosave { rf_win::snip::save::screenshots_dir() } else { None };
-    let now = rf_win::snip::save::local_time();
+    let dir = if autosave { rf_platform::snip::save::screenshots_dir() } else { None };
+    let now = rf_platform::snip::save::local_time();
     match SystemClipboard::new() {
         Ok(mut clip) => process(&parts, region, dir.as_deref(), &mut clip, &now),
         Err(e) => process(&parts, region, dir.as_deref(), &mut NoClipboard(e), &now),
@@ -99,15 +99,15 @@ pub fn run(sources: &[Source], region: Rect, autosave: bool) -> Made {
 
 /// `Kaydet`: writes the PNG to `Pictures\Screenshots` under the name for this moment. Runs on a thread of its own.
 pub fn save_now(png: &[u8]) -> Result<std::path::PathBuf, String> {
-    let dir = rf_win::snip::save::screenshots_dir().ok_or_else(|| "the Pictures folder could not be found".to_string())?;
-    save_png(&dir, png, &rf_win::snip::save::local_time()).map_err(|e| e.to_string())
+    let dir = rf_platform::snip::save::screenshots_dir().ok_or_else(|| "the Pictures folder could not be found".to_string())?;
+    save_png(&dir, png, &rf_platform::snip::save::local_time()).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_win::snip::clip::{Format, Written};
-    use rf_win::snip::frame::Frame;
+    use rf_platform::snip::clip::{Format, Written};
+    use rf_platform::snip::frame::Frame;
 
     /// A fake clipboard that keeps what it is given.
     #[derive(Default)]

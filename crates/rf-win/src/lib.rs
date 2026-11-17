@@ -39,6 +39,7 @@ pub mod glass;
 pub mod hotkey;
 pub mod hash;
 pub mod indexer;
+pub mod input;
 pub mod inputlang;
 pub mod known;
 pub mod libraries;

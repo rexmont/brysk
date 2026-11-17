@@ -64,7 +64,7 @@ pub struct LookWindow {
     /// Her yüklemede artar: içerik geçiş animasyonu yeniden başlar.
     load_gen: u64,
     /// Otomatik yeniden yükleme: dosyanın klasörü izlenir.
-    _watch: Option<rf_win::watch::DirWatch>,
+    _watch: Option<rf_platform::watch::DirWatch>,
     _watch_task: Option<Task<()>>,
     focus: FocusHandle,
     _hide: Option<Task<()>>,
@@ -227,7 +227,7 @@ impl LookWindow {
         self.viewer.cleanup();
         self._loading = None;
         self.busy = false;
-        if rf_win::drives::slow_to_read(&self.path) {
+        if rf_platform::drives::slow_to_read(&self.path) {
             self.load_in_background(resize, window, cx);
             return;
         }
@@ -271,7 +271,7 @@ impl LookWindow {
             let b = window.bounds();
             let cur = (f32::from(b.size.width), f32::from(b.size.height));
             // (a size the user dragged to is recorded by the bounds observer, see `new`)
-            let w = rf_win::look::win::work_area_of(self.hwnd);
+            let w = rf_platform::look::win::work_area_of(self.hwnd);
             let work = Rect { x: w[0], y: w[1], w: w[2], h: w[3] };
             let size = geometry::fit(prepared.preferred, work, prepared.fit_ratio);
             let old = Rect { x: f32::from(b.origin.x), y: f32::from(b.origin.y), w: cur.0, h: cur.1 };
@@ -282,7 +282,7 @@ impl LookWindow {
             // borrowed"); the window then grows but the content stays at the old size. A task runs
             // after the update, when the size change reaches GPUI normally.
             let (hwnd, rect, scale) = (self.hwnd, [r.x, r.y, r.w, r.h], window.scale_factor());
-            cx.spawn(async move |_, _| rf_win::look::win::set_rect(hwnd, rect, scale)).detach();
+            cx.spawn(async move |_, _| rf_platform::look::win::set_rect(hwnd, rect, scale)).detach();
             self.programmatic = size;
         }
         self.title = prepared.title.into();
@@ -305,7 +305,7 @@ impl LookWindow {
         let Some(dir) = self.path.parent().map(|d| d.to_path_buf()) else { return };
         let stamp = |p: &std::path::Path| std::fs::metadata(p).ok().map(|m| (m.modified().ok(), m.len()));
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<()>();
-        let Ok(w) = rf_win::watch::watch_dir(&dir, Duration::from_millis(300), move || {
+        let Ok(w) = rf_platform::watch::watch_dir(&dir, Duration::from_millis(300), move || {
             let _ = tx.unbounded_send(());
         }) else {
             return;
@@ -343,7 +343,7 @@ impl LookWindow {
 
     pub(crate) fn set_topmost(&mut self, on: bool, cx: &mut Context<Self>) {
         self.topmost = on;
-        rf_win::look::win::set_topmost(self.hwnd, on);
+        rf_platform::look::win::set_topmost(self.hwnd, on);
         cx.notify();
     }
 
@@ -368,7 +368,7 @@ impl LookWindow {
             let mut away = BarAway::default();
             loop {
                 cx.background_executor().timer(BAR_WATCH).await;
-                let over = rf_win::look::win::pointer_in_top_strip(hwnd, strip);
+                let over = rf_platform::look::win::pointer_in_top_strip(hwnd, strip);
                 let go_on = this.update(cx, |v, cx| {
                     if !v.chrome_shown {
                         return false;
@@ -389,23 +389,23 @@ impl LookWindow {
 
     fn open_file(&self) {
         let p = self.path.clone();
-        rf_win::sta::run(move |_| {
+        rf_platform::sta::run(move |_| {
             crate::open_rules_page::follow_file();
-            if let Err(e) = rf_win::openrules::open(&p) {
+            if let Err(e) = rf_platform::openrules::open(&p) {
                 log::warn!("look open: {e:#}");
             }
         });
     }
 
-    /// Windows' share sheet for the shown file, over DirectLook's window (`rf_win::share`, issue 48).
+    /// Windows' share sheet for the shown file, over DirectLook's window (`rf_platform::share`, issue 48).
     fn share(&self, window: &Window, cx: &mut App) {
         crate::share::open(hwnd_of(window), vec![self.path.clone()], cx);
     }
 
     fn open_with(&self) {
         let p = self.path.clone();
-        rf_win::sta::run(move |_| {
-            if let Err(e) = rf_win::shell::open_with(&p) {
+        rf_platform::sta::run(move |_| {
+            if let Err(e) = rf_platform::shell::open_with(&p) {
                 log::warn!("look open with: {e:#}");
             }
         });
@@ -413,12 +413,16 @@ impl LookWindow {
 
     fn drag_out(&self) {
         let items = vec![self.path.clone()];
+        #[cfg(windows)]
         let ui_thread = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+        #[cfg(not(windows))]
+        let ui_thread = 0u32;
+        #[cfg(windows)]
         unsafe {
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
         }
-        rf_win::sta::run(move |owner| {
-            if let Err(e) = rf_win::dnd::drag_out(owner, ui_thread, &items) {
+        rf_platform::sta::run(move |owner| {
+            if let Err(e) = rf_platform::dnd::drag_out(owner, ui_thread, &items) {
                 log::warn!("look drag: {e:#}");
             }
         });

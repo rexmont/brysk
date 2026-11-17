@@ -22,7 +22,7 @@ pub fn wash(g: &ViewFrame, fill: Hsla) -> Div {
 /// The line above the island's row, as wide as the glass is at this moment, as faint as the content is. `None` for a panel with a row
 /// of its own.
 pub fn hairline(g: &ViewFrame, pal: Palette) -> Option<Div> {
-    g.line_y.map(|y| div().absolute().left(px(g.wash[0])).top(px(y)).w(px(g.wash[2])).h(px(rf_win::dock::startpage::DIVIDER_H)).bg(pal.separator().hsla()).opacity(g.content))
+    g.line_y.map(|y| div().absolute().left(px(g.wash[0])).top(px(y)).w(px(g.wash[2])).h(px(rf_platform::dock::startpage::DIVIDER_H)).bg(pal.separator().hsla()).opacity(g.content))
 }
 
 /// The panel's body in its rectangle of the window, with the content's opacity of the moment.

@@ -1,7 +1,7 @@
 //! The Start panel's pages, drawn: the search field, the HOME page (the pinned grid with its dots, "Önerilenler"), the ALL APPS page
 //! and the bottom row (the account picture and name, the gear, the power button). A child module of `start.rs`: it draws that view's own
-//! state and shares its private parts. The numbers are `rf_win::dock::startpage`, the choice of the recommended entries is
-//! `rf_win::dock::startrecent`, the account picture is `rf_win::dock::startuser`; none of them is repeated here.
+//! state and shares its private parts. The numbers are `rf_platform::dock::startpage`, the choice of the recommended entries is
+//! `rf_platform::dock::startrecent`, the account picture is `rf_platform::dock::startuser`; none of them is repeated here.
 //!
 //! WHAT IT COSTS. Nothing runs while the panel is hidden. An opening reads the recent-file shortcuts and (once for each size) the
 //! account picture on worker threads, builds at most 18 pinned tiles and 6 recommended entries (a page of the grid, not all the pins),
@@ -9,9 +9,9 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rf_win::dock::clock;
-use rf_win::dock::startrecent::{self, Pick, Source, When};
-use rf_win::toasts::{self, Ago};
+use rf_platform::dock::clock;
+use rf_platform::dock::startrecent::{self, Pick, Source, When};
+use rf_platform::toasts::{self, Ago};
 
 use super::*;
 use crate::dock::cc_model::Words;
@@ -499,8 +499,8 @@ impl StartView {
 #[cfg(test)]
 mod tests {
     use super::{AVATAR, Words, avatar_px, keep_icon_on_hide, rec_key, rec_line};
-    use rf_win::dock::startrecent::When;
-    use rf_win::toasts::Ago;
+    use rf_platform::dock::startrecent::When;
+    use rf_platform::toasts::Ago;
 
     fn tr_tr(s: &'static str) -> &'static str {
         s

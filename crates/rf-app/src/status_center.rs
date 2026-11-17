@@ -14,7 +14,7 @@ use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::transfer::{self as xfer, OpStats, Outcome, Pace, Stage};
-use rf_win::fileops::{self, ByteProgress, Tracker, Transfer};
+use rf_platform::fileops::{self, ByteProgress, Tracker, Transfer};
 
 use crate::theme::{self, Palette};
 
@@ -68,7 +68,7 @@ pub struct OpState {
 pub struct Question {
     count: usize,
     /// What the dialog lists, kept for "Seç…" on the strip or a card (the dialog is not opened until then).
-    list: Vec<rf_win::fastcopy::Conflict>,
+    list: Vec<rf_platform::fastcopy::Conflict>,
     reply: std::rc::Rc<std::cell::RefCell<Option<crate::conflict_dialog::Reply>>>,
 }
 
@@ -162,7 +162,7 @@ impl Global for OpsGlobal {}
 enum Ev {
     Progress(u32, u32, Option<String>),
     /// The copy thread asks about names that already exist and waits for the reply.
-    Ask(Vec<rf_win::fastcopy::Conflict>, crate::conflict_dialog::Reply),
+    Ask(Vec<rf_platform::fastcopy::Conflict>, crate::conflict_dialog::Reply),
     Done(Result<bool, String>),
 }
 
@@ -224,8 +224,8 @@ impl Ops {
 
     /// What the taskbar buttons show: the running operations' progress, yellow when all are
     /// paused, red while a failure is unseen.
-    fn taskbar(&self) -> rf_win::taskbar_progress::State {
-        use rf_win::taskbar_progress::State;
+    fn taskbar(&self) -> rf_platform::taskbar_progress::State {
+        use rf_platform::taskbar_progress::State;
         let run: Vec<&OpState> = self.ops.iter().filter(|o| o.phase == OpPhase::Running).collect();
         let Some(v) = self.overall() else { return State::None };
         if run.iter().all(|o| o.total == 0) {
@@ -356,7 +356,7 @@ impl Ops {
     /// Answers operation `id`'s question for every name. Gives back the reply it took (the
     /// dialog showing it is taken away), or `None` when there was nothing to answer: no such
     /// operation, no question, or somebody answered first.
-    fn answered(&mut self, id: u64, r: rf_win::fastcopy::Resolve) -> Option<std::rc::Rc<std::cell::RefCell<Option<crate::conflict_dialog::Reply>>>> {
+    fn answered(&mut self, id: u64, r: rf_platform::fastcopy::Resolve) -> Option<std::rc::Rc<std::cell::RefCell<Option<crate::conflict_dialog::Reply>>>> {
         let q = self.ops.iter_mut().find(|o| o.id == id)?.question.take()?;
         let reply = q.reply.borrow_mut().take()?;
         let _ = reply.send(Some(vec![r; q.count]));
@@ -388,7 +388,7 @@ impl Ops {
     }
 
     /// The same answer for every name the copy asked about, from the strip or a card.
-    pub(crate) fn answer(&mut self, id: u64, r: rf_win::fastcopy::Resolve, cx: &mut Context<Self>) {
+    pub(crate) fn answer(&mut self, id: u64, r: rf_platform::fastcopy::Resolve, cx: &mut Context<Self>) {
         if let Some(reply) = self.answered(id, r) {
             // the dialog (if "Seç…" opened one) is answered by this: take it away
             cx.defer(move |cx| crate::conflict_dialog::dismiss_if(&reply, cx));
@@ -615,7 +615,7 @@ pub fn start_with_id(
     std::thread::Builder::new()
         .name("rf-op".into())
         .spawn(move || {
-            rf_win::shell::ensure_com();
+            rf_platform::shell::ensure_com();
             // (a failure the shell's absence causes gets a sentence that says so: shellless.rs)
             let r = work(tracker).map_err(|e| crate::shellless::op_failure_text(&e));
             let _ = tx.unbounded_send(Ev::Done(r));
@@ -773,7 +773,7 @@ pub fn transfer_then(cx: &mut App, kind: Transfer, sources: Vec<std::path::PathB
 }
 
 /// Pastes the clipboard's VIRTUAL files into `dest`: files that exist only in the program that copied them, which hands their bytes
-/// over while they are written (`rf_win::vfiles`, which says what is written and what never is). A tracked operation like a copy:
+/// over while they are written (`rf_platform::vfiles`, which says what is written and what never is). A tracked operation like a copy:
 /// its progress is in bytes when the source told the sizes and in files when it did not, and it can be cancelled. Then `after` on
 /// the UI thread with the top-level items that arrived. Not into an archive.
 pub fn paste_virtual(cx: &mut App, dest: std::path::PathBuf, after: impl FnOnce(Vec<std::path::PathBuf>, &mut App) + 'static) {
@@ -788,7 +788,7 @@ pub fn paste_virtual(cx: &mut App, dest: std::path::PathBuf, after: impl FnOnce(
         cx,
         title,
         move |t| {
-            let got = rf_win::vfiles::paste_clipboard(
+            let got = rf_platform::vfiles::paste_clipboard(
                 &dest,
                 &mut |p| {
                     let current = p.current.map(str::to_string);
@@ -859,7 +859,7 @@ fn transfer_inner(
         t.limit.store(limit, Ordering::Relaxed);
         // our engine (conflicts asked in one list); Windows' engine when it is turned off
         let r = if fast {
-            rf_win::fastcopy::transfer(kind, &sources, &dest, t.clone())
+            rf_platform::fastcopy::transfer(kind, &sources, &dest, t.clone())
         } else {
             fileops::transfer_tracked(kind, &sources, &dest, t.clone())
         };
@@ -904,7 +904,7 @@ pub fn offer_resume(cx: &mut App) {
     let found = cx.background_spawn(async {
         // let the window settle first; the scan itself is a directory listing
         std::thread::sleep(std::time::Duration::from_millis(700));
-        rf_win::fastcopy::interrupted()
+        rf_platform::fastcopy::interrupted()
     });
     cx.spawn(async move |cx| {
         let list = found.await;
@@ -917,7 +917,7 @@ pub fn offer_resume(cx: &mut App) {
     .detach();
 }
 
-fn ask_resume(job: rf_win::fastcopy::Interrupted, window: &mut gpui_kit::Window, cx: &mut App) {
+fn ask_resume(job: rf_platform::fastcopy::Interrupted, window: &mut gpui_kit::Window, cx: &mut App) {
     use crate::prompt::{Button, Kind};
     let title = match job.kind {
         Transfer::Copy => t!("Yarıda kalan bir kopyalama var"),
@@ -944,7 +944,7 @@ fn ask_resume(job: rf_win::fastcopy::Interrupted, window: &mut gpui_kit::Window,
             }),
             Button::new(t!("Vazgeç"), Kind::Normal, move |_, _, cx| {
                 // what was copied stays where it is
-                rf_win::fastcopy::discard(&j2.journal);
+                rf_platform::fastcopy::discard(&j2.journal);
                 offer_resume(cx);
                 Ok(())
             }),
@@ -956,7 +956,7 @@ fn ask_resume(job: rf_win::fastcopy::Interrupted, window: &mut gpui_kit::Window,
 }
 
 /// Carries a cut-off job on in the Status Center, with its original plan.
-pub fn resume_job(cx: &mut App, job: rf_win::fastcopy::Interrupted) {
+pub fn resume_job(cx: &mut App, job: rf_platform::fastcopy::Interrupted) {
     let verb = match job.kind {
         Transfer::Copy => t!("Kopyalanıyor"),
         Transfer::Move => t!("Taşınıyor"),
@@ -965,7 +965,7 @@ pub fn resume_job(cx: &mut App, job: rf_win::fastcopy::Interrupted) {
     let limit = u64::from(cx.global::<crate::settings::Settings>().copy_speed_limit) << 20;
     start(cx, title, move |t| {
         t.limit.store(limit, Ordering::Relaxed);
-        rf_win::fastcopy::resume(&job.journal, t)
+        rf_platform::fastcopy::resume(&job.journal, t)
     });
 }
 
@@ -1029,8 +1029,8 @@ pub fn extract_pick(cx: &mut App, archives: Vec<std::path::PathBuf>) {
     }
     let (tx, rx) = futures::channel::oneshot::channel::<Option<std::path::PathBuf>>();
     let title = t!("Çıkarılacak klasör").to_string();
-    rf_win::sta::run(move |owner| {
-        let _ = tx.send(rf_win::dialogs::pick(owner, &title, rf_win::dialogs::Pick::Folder));
+    rf_platform::sta::run(move |owner| {
+        let _ = tx.send(rf_platform::dialogs::pick(owner, &title, rf_platform::dialogs::Pick::Folder));
     });
     cx.spawn(async move |cx| {
         let Ok(Some(dir)) = rx.await else { return };
@@ -1192,7 +1192,7 @@ pub fn delete_ex(cx: &mut App, paths: Vec<std::path::PathBuf>, permanent: bool, 
     let id = start_with_id(cx, title, move |t| {
         // permanent: our parallel delete (the shell takes what it can't); recycle bin: the shell
         let r = if permanent && fast {
-            rf_win::fastdelete::delete_permanent(&paths, t.clone(), rf_win::fastdelete::threads_for(&paths))
+            rf_platform::fastdelete::delete_permanent(&paths, t.clone(), rf_platform::fastdelete::threads_for(&paths))
         } else {
             fileops::delete_tracked(&paths, permanent, t.clone())
         };
@@ -1213,7 +1213,7 @@ pub fn delete_ex(cx: &mut App, paths: Vec<std::path::PathBuf>, permanent: bool, 
 /// Puts the operations' progress on every main window's taskbar button (when it changed by a
 /// tenth of a percent or more).
 pub fn sync_taskbar(ops: &Entity<Ops>, cx: &mut App) {
-    use rf_win::taskbar_progress::State;
+    use rf_platform::taskbar_progress::State;
     thread_local! {
         static LAST: std::cell::Cell<(State, usize)> = const { std::cell::Cell::new((State::None, 0)) };
     }
@@ -1231,9 +1231,16 @@ pub fn sync_taskbar(ops: &Entity<Ops>, cx: &mut App) {
     LAST.with(|l| l.set((state, windows.len())));
     for w in windows {
         let _ = w.update(cx, |_, window, _| {
-            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            if let Ok(RawWindowHandle::Win32(h)) = HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
-                rf_win::taskbar_progress::set(h.hwnd.get(), state);
+            #[cfg(windows)]
+            {
+                use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                if let Ok(RawWindowHandle::Win32(h)) = HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
+                    rf_platform::taskbar_progress::set(h.hwnd.get(), state);
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = (window, state);
             }
         });
     }
@@ -1569,7 +1576,7 @@ fn fmt_duration_with(secs: f32, (sec, min, hour): (&str, &str, &str)) -> String 
 mod tests {
     use super::{Glance, OpPhase, OpState, Ops, Ordering, Question, fmt_duration_with, glance_of};
     use rf_core::transfer::{self as xfer, Stage};
-    use rf_win::fastcopy::Resolve;
+    use rf_platform::fastcopy::Resolve;
     use std::time::{Duration, Instant};
 
     fn op(id: u64, title: &str, phase: OpPhase, done: u32, total: u32) -> OpState {
@@ -1890,7 +1897,7 @@ fn open_popup(ops: &Entity<Ops>, owner: AnyWindowHandle, cx: &mut App) -> Option
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         if let Ok(h) = w.window_handle() {
             if let RawWindowHandle::Win32(h) = h.as_raw() {
-                rf_win::window::set_dark_mode(h.hwnd.get(), dark);
+                rf_platform::window::set_dark_mode(h.hwnd.get(), dark);
                 crate::glass::keep_out_of_capture(h.hwnd.get());
             }
         }

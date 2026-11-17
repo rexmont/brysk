@@ -49,15 +49,15 @@ pub fn startup() {
 /// with Windows, and the Open/Save dialog DLL (a per-build copy).
 fn after_install_or_update() {
     let Ok(me) = std::env::current_exe() else { return };
-    if rf_win::default_fm::is_enabled(rf_win::default_fm::CLASSES) {
-        let _ = rf_win::default_fm::enable(&me.display().to_string(), rf_win::default_fm::CLASSES);
+    if rf_platform::default_fm::is_enabled(rf_platform::default_fm::CLASSES) {
+        let _ = rf_platform::default_fm::enable(&me.display().to_string(), rf_platform::default_fm::CLASSES);
     }
-    if rf_win::dialogs::starts_with_windows_as("DirectLook") {
-        let _ = rf_win::dialogs::set_start_with_windows_as("DirectLook", &me.with_file_name("directlook.exe"), &["--background"], true);
+    if rf_platform::dialogs::starts_with_windows_as("DirectLook") {
+        let _ = rf_platform::dialogs::set_start_with_windows_as("DirectLook", &me.with_file_name("directlook.exe"), &["--background"], true);
     }
-    if rf_win::dialog_reg::is_enabled(rf_win::dialog_reg::CLASSES) {
+    if rf_platform::dialog_reg::is_enabled(rf_platform::dialog_reg::CLASSES) {
         if let Some(dll) = crate::dialog_dll() {
-            rf_win::dialog_reg::point_to(&dll, rf_win::dialog_reg::CLASSES);
+            rf_platform::dialog_reg::point_to(&dll, rf_platform::dialog_reg::CLASSES);
         }
     }
 }
@@ -65,26 +65,26 @@ fn after_install_or_update() {
 /// A fresh install turns on rustyfiles' Open/Save dialogs (per user, no admin rights; Settings →
 /// Advanced turns them off). Updates don't, so someone who turned them off keeps them off.
 fn dialogs_on_by_default() {
-    let classes = rf_win::dialog_reg::CLASSES;
-    if !rf_win::dialog_reg::is_enabled(classes) {
+    let classes = rf_platform::dialog_reg::CLASSES;
+    if !rf_platform::dialog_reg::is_enabled(classes) {
         if let Some(dll) = crate::dialog_dll() {
-            let _ = rf_win::dialog_reg::enable(&dll, classes);
+            let _ = rf_platform::dialog_reg::enable(&dll, classes);
         }
     }
 }
 
 /// Everything rustyfiles changed in Windows goes back (settings in %APPDATA% stay).
 fn before_uninstall() {
-    let classes = rf_win::default_fm::CLASSES;
-    if rf_win::default_fm::is_enabled(classes) {
-        let _ = rf_win::default_fm::disable(classes);
+    let classes = rf_platform::default_fm::CLASSES;
+    if rf_platform::default_fm::is_enabled(classes) {
+        let _ = rf_platform::default_fm::disable(classes);
     }
-    let _ = rf_win::dialog_reg::disable(rf_win::dialog_reg::CLASSES);
+    let _ = rf_platform::dialog_reg::disable(rf_platform::dialog_reg::CLASSES);
     let none = Path::new("");
-    let _ = rf_win::dialogs::set_start_with_windows_as("DirectLook", none, &[], false);
-    let _ = rf_win::dialogs::set_start_with_windows(none, false);
+    let _ = rf_platform::dialogs::set_start_with_windows_as("DirectLook", none, &[], false);
+    let _ = rf_platform::dialogs::set_start_with_windows(none, false);
     // DirectLook holds its exe open
-    rf_win::single_instance::send_to(&crate::look::ipc::app_name(), &crate::look::ipc::Msg::Quit.encode());
+    rf_platform::single_instance::send_to(&crate::look::ipc::app_name(), &crate::look::ipc::Msg::Quit.encode());
     std::thread::sleep(Duration::from_millis(500));
     // and so does a running dock (a process of its own that outlives rustyfiles' window)
     crate::dock::control::stop_for_update();
@@ -351,7 +351,7 @@ pub async fn redraw_while_busy(cx: &mut gpui_kit::AsyncApp) {
 pub fn restart_to_update() {
     let Some(um) = manager() else { return };
     let pending = PENDING.lock().unwrap().clone();
-    rf_win::single_instance::send_to(&crate::look::ipc::app_name(), &crate::look::ipc::Msg::Quit.encode());
+    rf_platform::single_instance::send_to(&crate::look::ipc::app_name(), &crate::look::ipc::Msg::Quit.encode());
     std::thread::sleep(Duration::from_millis(300));
     // the dock is its own process and holds the exe open too; the new version's start brings it back
     crate::dock::control::stop_for_update();
@@ -367,8 +367,8 @@ pub fn restart_to_update() {
     let splash = crate::update_splash::launch();
     match um.wait_exit_then_apply_updates(&asset, splash.is_some(), true, Vec::<String>::new()) {
         Ok(()) => {
-            // a launch in the next moments must not be forwarded to a process that ends now (see rf_win::handover)
-            rf_win::handover::GATE.leave_now();
+            // a launch in the next moments must not be forwarded to a process that ends now (see rf_platform::handover)
+            rf_platform::handover::GATE.leave_now();
             std::process::exit(0)
         }
         Err(e) => {

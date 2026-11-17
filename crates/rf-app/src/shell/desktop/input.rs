@@ -74,8 +74,8 @@ impl DesktopView {
                 }
             }))
             .on_action(cx.listener(|this, _: &Properties, _, cx| this.properties(cx)))
-            .on_action(cx.listener(|this, _: &CopyItems, _, cx| this.copy_selection(rf_win::fileops::Transfer::Copy, cx)))
-            .on_action(cx.listener(|this, _: &CutItems, _, cx| this.copy_selection(rf_win::fileops::Transfer::Move, cx)))
+            .on_action(cx.listener(|this, _: &CopyItems, _, cx| this.copy_selection(rf_platform::fileops::Transfer::Copy, cx)))
+            .on_action(cx.listener(|this, _: &CutItems, _, cx| this.copy_selection(rf_platform::fileops::Transfer::Move, cx)))
             .on_action(cx.listener(|this, _: &PasteItems, window, cx| this.paste(Via::Keyboard, window, cx)))
             .on_action(cx.listener(|this, _: &DeleteItems, window, cx| this.delete_selection(false, window, cx)))
             .on_action(cx.listener(|this, _: &DeletePermanently, window, cx| this.delete_selection(true, window, cx)))
@@ -334,8 +334,8 @@ impl DesktopView {
         unsafe {
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
         }
-        rf_win::sta::run(move |owner| {
-            if let Err(e) = rf_win::dnd::drag_out(owner, ui_thread, &paths) {
+        rf_platform::sta::run(move |owner| {
+            if let Err(e) = rf_platform::dnd::drag_out(owner, ui_thread, &paths) {
                 log::warn!("desktop drag out: {e:#}");
             }
         });
@@ -358,7 +358,7 @@ impl DesktopView {
             if let Some(hwnd) = self.cover.filter(|h| *h != 0)
                 && !self.sel.selected.is_empty()
             {
-                rf_win::desktop::cover::activate(hwnd);
+                rf_platform::desktop::cover::activate(hwnd);
             }
             cx.notify();
         }
@@ -448,7 +448,7 @@ impl DesktopView {
             let paths: Vec<PathBuf> = ev.drag(cx).paths().to_vec();
             // the pointer shows what the drop would do with what is under it, by the same decision the drop makes
             let (action, _, _) = self.plan_external(&paths, None, pt);
-            let take_in = rf_win::dnd::default_transfer(&paths, &dir, false, false);
+            let take_in = rf_platform::dnd::default_transfer(&paths, &dir, false, false);
             let into_folder = match &action {
                 DropAction::HandTo { target, accepts: Accepts::Folder } => self.drop_target_folder(target, &paths, false, false).and_then(|(_, verdict)| verdict.ok()),
                 _ => None,

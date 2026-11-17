@@ -83,8 +83,17 @@ impl AudioSink for NullSink {
     }
 }
 
+#[cfg(windows)]
 pub use wasapi::wasapi_sink;
 
+/// No system audio output yet on macOS: DirectLook falls back to [`NullSink`] (silent, clocked)
+/// until the CoreAudio sink is written. See docs/port-macos.md, milestone M3.
+#[cfg(not(windows))]
+pub fn wasapi_sink() -> anyhow::Result<Box<dyn AudioSink>> {
+    anyhow::bail!("no system audio output on this platform yet")
+}
+
+#[cfg(windows)]
 mod wasapi {
     use super::AudioSink;
     use anyhow::Context;

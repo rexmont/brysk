@@ -51,11 +51,11 @@ fn hexa(c: u32, a: f32) -> Hsla {
 
 /// The accent palette the app wears: the colour the user chose for rustyfiles (Settings > Appearance), else the user's Windows
 /// accent palette, which is read once.
-fn system_accent() -> Option<rf_win::accent::AccentPalette> {
-    static WINDOWS: std::sync::OnceLock<Option<rf_win::accent::AccentPalette>> = std::sync::OnceLock::new();
-    match rf_win::accent::override_color() {
-        Some(c) => Some(rf_win::accent::from_color(c)),
-        None => *WINDOWS.get_or_init(rf_win::accent::system_palette),
+fn system_accent() -> Option<rf_platform::accent::AccentPalette> {
+    static WINDOWS: std::sync::OnceLock<Option<rf_platform::accent::AccentPalette>> = std::sync::OnceLock::new();
+    match rf_platform::accent::override_color() {
+        Some(c) => Some(rf_platform::accent::from_color(c)),
+        None => *WINDOWS.get_or_init(rf_platform::accent::system_palette),
     }
 }
 
@@ -194,7 +194,7 @@ impl Palette {
     }
 }
 
-/// The material a window asks Windows for: the wanted one where Windows has materials, none where it has not (`rf_win::osver`,
+/// The material a window asks Windows for: the wanted one where Windows has materials, none where it has not (`rf_platform::osver`,
 /// issue 24). There the palette paints the window itself (`settings::solid_backdrop`), and asking for "none" also switches off a
 /// blur-behind that an earlier choice may have left on the window. A see-through window (glass, an overlay) stays what it is.
 pub fn window_material(wanted: WindowBackgroundAppearance) -> WindowBackgroundAppearance {

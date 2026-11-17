@@ -1,5 +1,5 @@
 //! Columns for any Windows property in the Details view (duration, artist, date taken ...): the part
-//! that lives inside the folder view. The data side is `rf_win::propcols` (reading) and
+//! that lives inside the folder view. The data side is `rf_platform::propcols` (reading) and
 //! `rf_core::propcols` (the chosen list, typed values, the cache); the chooser window is
 //! `crate::prop_chooser`. See docs/design/property-columns.md.
 //!
@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize};
 
 use parking_lot::Mutex;
 use rf_core::propcols::{self as pc, ChosenColumn, ChosenColumns, PropCache, PropCell, PropKind, PropValue};
-use rf_win::propcols as wp;
+use rf_platform::propcols as wp;
 
 use super::*;
 use crate::fluent_menu::{self, Item, Menu, MenuIcon};
@@ -870,6 +870,7 @@ impl FolderView {
         }
         items.push(Item::Separator);
         // (opened after the menu has closed, so the chooser takes the focus the menu gives back)
+        #[cfg(windows)]
         items.push(Item::action(t!("Diğer sütunlar…"), MenuIcon::Lucide(L::Columns3), |window, cx| {
             window.defer(cx, crate::prop_chooser::open)
         }));
@@ -1038,7 +1039,7 @@ fn follows_property_sort(spec: SortSpec, current: SortSpec) -> bool {
 
 /// The open folder is one whose files the property system can read without a network round trip.
 fn plain_local_path(p: &Path) -> bool {
-    !crate::archive_view::is_browsable_path(p) && !rf_win::ftp::is_ftp(p) && !rf_win::localized::is_network(p)
+    !crate::archive_view::is_browsable_path(p) && !rf_platform::ftp::is_ftp(p) && !rf_platform::localized::is_network(p)
 }
 
 #[cfg(test)]
@@ -1051,7 +1052,7 @@ mod tests {
     use parking_lot::Mutex;
     use rf_core::propcols::{PropCache, PropCell, PropValue};
     use rf_core::{Entry, EntryKind, SortDir, SortKey, SortSpec};
-    use rf_win::propcols::{FakeSource, ReadFail};
+    use rf_platform::propcols::{FakeSource, ReadFail};
 
     // (not `use super::*`: that brings gpui's `test` attribute macro into scope and #[test] then loops)
     use super::{

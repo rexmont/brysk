@@ -12,7 +12,7 @@ use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use parking_lot::Mutex;
-use rf_win::bench::{App as BenchApp, AppKind, Machine, OpenResult};
+use rf_platform::bench::{App as BenchApp, AppKind, Machine, OpenResult};
 
 use crate::bench::{OpenTest, Progress, Results};
 use crate::settings::{self, Settings};
@@ -48,7 +48,7 @@ impl Global for State {}
 
 fn state(cx: &mut App) -> &mut State {
     if !cx.has_global::<State>() {
-        let detected = rf_win::bench::detect();
+        let detected = rf_platform::bench::detect();
         cx.set_global(State {
             detected,
             machine: None,
@@ -63,7 +63,7 @@ fn state(cx: &mut App) -> &mut State {
         });
         // the machine line reads the registry and asks the disk: not on the UI thread
         cx.spawn(async move |cx| {
-            let m = cx.background_spawn(async { rf_win::bench::machine(&crate::bench::bench_dir()) }).await;
+            let m = cx.background_spawn(async { rf_platform::bench::machine(&crate::bench::bench_dir()) }).await;
             cx.update(|cx| {
                 cx.global_mut::<State>().machine = Some(m);
                 cx.refresh_windows();
@@ -465,7 +465,7 @@ fn enc(s: &str) -> String {
 
 fn open_url(url: String) {
     std::thread::spawn(move || {
-        let _ = rf_win::shell::open(std::path::Path::new(&url));
+        let _ = rf_platform::shell::open(std::path::Path::new(&url));
     });
 }
 
@@ -600,12 +600,12 @@ fn copy_picture(window: &Window, cx: &mut App) {
     let Some(r) = state(cx).results.clone() else { return };
     let owner = hwnd(window);
     let svg = card_svg(&r);
-    match rf_win::bench::render_card(&svg, 1.0) {
+    match rf_platform::bench::render_card(&svg, 1.0) {
         Ok(pic) => {
             // also kept as a file next to the results, for attaching
             let path = crate::bench::bench_dir().join("rustyfiles-speed-test.png");
             let _ = std::fs::write(&path, &pic.png);
-            let ok = owner.is_some_and(|h| rf_win::clipboard::set_image(windows::Win32::Foundation::HWND(h as *mut _), pic.width, pic.height, &pic.rgba, &pic.png).is_ok());
+            let ok = owner.is_some_and(|h| rf_platform::clipboard::set_image(windows::Win32::Foundation::HWND(h as *mut _), pic.width, pic.height, &pic.rgba, &pic.png).is_ok());
             note(if ok { t!("Sonuç kartı panoya kopyalandı") } else { t!("Panoya kopyalanamadı") }, cx);
         }
         Err(e) => {
@@ -620,11 +620,11 @@ fn save_picture(cx: &mut App) {
     let Some(r) = state(cx).results.clone() else { return };
     let svg = card_svg(&r);
     std::thread::spawn(move || {
-        let Ok(pic) = rf_win::bench::render_card(&svg, 1.0) else { return };
-        let dir = rf_win::known::KnownFolder::Downloads.path().unwrap_or_else(std::env::temp_dir);
-        let path = rf_win::fileops::unique_name(&dir, "rustyfiles speed test", ".png");
+        let Ok(pic) = rf_platform::bench::render_card(&svg, 1.0) else { return };
+        let dir = rf_platform::known::KnownFolder::Downloads.path().unwrap_or_else(std::env::temp_dir);
+        let path = rf_platform::fileops::unique_name(&dir, "rustyfiles speed test", ".png");
         if std::fs::write(&path, &pic.png).is_ok() {
-            let _ = rf_win::shell::open(&path);
+            let _ = rf_platform::shell::open(&path);
         }
     });
     note(t!("Kart İndirilenler klasörüne kaydedildi"), cx);
@@ -1076,7 +1076,7 @@ mod tests {
     #[test]
     fn card_renders() {
         let Some(r) = crate::bench::last_results() else { return };
-        let pic = rf_win::bench::render_card(&super::card_svg(&r), 1.0).unwrap();
+        let pic = rf_platform::bench::render_card(&super::card_svg(&r), 1.0).unwrap();
         assert_eq!((pic.width, pic.height), (1200, 675));
         std::fs::write(std::env::temp_dir().join("rf-bench-card.png"), &pic.png).unwrap();
     }

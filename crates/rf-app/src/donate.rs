@@ -6,8 +6,10 @@
 
 use std::sync::Mutex;
 
-use rf_win::bench::AppKind;
+#[cfg(windows)]
+use rf_platform::bench::AppKind;
 
+#[cfg(windows)]
 use crate::bench::{OpenTest, Results, Versus};
 use crate::t;
 
@@ -33,6 +35,7 @@ static FACTS: Mutex<Option<Facts>> = Mutex::new(None);
 
 /// Reads the saved speed test on a helper thread (called at start-up and after a test).
 pub fn refresh() {
+    #[cfg(windows)]
     std::thread::Builder::new()
         .name("rf-donate".into())
         .spawn(|| {
@@ -40,18 +43,24 @@ pub fn refresh() {
             *FACTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(f);
         })
         .ok();
+    #[cfg(not(windows))]
+    {
+        *FACTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(Facts::default());
+    }
 }
 
 fn ratio(slow: f64, fast: f64) -> Option<f64> {
     (fast > 0.0 && slow / fast >= MIN_RATIO).then_some(slow / fast)
 }
 
+#[cfg(windows)]
 fn versus(v: &Option<Versus>) -> Option<f64> {
     let v = v.as_ref()?;
     ratio(v.windows_ms?, v.ours_ms?)
 }
 
 /// The comparisons a saved result supports.
+#[cfg(windows)]
 pub fn facts(r: &Results) -> Facts {
     let mut f = Facts::default();
     // the biggest folder both rustyfiles and File Explorer opened
@@ -76,6 +85,12 @@ pub fn facts(r: &Results) -> Facts {
     f.unzip = versus(&r.engines.unzip);
     f.search = r.engines.search_ms.filter(|_| r.engines.search_entries > 0).map(|ms| (ms, r.engines.search_entries));
     f
+}
+
+/// No Windows speed test to quote on macOS yet.
+#[cfg(not(windows))]
+pub fn facts(_r: &()) -> Facts {
+    Facts::default()
 }
 
 /// "1,6" / "1.6".

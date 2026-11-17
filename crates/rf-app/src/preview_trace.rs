@@ -40,12 +40,19 @@ pub fn mark(text: &str) {
 
 /// (idle, kernel + user) CPU time of the whole machine, in 100 ns units.
 fn cpu_times() -> Option<(u64, u64)> {
-    use windows::Win32::Foundation::FILETIME;
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::FILETIME;
     use windows::Win32::System::Threading::GetSystemTimes;
     let (mut idle, mut kernel, mut user) = (FILETIME::default(), FILETIME::default(), FILETIME::default());
     unsafe { GetSystemTimes(Some(&mut idle), Some(&mut kernel), Some(&mut user)).ok()? };
     let n = |f: FILETIME| (u64::from(f.dwHighDateTime) << 32) | u64::from(f.dwLowDateTime);
     Some((n(idle), n(kernel) + n(user)))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
 }
 
 /// How busy the whole machine was between two readings of `cpu_times`, in percent.
@@ -62,6 +69,12 @@ pub fn process_facts(what: &str) {
     if !on() {
         return;
     }
+    #[cfg(not(windows))]
+    {
+        mark(&format!("{what}: macOS process facts are not collected"));
+        return;
+    }
+    #[cfg(windows)]
     use windows::Win32::System::Threading::{
         GetCurrentProcess, GetPriorityClass, GetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE, ProcessPowerThrottling,
     };

@@ -1,7 +1,7 @@
 //! Settings' card for the right island's own buttons (safe removal, Windows Security, network, volume): one row for each, in the order
 //! the island draws them, with two arrows that move the row one place and a switch that shows or hides the button. A row can also be
 //! dragged onto another row and takes its place (the same kind of drag as a pinned folder of the sidebar). The rules are
-//! `rf_win::dock::status_order` (tested there); this file only draws them and writes the two lists (`dock_status_order`,
+//! `rf_platform::dock::status_order` (tested there); this file only draws them and writes the two lists (`dock_status_order`,
 //! `dock_status_hidden`). The running dock reads them when it is told that the file changed (`control::Keys::status`).
 //!
 //! WHY A CARD OF ITS OWN and not entries of the Dock page (`dock_page::entries`): an entry is one control on one field, and this is a
@@ -11,7 +11,7 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::status_order::{self, Status};
+use rf_platform::dock::status_order::{self, Status};
 
 use crate::settings::{self, Settings};
 use crate::settings_view::{card_body, shell, switch};
@@ -128,7 +128,7 @@ pub(crate) fn card(p: &Palette, s: &Settings, live: bool) -> Div {
 mod tests {
     // (not `super::*`: the glob of the UI kit above carries its own `test` attribute)
     use gpui_kit::assets::IconName as L;
-    use rf_win::dock::status_order::Status;
+    use rf_platform::dock::status_order::Status;
 
     use super::{icon, name};
 

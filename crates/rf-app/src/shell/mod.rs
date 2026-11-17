@@ -31,7 +31,7 @@ pub mod taskbar_hide;
 
 use std::sync::OnceLock;
 
-pub use rf_win::shellhost::ShellMode;
+pub use rf_platform::shellhost::ShellMode;
 
 /// The command-line argument that makes this process the shell host (the same process as `--dock`).
 pub const ARG: &str = "--shell";
@@ -68,9 +68,9 @@ pub fn requested_mode(args: &[String]) -> Option<ShellMode> {
 
 /// Called once by the host at its start: looks at the shell window (read-only), logs what it found and remembers it.
 pub fn note_host_start(args: &[String]) -> HostInfo {
-    let info = HostInfo { mode: rf_win::shellhost::mode::detect(), requested: requested_mode(args) };
+    let info = HostInfo { mode: rf_platform::shellhost::mode::detect(), requested: requested_mode(args) };
     if info.requested.is_some_and(|r| r != info.mode) {
-        // (the guard says "shell" when it starts us; if Explorer owns the shell window all the same, the look wins: see rf_win::shellhost::mode)
+        // (the guard says "shell" when it starts us; if Explorer owns the shell window all the same, the look wins: see rf_platform::shellhost::mode)
         log::warn!("shell host: asked to run as {:?}, found {:?}", info.requested.map(ShellMode::name), info.mode.name());
     }
     log::info!("shell host: mode {}", info.mode.name());

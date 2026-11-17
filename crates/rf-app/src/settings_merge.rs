@@ -240,8 +240,10 @@ pub fn save_tracked(cell: &BaselineCell, path: &Path, mine: Table, default_base:
 /// A mutex shared by every process of the user's session that saves this file, so that two saves do not read-modify-write at the
 /// same moment. Waits at most three seconds; if it cannot be had the save goes on without it (the window for a lost change is the few
 /// milliseconds between a read and a rename, against a settings file that would never be saved at all).
+#[cfg(windows)]
 struct FileLock(windows::Win32::Foundation::HANDLE);
 
+#[cfg(windows)]
 impl FileLock {
     fn acquire(path: &Path) -> Option<FileLock> {
         use windows::Win32::Foundation::{CloseHandle, WAIT_ABANDONED, WAIT_OBJECT_0};
@@ -252,7 +254,7 @@ impl FileLock {
         for b in key.bytes() {
             h = (h ^ u32::from(b)).wrapping_mul(0x0100_0193);
         }
-        let name = rf_win::wide::wide(format!("Local\\rustyfiles-settings-{h:08x}"));
+        let name = rf_platform::wide::wide(format!("Local\\rustyfiles-settings-{h:08x}"));
         let handle = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }.ok()?;
         let got = unsafe { WaitForSingleObject(handle, 3_000) };
         if got == WAIT_OBJECT_0 || got == WAIT_ABANDONED {
@@ -265,6 +267,7 @@ impl FileLock {
     }
 }
 
+#[cfg(windows)]
 impl Drop for FileLock {
     fn drop(&mut self) {
         use windows::Win32::Foundation::CloseHandle;
@@ -273,6 +276,28 @@ impl Drop for FileLock {
             let _ = ReleaseMutex(self.0);
             let _ = CloseHandle(self.0);
         }
+    }
+}
+
+/// macOS: a `flock` on the settings file itself, held for the read-modify-write.
+#[cfg(not(windows))]
+struct FileLock(std::fs::File);
+
+#[cfg(not(windows))]
+impl FileLock {
+    fn acquire(path: &Path) -> Option<FileLock> {
+        use std::os::unix::io::AsRawFd;
+        let f = std::fs::OpenOptions::new().create(true).read(true).write(true).open(path.with_extension("lock")).ok()?;
+        let r = unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        (r == 0).then_some(FileLock(f))
+    }
+}
+
+#[cfg(not(windows))]
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        use std::os::unix::io::AsRawFd;
+        let _ = unsafe { libc::flock(self.0.as_raw_fd(), libc::LOCK_UN) };
     }
 }
 

@@ -11,6 +11,7 @@ pub mod image;
 pub mod info;
 pub mod markdown;
 pub mod pdf;
+#[cfg(windows)]
 pub mod rd_video;
 pub mod text;
 pub mod video;

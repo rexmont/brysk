@@ -1,5 +1,5 @@
 //! The dock's size as the settings file keeps it ("Dock boyutu"): a factor from 0.75 to 1.5 that the slider on the Dock page sets in
-//! steps of 0.05. The range, the old names and the arithmetic are `rf_win::dock::size_live`; this is the value that is saved.
+//! steps of 0.05. The range, the old names and the arithmetic are `rf_platform::dock::size_live`; this is the value that is saved.
 //!
 //! THE FILE. The setting is still called `dock_size`. It used to be one of four names (small, medium, large, xlarge); it is now a number
 //! (`dock_size = 1.25`), and a number that is exactly one of the four old sizes is still written as its name, so a file this version
@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-use rf_win::dock::size_live as live;
+use rf_platform::dock::size_live as live;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

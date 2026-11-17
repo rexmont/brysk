@@ -1,7 +1,7 @@
 //! The dock's app menu (shell plan increment B8): a right click on an app's icon in the middle island opens OUR menu on glass above the
 //! icon. Top to bottom: the jump-list sections of the app (`jump_source`), then the fixed part: the app's name (starts a new instance),
 //! "Dock'a sabitle" / "Dock'tan kaldır" (the dock's own pin list, `own_pins`) and, for a running app, "Pencereyi kapat" / "Tüm
-//! pencereleri kapat (n)". The rows, their order and the keyboard's walk are `rf_win::dock::appmenu` (pure, tested); this file is the
+//! pencereleri kapat (n)". The rows, their order and the keyboard's walk are `rf_platform::dock::appmenu` (pure, tested); this file is the
 //! window and what the rows do.
 //!
 //! THE MENU OPENS AT ONCE with the fixed part. The sections are asked for on a worker thread afterwards and appear when they arrive (the
@@ -26,12 +26,12 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::appmenu::{self as model, Fixed, Item, Menu, RowId, Shape};
-use rf_win::dock::layout::Rect;
-use rf_win::dock::panel::{self as geo, CloseCause};
-use rf_win::dock::preview as place;
-use rf_win::dock::winops::{self, WinRef};
-use rf_win::dock::{DockApp, ownpins};
+use rf_platform::dock::appmenu::{self as model, Fixed, Item, Menu, RowId, Shape};
+use rf_platform::dock::layout::Rect;
+use rf_platform::dock::panel::{self as geo, CloseCause};
+use rf_platform::dock::preview as place;
+use rf_platform::dock::winops::{self, WinRef};
+use rf_platform::dock::{DockApp, ownpins};
 
 use super::backdrop::IslandGlass;
 use super::host;
@@ -161,7 +161,7 @@ fn open_now(req: MenuRequest, started: Instant, cx: &mut App) {
     let anchor_x = req.anchor_x.round() as i32;
     let serial = {
         let was_open = cx.try_global::<MenuHost>().is_some_and(|h| h.open);
-        let front = rf_win::dock::foreground_root();
+        let front = rf_platform::dock::foreground_root();
         let p = host_g(cx);
         p.serial += 1;
         // (a menu that is already open keeps the window that had the keyboard before it; one still easing out has the menu itself in
@@ -190,10 +190,10 @@ fn open_now(req: MenuRequest, started: Instant, cx: &mut App) {
     host_g(cx).rect = rect;
     // show, bring to the front, then glass (in this order: the engine attaches to a window that is on the screen)
     cx.spawn(async move |cx| {
-        rf_win::window::set_dark_mode(hwnd, dark);
+        rf_platform::window::set_dark_mode(hwnd, dark);
         geo::show_at(hwnd, rect);
         // (the quiet kind: no tap of the Alt key into the window that is in front; the click that opened the menu was ours)
-        rf_win::window::bring_to_front_quietly(hwnd);
+        rf_platform::window::bring_to_front_quietly(hwnd);
         cx.update(|cx| {
             let _ = handle.update(cx, |v, window, cx| v.on_shown(dark, window, cx));
             log::info!("dock: app menu shown in {:?} from the click at x={anchor_x}{}", started.elapsed(), if made_now { " (window made for it)" } else { "" });
@@ -284,7 +284,7 @@ fn watch_once(serial: u64, cx: &mut App) -> bool {
         close(CloseCause::LayoutChanged, cx);
         return false;
     }
-    let fg = rf_win::dock::foreground_root();
+    let fg = rf_platform::dock::foreground_root();
     let front = fg == hwnd;
     let down = geo::any_button_down();
     // (the dock's own island is not exempt: a click on another icon closes this menu, and its mouse-up opens that icon's)
@@ -329,7 +329,7 @@ pub fn close(cause: CloseCause, cx: &mut App) {
         if cx.update(|cx| is_open(cx)) {
             return;
         }
-        let fg = rf_win::dock::foreground_root();
+        let fg = rf_platform::dock::foreground_root();
         geo::hide(hwnd);
         cx.update(|cx| {
             let _ = handle.update(cx, |v, window, cx| v.on_hidden(window, cx));
@@ -407,8 +407,8 @@ impl MenuView {
         // (the monitors the window used last is not on: two quick questions of Windows, none of which waits for the program. An app
         // with no window is offered every monitor, if it is started from a file: its new window is told by its program)
         let monitors = match windows.first() {
-            Some(w) => rf_win::dock::winmove::targets(&rf_win::dock::winmove::screens(), rf_win::dock::monitors::monitor_of_window(w.hwnd)),
-            None if on_disk => rf_win::dock::winmove::targets(&rf_win::dock::winmove::screens(), None),
+            Some(w) => rf_platform::dock::winmove::targets(&rf_platform::dock::winmove::screens(), rf_platform::dock::monitors::monitor_of_window(w.hwnd)),
+            None if on_disk => rf_platform::dock::winmove::targets(&rf_platform::dock::winmove::screens(), None),
             None => Vec::new(),
         };
         let fixed = model::with_window_rows(fixed, &monitors);
@@ -484,7 +484,7 @@ impl MenuView {
     fn load_entry_icons(&mut self, cx: &mut Context<Self>) {
         let Some(a) = self.active.as_ref() else { return };
         let px = (16.0 * host::env_on(host::active(cx), cx).scale).ceil() as u32;
-        let wanted: Vec<(String, rf_win::dock::IconSource)> = a
+        let wanted: Vec<(String, rf_platform::dock::IconSource)> = a
             .sections
             .iter()
             .flat_map(|s| &s.entries)
@@ -556,8 +556,8 @@ impl MenuView {
                     // Windows shows its consent prompt: the user asked for it with this row. (A shortcut brings its arguments
                     // along; a bare program is started without any.)
                     std::thread::spawn(move || {
-                        if let Err(e) = rf_win::dock::startapps::launch_file_as_admin(&file)
-                            && !rf_win::dock::startapps::is_cancelled(&e)
+                        if let Err(e) = rf_platform::dock::startapps::launch_file_as_admin(&file)
+                            && !rf_platform::dock::startapps::is_cancelled(&e)
                         {
                             log::warn!("dock: starting as administrator failed: {e:#}");
                         }
@@ -573,7 +573,7 @@ impl MenuView {
             RowId::Fixed(Fixed::Properties) => {
                 if let Some(file) = a.app.launch.as_ref().and_then(|l| l.file()).map(|p| p.to_path_buf()) {
                     std::thread::spawn(move || {
-                        if let Err(e) = rf_win::shell::properties(&file) {
+                        if let Err(e) = rf_platform::shell::properties(&file) {
                             log::warn!("dock: the properties could not be opened: {e:#}");
                         }
                     });
@@ -585,8 +585,8 @@ impl MenuView {
                 // (the window used last, as "close window" takes it; moving sends the program messages: never on the UI thread)
                 if let Some(w) = a.windows.first().copied() {
                     std::thread::spawn(move || {
-                        if rf_win::dock::winmove::move_to_screen(w, number) {
-                            rf_win::dock::launch::activate(w.hwnd);
+                        if rf_platform::dock::winmove::move_to_screen(w, number) {
+                            rf_platform::dock::launch::activate(w.hwnd);
                         } else {
                             log::info!("dock: the window was not moved to monitor {number} (it is gone, or Windows refused)");
                         }
@@ -595,16 +595,16 @@ impl MenuView {
                     // Not running: started as always, and its new window is moved when it shows (a program cannot be told where
                     // to open). The windows that are there now are noted first, to tell the new one.
                     std::thread::spawn(move || {
-                        use rf_win::dock::winmove;
+                        use rf_platform::dock::winmove;
                         let program = winmove::program_of(&launch);
                         let known = winmove::known_windows();
-                        if let Err(e) = rf_win::dock::launch::start(&launch) {
+                        if let Err(e) = rf_platform::dock::launch::start(&launch) {
                             log::warn!("dock: starting the app for monitor {number} failed: {e:#}");
                             return;
                         }
                         let found = program.and_then(|p| winmove::wait_for_new_window(&p, &known, std::time::Duration::from_secs(20)));
                         match found {
-                            Some(w) if winmove::move_to_screen(w, number) => rf_win::dock::launch::activate(w.hwnd),
+                            Some(w) if winmove::move_to_screen(w, number) => rf_platform::dock::launch::activate(w.hwnd),
                             Some(_) => log::info!("dock: the new window was not moved to monitor {number} (Windows refused)"),
                             None => log::info!("dock: no new window of the started program was seen; it stays where it opened"),
                         }
@@ -614,8 +614,8 @@ impl MenuView {
             RowId::Fixed(Fixed::FitToScreen) => {
                 if let Some(w) = a.windows.first().copied() {
                     std::thread::spawn(move || {
-                        if rf_win::dock::winmove::fit_to_screen(w) {
-                            rf_win::dock::launch::activate(w.hwnd);
+                        if rf_platform::dock::winmove::fit_to_screen(w) {
+                            rf_platform::dock::launch::activate(w.hwnd);
                         }
                     });
                 }
@@ -841,14 +841,14 @@ impl Render for MenuView {
 /// page opens), else the file itself.
 fn location_of(file: &std::path::Path) -> std::path::PathBuf {
     let is_link = file.extension().is_some_and(|e| e.eq_ignore_ascii_case("lnk"));
-    let target = is_link.then(|| rf_win::shortcut::resolve(file).ok()).flatten().map(|s| s.target).filter(|t| !t.as_os_str().is_empty() && t.exists());
+    let target = is_link.then(|| rf_platform::shortcut::resolve(file).ok()).flatten().map(|s| s.target).filter(|t| !t.as_os_str().is_empty() && t.exists());
     target.unwrap_or_else(|| file.to_path_buf())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Basis, EntryPicture, Fixed, basis_changed, entry_picture, fixed_label};
-    use rf_win::dock::layout::Rect;
+    use rf_platform::dock::layout::Rect;
 
     #[test]
     fn a_line_wears_its_own_icon_the_apps_when_it_has_none_or_it_cannot_be_drawn_and_nothing_while_it_loads() {

@@ -1,5 +1,5 @@
 //! Where the dock's tray strip gets its icons from, and where it sends its clicks. The strip (`tray_strip.rs`) knows nothing of how the
-//! icons arrive: this file is the one seam between it and the tray host (`rf_win::trayhost`, built by another team at the same time).
+//! icons arrive: this file is the one seam between it and the tray host (`rf_platform::trayhost`, built by another team at the same time).
 //!
 //! THE SEAM is five things, and nothing else of the host is touched from the strip:
 //!
@@ -9,7 +9,7 @@
 //! * [`deliver_click`]: a click on an icon (which button, where the pointer is) for the host's click engine to hand to the program;
 //! * [`report_icon_rects`]: where each icon is on the screen now, for the host to answer `Shell_NotifyIconGetRect` with.
 //!
-//! THE REAL SOURCE is `tray_feed.rs`: it takes the running tray host's model (`rf_win::trayhost`, owned by `shell::trayhost` while the
+//! THE REAL SOURCE is `tray_feed.rs`: it takes the running tray host's model (`rf_platform::trayhost`, owned by `shell::trayhost` while the
 //! setting `shell_tray_host` is on) and gives the strip what these five promise. With no host attached (the setting off, the host in
 //! its log-only mode, or not yet started) there is no snapshot, and the island is exactly what it was. What each body promises:
 //!
@@ -40,9 +40,9 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use rf_win::dock::layout::Rect;
-use rf_win::dock::tray_order::StableId;
-use rf_win::dock::tray_strip::ClickKind;
+use rf_platform::dock::layout::Rect;
+use rf_platform::dock::tray_order::StableId;
+use rf_platform::dock::tray_strip::ClickKind;
 
 /// The host's own name for an icon. Opaque here: only handed back to the host.
 pub type IconKey = u64;

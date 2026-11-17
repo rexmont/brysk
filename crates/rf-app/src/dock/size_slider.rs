@@ -3,7 +3,7 @@
 //!
 //! WHAT A STEP DOES. It sets the size in the settings in memory (so the page and everything else in this process shows it at once) and
 //! lets `settings::update_live` write the file once the steps have settled, as every slider does. Besides, it sends the number itself to
-//! the running dock on its pipe (`size <stamp> <permille> <0|1>`, see `rf_win::dock::size_live`), so the dock follows the slider while
+//! the running dock on its pipe (`size <stamp> <permille> <0|1>`, see `rf_platform::dock::size_live`), so the dock follows the slider while
 //! it is dragged instead of jumping when the file lands. When the pointer is let go (or a key made its single step) a last message with
 //! the release flag tells the dock to do what it held back: the reserved screen band and the icons' new resolution. A key press sends
 //! its step WITHOUT the release: a held arrow key is a run of steps, and the dock's rest check (`size_live::IDLE`) settles it once.
@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use gpui_kit::component::h_flex;
 use gpui_kit::*;
-use rf_win::dock::size_live::{self as live, Msg, Outbox};
+use rf_platform::dock::size_live::{self as live, Msg, Outbox};
 
 use super::size_pref::DockSizePref;
 use crate::settings::{self, Settings};
@@ -137,7 +137,7 @@ fn deliver(m: Msg) {
     let line = live::message(m);
     let attempts = if m.released { 6 } else { 1 };
     for attempt in 0..attempts {
-        if rf_win::single_instance::send_to(super::control::APP, &line) {
+        if rf_platform::single_instance::send_to(super::control::APP, &line) {
             return;
         }
         if attempt + 1 < attempts {

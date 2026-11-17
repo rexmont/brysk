@@ -9,10 +9,8 @@ use futures::channel::oneshot;
 use gpui_kit::assets::IconName as L;
 use gpui_kit::*;
 use rf_core::{Location, SortDir, SortKey};
-use rf_win::ctxmenu::{MenuOutcome, ShellItem, ShellTarget};
-use rf_win::fileops::Transfer;
-use windows::Win32::Foundation::POINT;
-use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+use rf_platform::ctxmenu::{MenuOutcome, ShellItem, ShellTarget};
+use rf_platform::fileops::Transfer;
 
 use crate::fluent_menu::{self, Item, Menu, MenuIcon, Pending, Quick, Sub};
 use crate::folder_view::{FolderEvent, FolderView, GroupBy, ViewMode};
@@ -78,10 +76,7 @@ impl FolderView {
             }
             return;
         }
-        let shift = unsafe {
-            use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_SHIFT};
-            GetKeyState(VK_SHIFT.0 as i32) < 0
-        };
+        let shift = shift_down();
         if shift {
             // power users: the full classic Explorer menu (extended verbs)
             self.show_native_menu(background, cx);
@@ -98,17 +93,17 @@ impl FolderView {
         let target = if background { ShellTarget::Background(dir.clone()) } else { ShellTarget::Items(items.clone()) };
         // The user's own programs for the first selected file's type (Settings > File types): the first rows of "Open with". Their
         // icons are read on the worker, with the shell's items: never on the UI thread.
-        let own: Vec<String> = if background { Vec::new() } else { items.first().map(|f| rf_win::openrules::programs_for(f)).unwrap_or_default() };
+        let own: Vec<String> = if background { Vec::new() } else { items.first().map(|f| rf_platform::openrules::programs_for(f)).unwrap_or_default() };
         let (tx, rx) = oneshot::channel();
-        rf_win::sta::run(move |owner| {
+        rf_platform::sta::run(move |owner| {
             let own: Vec<OwnProgram> = own
                 .into_iter()
                 .map(|program| {
-                    let icon = rf_win::thumbs::get_image(std::path::Path::new(&program), 32, rf_win::thumbs::Kind::Icon).ok();
+                    let icon = rf_platform::thumbs::get_image(std::path::Path::new(&program), 32, rf_platform::thumbs::Kind::Icon).ok();
                     (program, icon)
                 })
                 .collect();
-            let _ = tx.send((rf_win::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")), own));
+            let _ = tx.send((rf_platform::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")), own));
         });
         let menu_weak = menu_view.downgrade();
         cx.spawn(async move |_, cx| {
@@ -140,7 +135,7 @@ impl FolderView {
     }
 
     fn quick_clipboard(&self, me: &Me, with_items: bool) -> Vec<Quick> {
-        let paste_ok = rf_win::clipboard::can_paste();
+        let paste_ok = rf_platform::clipboard::can_paste();
         if !with_items {
             return vec![
                 Quick::new(L::ClipboardPaste, t!("Yapıştır  (Ctrl+V)"), paste_ok, act(me, |v, w, cx| v.paste(w, cx))),
@@ -215,7 +210,7 @@ impl FolderView {
             let sel = items.to_vec();
             v.push(Item::action(t!("Seçimle klasör oluştur"), icon(L::FolderInput), act(me, move |v, _, cx| v.folder_with_selection(sel.clone(), cx))));
         }
-        if single_dir && crate::archive_view::split(&target_dir).is_none() && !rf_win::ftp::is_ftp(&target_dir) {
+        if single_dir && crate::archive_view::split(&target_dir).is_none() && !rf_platform::ftp::is_ftp(&target_dir) {
             let d = target_dir.clone();
             v.push(Item::action(t!("Disk kullanımını göster"), icon(L::ChartPie), act(me, move |_, _, cx| {
                 cx.emit(FolderEvent::OpenInNewTab(Location::DiskUsage(d.clone())))
@@ -256,40 +251,40 @@ impl FolderView {
             v.push(Item::action(t!("Klasörü düzleştir"), icon(L::FolderTree), act(me, move |v, w, cx| v.flatten_folder(d.clone(), w, cx))));
         }
         // type-specific actions (Files: rotate, set as background, install font, run as administrator)
-        if !items.is_empty() && items.iter().all(|p| rf_win::rotate::can_rotate(p) && crate::archive_view::split(p).is_none()) {
+        if !items.is_empty() && items.iter().all(|p| rf_platform::rotate::can_rotate(p) && crate::archive_view::split(p).is_none()) {
             v.push(Item::action(t!("Sağa döndür"), icon(L::RotateCw), act(me, |v, w, cx| v.rotate_selection(true, w, cx))));
             v.push(Item::action(t!("Sola döndür"), icon(L::RotateCcw), act(me, |v, w, cx| v.rotate_selection(false, w, cx))));
         }
         if items.len() == 1 {
             let p = items[0].clone();
-            if rf_win::fileactions::is_image(&p) {
+            if rf_platform::fileactions::is_image(&p) {
                 v.push(Item::action(t!("Masaüstü arka planı yap"), icon(L::Monitor), move |_, _| {
                     let p = p.clone();
                     std::thread::spawn(move || {
-                        if let Err(e) = rf_win::fileactions::set_wallpaper(&p) {
+                        if let Err(e) = rf_platform::fileactions::set_wallpaper(&p) {
                             log::warn!("wallpaper: {e:#}");
                         }
                     });
                 }));
-            } else if rf_win::fileactions::is_runnable(&p) {
+            } else if rf_platform::fileactions::is_runnable(&p) {
                 v.push(Item::action(t!("Yönetici olarak çalıştır"), icon(L::ShieldCheck), move |_, _| {
                     let p = p.clone();
-                    rf_win::sta::run(move |owner| {
-                        if let Err(e) = rf_win::ctxmenu::invoke_verb(owner, &ShellTarget::One(p), "runas", cursor()) {
+                    rf_platform::sta::run(move |owner| {
+                        if let Err(e) = rf_platform::ctxmenu::invoke_verb(owner, &ShellTarget::One(p), "runas", cursor()) {
                             log::warn!("runas: {e:#}");
                         }
                     });
                 }));
             }
         }
-        if !items.is_empty() && items.iter().all(|p| rf_win::fileactions::is_font(p)) {
+        if !items.is_empty() && items.iter().all(|p| rf_platform::fileactions::is_font(p)) {
             let fonts = items.to_vec();
             v.push(Item::action(t!("Yazı tipini yükle"), icon(L::Type), move |w, cx| {
                 let fonts = fonts.clone();
                 let title = format!("{} {}", t!("Yazı tipi yükleniyor:"), crate::i18n::items(fonts.len()));
                 crate::status_center::start_with(cx, title, move |_| {
                     for f in &fonts {
-                        rf_win::fileactions::install_font_for_user(f)?;
+                        rf_platform::fileactions::install_font_for_user(f)?;
                     }
                     Ok(true)
                 }, None);
@@ -317,7 +312,7 @@ impl FolderView {
                     let rar_items = items.to_vec();
                     Item::action(t!("RAR olarak sıkıştır"), icon(L::FileArchive), move |_, cx| {
                         if let Some((dir, stem)) = archive_stem(&rar_items) {
-                            let dest = rf_win::fileops::unique_name(&dir, &stem, ".rar");
+                            let dest = rf_platform::fileops::unique_name(&dir, &stem, ".rar");
                             crate::status_center::compress_rar(cx, rar_items.clone(), dest, 5, None);
                         }
                     })
@@ -397,11 +392,11 @@ impl FolderView {
         }
         let fallback = Rc::new(own_new_items(me));
         v.push(Item::Sub { label: t!("Yeni").into(), icon: icon(L::CirclePlus), items: Sub::Pending { key: "new", fallback: Some(fallback) } });
-        v.push(Item::action(t!("Kısayol yapıştır"), icon(L::ClipboardPaste), act(me, |v, w, cx| v.paste_shortcuts(w, cx))).enabled(rf_win::clipboard::has_files()));
+        v.push(Item::action(t!("Kısayol yapıştır"), icon(L::ClipboardPaste), act(me, |v, w, cx| v.paste_shortcuts(w, cx))).enabled(rf_platform::clipboard::has_files()));
         let d = dir.to_path_buf();
         v.push(Item::action(t!("Kenar çubuğuna sabitle"), icon(L::Pin), act(me, move |v, _, cx| v.pin(d.clone(), cx))));
         v.push(Item::action(t!("Yolu kopyala"), icon(L::ClipboardCopy), act(me, |v, _, cx| v.copy_path(cx))));
-        if !self.is_search() && !crate::archive_view::is_browsable_path(dir) && !rf_win::ftp::is_ftp(dir) {
+        if !self.is_search() && !crate::archive_view::is_browsable_path(dir) && !rf_platform::ftp::is_ftp(dir) {
             let d = dir.to_path_buf();
             v.push(Item::action(t!("Disk kullanımını göster"), icon(L::ChartPie), act(me, move |_, _, cx| {
                 cx.emit(FolderEvent::OpenInNewTab(Location::DiskUsage(d.clone())))
@@ -413,6 +408,7 @@ impl FolderView {
         let d = dir.to_path_buf();
         v.push(Item::action(t!("Terminalde aç"), icon(L::SquareTerminal), move |_, _| open_terminal(d.clone())).hint("Ctrl+Shift+`"));
         // the folder organizer: only where the folder has rules
+        #[cfg(windows)]
         if !self.is_search() && crate::organizer::has_rules_for(dir, cx) {
             let d = dir.to_path_buf();
             v.push(Item::action(t!("Klasörü düzenle"), icon(L::WandSparkles), move |w, cx| crate::organizer::organize_folder(d.clone(), w, cx)));
@@ -442,7 +438,7 @@ impl FolderView {
         }
     }
 
-    /// Windows' share sheet for the selection, over this window (`rf_win::share`: the context menu's verb failed, issue 48).
+    /// Windows' share sheet for the selection, over this window (`rf_platform::share`: the context menu's verb failed, issue 48).
     pub(crate) fn share(&self, window: &Window, cx: &mut App) {
         crate::share::open(crate::look::window::hwnd_of(window), self.selection_paths(), cx);
     }
@@ -450,7 +446,12 @@ impl FolderView {
     /// Properties of the current folder (background menu).
     pub(crate) fn folder_properties(&self, cx: &mut App) {
         let Some(dir) = self.current_dir() else { return };
+        #[cfg(windows)]
         crate::properties_view::open(vec![dir], self.images.clone(), cx);
+        #[cfg(not(windows))]
+        {
+            let _ = (dir, cx);
+        }
     }
 }
 
@@ -579,8 +580,8 @@ impl FolderView {
                 let view = fluent_menu::show(Menu { quick: Vec::new(), items: own_new_items(&me) }, pos, window, cx);
                 // the shell's templates (Word, Excel…) join as soon as the shell answers
                 let (tx, rx) = oneshot::channel();
-                rf_win::sta::run(move |owner| {
-                    let _ = tx.send(rf_win::ctxmenu::build(owner, &ShellTarget::Background(dir), false).ok());
+                rf_platform::sta::run(move |owner| {
+                    let _ = tx.send(rf_platform::ctxmenu::build(owner, &ShellTarget::Background(dir), false).ok());
                 });
                 let weak = view.downgrade();
                 cx.spawn(async move |_, cx| {
@@ -849,14 +850,14 @@ fn archive_password(dest: PathBuf, finish: Finish, first: Option<String>, window
 
 fn open_terminal(d: PathBuf) {
     std::thread::spawn(move || {
-        let _ = rf_win::shell::open_terminal(&d);
+        let _ = rf_platform::shell::open_terminal(&d);
     });
 }
 
 /// "<name> - Kısayol.lnk" next to each item (unique name), like Explorer's "Create shortcut".
 fn create_shortcuts(items: Vec<PathBuf>) {
     std::thread::spawn(move || {
-        rf_win::shell::ensure_com();
+        rf_platform::shell::ensure_com();
         for target in items {
             let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else { continue };
             let base = format!("{} - {}", name.to_string_lossy(), t!("Kısayol"));
@@ -866,7 +867,7 @@ fn create_shortcuts(items: Vec<PathBuf>) {
                 link = parent.join(format!("{base} ({n}).lnk"));
                 n += 1;
             }
-            if let Err(e) = rf_win::shortcut::create(&link, &target) {
+            if let Err(e) = rf_platform::shortcut::create(&link, &target) {
                 log::warn!("shortcut: {e:#}");
             }
         }
@@ -874,7 +875,7 @@ fn create_shortcuts(items: Vec<PathBuf>) {
 }
 
 /// One of the user's own programs for a kind of file, and its icon when the shell gave one.
-type OwnProgram = (String, Option<rf_win::thumbs::Bgra>);
+type OwnProgram = (String, Option<rf_platform::thumbs::Bgra>);
 
 /// "Open with", with the user's own programs for the file's type first (in their order), then what Windows offers. Without a list
 /// for the type the submenu is Windows' alone. The programs are there also when the shell's part failed.
@@ -971,8 +972,8 @@ fn tidy(items: Vec<ShellItem>) -> Vec<ShellItem> {
 /// drives…); `me` receives "Rename" if the shell asks for it.
 pub fn load_shell_more(menu: WeakEntity<fluent_menu::MenuView>, target: ShellTarget, me: Me, cx: &mut App) {
     let (tx, rx) = oneshot::channel();
-    rf_win::sta::run(move |owner| {
-        let _ = tx.send(rf_win::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
+    rf_platform::sta::run(move |owner| {
+        let _ = tx.send(rf_platform::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
     });
     cx.spawn(async move |cx| {
         let r = rx.await.unwrap_or_else(|_| Err("cancelled".into()));
@@ -1019,8 +1020,8 @@ fn to_items(me: &Me, session: u64, items: &[ShellItem], cx: &mut App) -> Vec<Ite
 
 fn invoke_shell(me: &Me, session: u64, id: u32, cx: &mut App) {
     let (tx, rx) = oneshot::channel();
-    rf_win::sta::run(move |owner| {
-        let r = rf_win::ctxmenu::invoke(owner, session, id, cursor());
+    rf_platform::sta::run(move |owner| {
+        let r = rf_platform::ctxmenu::invoke(owner, session, id, cursor());
         if let Err(e) = &r {
             log::warn!("shell command: {e:#}");
         }
@@ -1047,8 +1048,7 @@ fn invoke_shell(me: &Me, session: u64, id: u32, cx: &mut App) {
 }
 
 fn shift_down() -> bool {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_SHIFT};
-    unsafe { GetKeyState(VK_SHIFT.0 as i32) < 0 }
+    rf_platform::input::shift_down()
 }
 
 impl FolderView {
@@ -1078,8 +1078,8 @@ impl FolderView {
             _ => ShellTarget::Items(items),
         };
         let (tx, rx) = oneshot::channel();
-        rf_win::sta::run(move |owner| {
-            let _ = tx.send(rf_win::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
+        rf_platform::sta::run(move |owner| {
+            let _ = tx.send(rf_platform::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
         });
         let menu_weak = menu_view.downgrade();
         cx.spawn(async move |_, cx| {

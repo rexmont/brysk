@@ -1,7 +1,7 @@
 //! The Recycle Bin's own settings, as Explorer's Recycle Bin Properties has them: per drive a custom
 //! maximum size (MB) or "remove files immediately", and "display delete confirmation". A small dialog drawn over the
 //! bin view. It READS the current values when it opens and writes only when Save is pressed, and then only what
-//! differs (`rf_core::recycle_bin::save`). The store behind it is a trait: the real one (`rf_win::recycle_settings`)
+//! differs (`rf_core::recycle_bin::save`). The store behind it is a trait: the real one (`rf_platform::recycle_settings`)
 //! reads the registry; nothing here writes without the Save button.
 
 use std::sync::Arc;

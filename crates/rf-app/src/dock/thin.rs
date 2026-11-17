@@ -1,9 +1,9 @@
-//! The thin dock, app side (the rules are `rf_win::dock::thin`, tested without a window): while a window the user can see stands on the
+//! The thin dock, app side (the rules are `rf_platform::dock::thin`, tested without a window): while a window the user can see stands on the
 //! band on the dock's monitor (a maximised one, or one docked to the band's edge under the dock) the middle island is as high as the
 //! side islands; the pointer coming near grows it back over the window; it goes thin again the moment the pointer has left and nothing
 //! of the dock is open (in one motion with the magnification going out: a user saw two steps when it waited 400 ms). THE BAND the dock
 //! reserves is the thin one for as long as the setting is on and does not follow the windows: a window is maximised into the room it
-//! keeps, in one step (`rf_win::dock::thin::BandRule` says why).
+//! keeps, in one step (`rf_platform::dock::thin::BandRule` says why).
 //! Setting "Pencere büyütüldüğünde dock'u incelt" (`dock_thin_when_maximized`, on by default, a key of the running dock: off is the dock
 //! of today and costs nothing but one atomic read per task-list event and per mouse move over the dock).
 //!
@@ -16,7 +16,7 @@
 //!
 //! WHERE THE FACTS COME FROM.
 //! * A maximised window: the task list's events the dock already follows (`MiddleIsland` calls [`task_changed`] from its watch) and the
-//!   placement events of `rf_win::dock::zoomwatch` (maximise, restore, snap; started only while the setting is on). Either one asks for
+//!   placement events of `rf_platform::dock::zoomwatch` (maximise, restore, snap; started only while the setting is on). Either one asks for
 //!   ONE walk over the windows on a worker thread (`zoomwatch::stands_on_band`), at most one at a time and one more if events came while it
 //!   ran; the answer comes back to the UI thread only as a fact. No timer reads windows.
 //! * The pointer: a window with a region is not told that the pointer is NEAR it, and the part above the thin glass is another
@@ -30,7 +30,7 @@
 //! the glass inside it and the icons do, in the frames the magnification already draws (`host::set_middle_frame` sends the glass and the
 //! pointer region), so the growth costs what a pointer move over the dock costs and nothing moves under the user's hand: the icons keep
 //! their centres, the glass keeps its bottom edge and its width. The band is another matter: it follows the setting alone
-//! (`rf_win::dock::thin::BandRule`).
+//! (`rf_platform::dock::thin::BandRule`).
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,11 +39,11 @@ use std::time::{Duration, Instant};
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui_kit::*;
-use rf_win::dock::hover::Slot;
-use rf_win::dock::layout::MIDDLE_HEIGHT;
-use rf_win::dock::magnify::{Frame, Presence};
-use rf_win::dock::thin::{Model, Squeeze, Zone};
-use rf_win::dock::zoomwatch::{self, ZoomWatch};
+use rf_platform::dock::hover::Slot;
+use rf_platform::dock::layout::MIDDLE_HEIGHT;
+use rf_platform::dock::magnify::{Frame, Presence};
+use rf_platform::dock::thin::{Model, Squeeze, Zone};
+use rf_platform::dock::zoomwatch::{self, ZoomWatch};
 
 use super::host::{self, Kind, MonId};
 use super::plan::{self, DockPicture};
@@ -187,7 +187,7 @@ pub fn fit_glass(glass_px: &mut [f32; 4], bottom_px: f32, sq: &Squeeze, unit: f3
     if sq.is_full() {
         return;
     }
-    let h = rf_win::dock::thin::glass_height_px(sq, unit, full_h_px);
+    let h = rf_platform::dock::thin::glass_height_px(sq, unit, full_h_px);
     glass_px[3] = h;
     glass_px[1] = bottom_px - h;
 }
@@ -242,7 +242,7 @@ pub fn docks_changed(cx: &mut App) {
     let enabled = h.enabled;
     h.mons.retain(|m| ids.contains(&m.mon));
     let have: Vec<MonId> = h.mons.iter().map(|m| m.mon).collect();
-    for id in rf_win::dock::monitors::new_ids(&have, &ids) {
+    for id in rf_platform::dock::monitors::new_ids(&have, &ids) {
         h.mons.push(MonThin::new(id, enabled));
     }
     layout_applied(cx);
@@ -315,7 +315,7 @@ fn zone_now(mon: MonId, cx: &App) -> Option<Zone> {
     let (left, right) = (host::visible_glass_rect_on(mon, Kind::Left, cx)?, host::visible_glass_rect_on(mon, Kind::Right, cx)?);
     let unit = host::dock_unit_on(mon, cx)?;
     let monitor = host::dock_monitors(cx).into_iter().find(|(id, _)| *id == mon)?.1.rect;
-    Some(rf_win::dock::thin::zone(full, left, right, monitor, unit))
+    Some(rf_platform::dock::thin::zone(full, left, right, monitor, unit))
 }
 
 /// The pointer is on this dock's island (its mouse events say so): near, at once, without waiting for the next look at the cursor.
@@ -335,7 +335,7 @@ pub fn pointer_on_island(mon: MonId, cx: &mut App) {
 
 /// What a walk asks: each dock, its monitor, and the full glass a docked window is measured against (`host::full_glass_span_on`: the
 /// middle island's, and the side islands' too when they are as tall as it).
-fn what_to_ask(cx: &mut App) -> Vec<(MonId, isize, Option<rf_win::dock::layout::Rect>)> {
+fn what_to_ask(cx: &mut App) -> Vec<(MonId, isize, Option<rf_platform::dock::layout::Rect>)> {
     host::dock_monitors(cx).into_iter().map(|(id, m)| (id, m.handle, host::full_glass_span_on(id, cx))).collect()
 }
 
@@ -361,7 +361,7 @@ fn read_maximized(cx: &mut App) {
                         .into_iter()
                         .map(|(id, handle, glass)| {
                             // (the home dock follows the primary monitor, whichever handle it has now)
-                            let handle = if id.is_home() { rf_win::dock::primary_monitor().map_or(handle, |p| p.handle) } else { handle };
+                            let handle = if id.is_home() { rf_platform::dock::primary_monitor().map_or(handle, |p| p.handle) } else { handle };
                             (id, zoomwatch::stands_on_band(handle, glass))
                         })
                         .collect()
@@ -542,8 +542,8 @@ fn reevaluate(mon: MonId, cx: &mut App) {
 mod tests {
     // (explicit names: `super::*` would bring the toolkit's own `test` attribute along and shadow the standard one)
     use super::{ENABLED, Ordering, Slot, Squeeze, fit_glass, picture, plan, task_changed};
-    use rf_win::dock::layout::{self, ICON_REST};
-    use rf_win::dock::magnify::{self, Frame};
+    use rf_platform::dock::layout::{self, ICON_REST};
+    use rf_platform::dock::magnify::{self, Frame};
 
     const BASELINE: f32 = 12.0;
 

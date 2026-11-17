@@ -295,8 +295,8 @@ impl DesktopView {
             let wp = source::read_wallpaper(&infos);
             let _ = worker_tx.unbounded_send(Msg::Wallpaper(Box::new(wp)));
             // (also for a scratch folder: its system icons, when the user chose to show them, carry the shell's own names too)
-            let names = rf_win::sta::call(Duration::from_secs(5), || {
-                VirtualKind::ALL.iter().filter_map(|k| rf_win::shellfolder::display_name(&k.parsing_name()).map(|n| (*k, n))).collect::<Vec<_>>()
+            let names = rf_platform::sta::call(Duration::from_secs(5), || {
+                VirtualKind::ALL.iter().filter_map(|k| rf_platform::shellfolder::display_name(&k.parsing_name()).map(|n| (*k, n))).collect::<Vec<_>>()
             })
             .unwrap_or_default();
             let _ = worker_tx.unbounded_send(Msg::VirtualNames(names));
@@ -412,7 +412,7 @@ impl DesktopView {
 
     /// The monitors changed (a resolution, a scale, a work area, a monitor added or removed): this view follows the monitor with the
     /// device key `key`. Does nothing when that monitor is not in the list (its window is about to be closed).
-    pub fn monitors_changed(&mut self, infos: Vec<rf_win::desktop::monitors::MonitorInfo>, key: &str, cx: &mut Context<Self>) {
+    pub fn monitors_changed(&mut self, infos: Vec<rf_platform::desktop::monitors::MonitorInfo>, key: &str, cx: &mut Context<Self>) {
         let Some(b) = self.backend.clone() else { return };
         let Some(canvas) = infos.iter().position(|m| m.device_key == key) else { return };
         self.backend = Some(Arc::new(b.with_monitors(infos, canvas)));
@@ -953,7 +953,7 @@ impl DesktopView {
         let Some(hwnd) = self.cover.filter(|h| *h != 0) else { return };
         let hits: Vec<Rect> = self.placed.iter().map(|p| p.hit).collect();
         if hits != self.hot_sent {
-            rf_win::desktop::cover::set_hot_regions(hwnd, &hits);
+            rf_platform::desktop::cover::set_hot_regions(hwnd, &hits);
             self.hot_sent = hits;
         }
     }
@@ -1083,7 +1083,7 @@ impl Render for DesktopView {
         let bg = self.wall_src.as_ref().map_or(Rgb(32, 32, 32), |w| w.background);
         // Rounded corners, when the setting asks for them, with black behind them: all four, also where two monitors meet (the
         // user's choice). The radius is in logical px, so it looks the same on every monitor's scale. The bottom pixel row is not
-        // this window's (`cover::geometry`); the black under the bottom corners there is `rf_win::desktop::cornerpatch`.
+        // this window's (`cover::geometry`); the black under the bottom corners there is `rf_platform::desktop::cornerpatch`.
         let radius = cx.try_global::<crate::settings::Settings>().map_or(0.0, |s| f32::from(s.desktop_corner_radius));
         let wallpaper: AnyElement = match &self.wall {
             Some(w) => img(w.image.clone()).absolute().left(px(0.)).top(px(0.)).w(px(sw)).h(px(sh)).object_fit(ObjectFit::Fill).rounded(px(radius)).into_any_element(),

@@ -8,7 +8,7 @@
 //!    `shell:` places never get here). A relative name is also tried inside the open folder, first, so a folder or file there with
 //!    the typed name always wins over a program of that name. If a place exists the tab goes there.
 //! 2. only when no such place exists is the text a COMMAND: the first word (or the quoted first part) is the program, the rest are
-//!    its arguments as typed. The program is looked for as the Run box would (`rf_win::runcmd`), and started through the shell with
+//!    its arguments as typed. The program is looked for as the Run box would (`rf_platform::runcmd`), and started through the shell with
 //!    the open folder as the working directory (the profile folder when the tab shows something that is not a folder on disk). The
 //!    tab stays, the field shows its path again. No elevation is asked for.
 //!    A full path to a program typed ALONE (no arguments) names a file that exists, so it is a place and the tab goes to that file,
@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rf_core::addrcmd::{self, Intent};
-use rf_win::runcmd::{self, Started};
+use rf_platform::runcmd::{self, Started};
 
 use super::*;
 
@@ -64,7 +64,7 @@ impl Workspace {
         };
         let tab = self.active_tab().clone();
         let open_dir = match tab.read(cx).location() {
-            Location::Path(p) if !rf_win::ftp::is_ftp(p) && rf_win::network::server_root(p).is_none() && crate::archive_view::split(p).is_none() => Some(p.clone()),
+            Location::Path(p) if !rf_platform::ftp::is_ftp(p) && rf_platform::network::server_root(p).is_none() && crate::archive_view::split(p).is_none() => Some(p.clone()),
             _ => None,
         };
         let command_possible = command_possible(
@@ -229,7 +229,7 @@ mod tests {
             if name == "address_cmd.rs" {
                 continue;
             }
-            assert!(!text.contains("runcmd::"), "{name} reaches rf_win::runcmd");
+            assert!(!text.contains("runcmd::"), "{name} reaches rf_platform::runcmd");
             // no module next to workspace.rs (they can all see a `pub(super)` method) may call the Enter handler's entry point
             if name != "workspace.rs" {
                 assert!(!text.contains("enter_address_text("), "{name} calls enter_address_text");

@@ -1,4 +1,4 @@
-//! The middle island's pins, app side. The model, the file and the seeding are `rf_win::dock::ownpins`; this is the path, the reading the
+//! The middle island's pins, app side. The model, the file and the seeding are `rf_platform::dock::ownpins`; this is the path, the reading the
 //! island does and the pin / unpin the app menu asks for.
 //!
 //! WHICH LIST THE ISLAND SHOWS. Until the user pins or unpins from the dock's own menu, the apps pinned to the Windows taskbar (read
@@ -8,9 +8,9 @@
 use std::path::PathBuf;
 
 use gpui_kit::*;
-use rf_win::dock::ownpins::{self, Changed};
-use rf_win::dock::pinorder::Placed;
-use rf_win::dock::{DockApp, PinnedApp};
+use rf_platform::dock::ownpins::{self, Changed};
+use rf_platform::dock::pinorder::Placed;
+use rf_platform::dock::{DockApp, PinnedApp};
 
 use super::middle::MiddleIsland;
 
@@ -25,7 +25,7 @@ pub fn effective_pins() -> Vec<PinnedApp> {
     if let Some(own) = path().and_then(|p| ownpins::effective(&p, |f| f.exists())) {
         return own;
     }
-    rf_win::dock::pins::read_pins()
+    rf_platform::dock::pins::read_pins()
 }
 
 /// The middle islands (one for each monitor's dock), so that a change of the list shows at once instead of at the island's next look
@@ -89,7 +89,7 @@ pub fn set_order(placed: Vec<Placed>, before: Vec<String>, cx: &mut App) {
 
 /// An app of the Start panel was dropped on the dock: it is added to the END of the dock's own list (a drop at a chosen place among the
 /// icons is not built), unless it is on it already, which is not said. On a worker thread; the island reads the list when it is written.
-pub fn pin_start_app(app: rf_win::apps::App, cx: &mut App) {
+pub fn pin_start_app(app: rf_platform::apps::App, cx: &mut App) {
     cx.spawn(async move |cx| {
         let done = cx.background_executor().spawn(async move { apply_start_app(&app) }).await;
         match done {
@@ -104,8 +104,8 @@ pub fn pin_start_app(app: rf_win::apps::App, cx: &mut App) {
     .detach();
 }
 
-fn apply_start_app(app: &rf_win::apps::App) -> Result<Changed, ownpins::ChangeError> {
-    use rf_win::dock::startdrag;
+fn apply_start_app(app: &rf_platform::apps::App) -> Result<Changed, ownpins::ChangeError> {
+    use rf_platform::dock::startdrag;
     let Some(path) = path() else { return Err(ownpins::ChangeError::Disk("no config folder".into())) };
     // (the shortcut and the shell are asked for before the file is touched; an app that cannot be pinned changes nothing)
     let shortcut = startdrag::shortcut_of(app);
@@ -148,8 +148,8 @@ fn apply_with(edit: impl FnOnce(&mut ownpins::PinFile) -> bool) -> Result<Change
 /// the pin folder could not be listed or held shortcuts that could not be read (an empty answer like that would make an empty list the
 /// dock's list for good).
 fn read_taskbar_for_seed() -> Option<Vec<PinnedApp>> {
-    use rf_win::dock::pins;
-    let reports = rf_win::sta::call(std::time::Duration::from_secs(15), || pins::inspect_pins(&pins::RealDisk))?;
+    use rf_platform::dock::pins;
+    let reports = rf_platform::sta::call(std::time::Duration::from_secs(15), || pins::inspect_pins(&pins::RealDisk))?;
     let apps: Vec<PinnedApp> = reports.iter().filter_map(|r| r.app.clone()).collect();
     if !apps.is_empty() {
         return Some(apps);

@@ -96,7 +96,7 @@ fn installed_exe() -> Option<PathBuf> {
 fn installed_windows() -> Vec<u32> {
     let Some(exe) = installed_exe() else { return Vec::new() };
     let exe = exe.to_string_lossy().to_lowercase();
-    rf_win::tasklist::tasks()
+    rf_platform::tasklist::tasks()
         .into_iter()
         .filter(|t| t.exe.as_ref().is_some_and(|e| e.to_string_lossy().to_lowercase() == exe))
         .map(|t| t.pid)
@@ -189,7 +189,7 @@ pub fn launch() -> Option<std::process::Child> {
     let copy = dir.join("rustyfiles-update.exe");
     std::fs::copy(&me, &copy).ok()?;
     // The copy's working directory is the temporary folder, said here and not inherited: a copy that stood in the installed folder
-    // kept the updater from renaming it, and the update gave up after ten tries (`rf_win::ownfolder` has the whole story; the
+    // kept the updater from renaming it, and the update gave up after ten tries (`rf_platform::ownfolder` has the whole story; the
     // versions 0.7.0-beta.1 to 0.7.3 did exactly that whenever the program had been started from its shortcut).
     std::process::Command::new(&copy).arg(ARG).env("RUSTYFILES_MULTI_INSTANCE", "1").current_dir(std::env::temp_dir()).spawn().ok()
 }

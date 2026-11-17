@@ -16,8 +16,8 @@
 //! THE SLOTS are the positions along the dock, left to right; an icon sits in the slot its place in the order gives it, and a slot keeps its
 //! size and place for the whole drag (the magnification is held still, `middle.rs::frozen`), so the icons that make room only change slots.
 
-use rf_win::dock::pinorder::Placed;
-use rf_win::dock::{DockItem, PinnedApp};
+use rf_platform::dock::pinorder::Placed;
+use rf_platform::dock::{DockItem, PinnedApp};
 
 /// How far sideways a press has to move before it is a drag (dock units, which are logical px at the default size).
 pub const DRAG_START: f32 = 5.0;
@@ -149,7 +149,7 @@ pub fn apply_landing(landing: Landing, items: &[DockItem], pins: &mut Vec<Pinned
         }
         Landing::Pin { from, at } => {
             let Some(DockItem::App(app)) = items.get(from) else { return false };
-            let Some(pin) = rf_win::dock::ownpins::pin_from_app(app) else { return false };
+            let Some(pin) = rf_platform::dock::ownpins::pin_from_app(app) else { return false };
             pins.insert(at.min(pins.len()), pin.to_pinned());
             true
         }
@@ -167,7 +167,7 @@ pub fn is_outside(y: f32, glass_top: f32, glass_bottom: f32) -> bool {
 /// captured meanwhile, so the dock may never have been told that it left, and the icons would stay grown around a pointer that is gone.
 /// A wrong "off" costs nothing: the next move over the dock brings the bell back.
 pub fn off_island(x: f32, y: f32, glass: [f32; 4]) -> bool {
-    x < glass[0] || x > glass[0] + glass[2] || y < glass[1] - rf_win::dock::layout::HEADROOM || y > glass[1] + glass[3]
+    x < glass[0] || x > glass[0] + glass[2] || y < glass[1] - rf_platform::dock::layout::HEADROOM || y > glass[1] + glass[3]
 }
 
 /// The right button that puts an icon back is not a request for a menu or for Task Manager. Its release comes to two handlers, the
@@ -197,7 +197,7 @@ impl RightGuard {
     }
 }
 
-/// The places of the pinned apps after a drop, for the pin file (by position among the pinned apps, see `rf_win::dock::pinorder`), when
+/// The places of the pinned apps after a drop, for the pin file (by position among the pinned apps, see `rf_platform::dock::pinorder`), when
 /// the drop changes the pin list; `pin_count` is how many pins the island showed. `None` for a drop that does not touch the file: the
 /// running apps' order is the island's own, kept in memory for the session, and writing nothing for it also asks the shell for nothing.
 pub fn placed(landing: Landing, items: &[DockItem], pin_count: usize) -> Option<Vec<Placed>> {
@@ -246,7 +246,7 @@ pub fn fill_slots(all: &[String], subset: &[String]) -> Vec<String> {
 }
 
 /// A slide: the icon is `from` dock units away from its slot at `t0` (ms on the dock's clock) and goes into it as the dock's
-/// spring over the slide's time (`rf_win::dock::spring::curve`; a cubic ease-out until 2026-11-13).
+/// spring over the slide's time (`rf_platform::dock::spring::curve`; a cubic ease-out until 2026-11-13).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Slide {
     pub from: f32,
@@ -260,7 +260,7 @@ impl Slide {
         if duration_ms == 0 || elapsed >= u64::from(duration_ms) {
             return 0.0;
         }
-        self.from * (1.0 - rf_win::dock::spring::curve(elapsed as f32 / duration_ms as f32))
+        self.from * (1.0 - rf_platform::dock::spring::curve(elapsed as f32 / duration_ms as f32))
     }
 
     /// Whether it is still moving at `now`.
@@ -591,14 +591,14 @@ mod tests {
         assert_eq!(follow_x(50.0, 20.0, 66.0, 12.0), 30.0, "ends the wrong way round are tolerated");
     }
 
-    fn pin_of(name: &str) -> rf_win::dock::PinnedApp {
-        use rf_win::dock::{IconSource, Launch};
+    fn pin_of(name: &str) -> rf_platform::dock::PinnedApp {
+        use rf_platform::dock::{IconSource, Launch};
         let exe = format!("c:/apps/{name}.exe");
-        rf_win::dock::PinnedApp { name: name.into(), aumid: None, exe: Some(exe.clone()), launch: Launch::Exe { path: exe.clone().into(), args: String::new() }, icon: IconSource::File(exe.into()) }
+        rf_platform::dock::PinnedApp { name: name.into(), aumid: None, exe: Some(exe.clone()), launch: Launch::Exe { path: exe.clone().into(), args: String::new() }, icon: IconSource::File(exe.into()) }
     }
 
-    fn running(name: &str, hwnd: isize) -> (String, Vec<rf_win::tasklist::Task>) {
-        let task = rf_win::tasklist::Task { hwnd, title: name.into(), pid: hwnd as u32, exe: Some(format!("c:/apps/{name}.exe").into()), app_id: None, minimized: false };
+    fn running(name: &str, hwnd: isize) -> (String, Vec<rf_platform::tasklist::Task>) {
+        let task = rf_platform::tasklist::Task { hwnd, title: name.into(), pid: hwnd as u32, exe: Some(format!("c:/apps/{name}.exe").into()), app_id: None, minimized: false };
         (task.group(), vec![task])
     }
 
@@ -610,12 +610,12 @@ mod tests {
     /// The model after a drop, rebuilt the way the island rebuilds it, shows the apps in the order the drag showed.
     #[test]
     fn the_models_new_order_is_the_order_the_drag_showed() {
-        use rf_win::dock::model;
+        use rf_platform::dock::model;
         // pinned a and b (b not running), running and not pinned: x then y
         let mut pins = vec![pin_of("a"), pin_of("b")];
         let groups = || vec![running("a", 1), running("x", 2), running("y", 3)];
         let mut seen: Vec<String> = Vec::new();
-        let build = |pins: &[rf_win::dock::PinnedApp], seen: &mut Vec<String>| model::merge(pins, model::keep_order(seen, groups()), 0);
+        let build = |pins: &[rf_platform::dock::PinnedApp], seen: &mut Vec<String>| model::merge(pins, model::keep_order(seen, groups()), 0);
         let items = build(&pins, &mut seen);
         assert_eq!(names(&items), ["a*", "b*", "x", "y"]);
         let k = kinds(&items);
@@ -779,8 +779,8 @@ mod tests {
         assert!(!off_island(100.0, 12.0, g), "the glass's corners are on it");
         assert!(!off_island(400.0, 84.0, g));
         // a grown icon reaches above the glass into the headroom
-        assert!(!off_island(200.0, 12.0 - rf_win::dock::layout::HEADROOM, g));
-        assert!(off_island(200.0, 12.0 - rf_win::dock::layout::HEADROOM - 1.0, g));
+        assert!(!off_island(200.0, 12.0 - rf_platform::dock::layout::HEADROOM, g));
+        assert!(off_island(200.0, 12.0 - rf_platform::dock::layout::HEADROOM - 1.0, g));
         assert!(off_island(99.0, 50.0, g) && off_island(401.0, 50.0, g));
         assert!(off_island(200.0, 85.0, g));
     }
@@ -818,7 +818,7 @@ mod tests {
 
     /// The items of a dock with pins `a`, `b` and a running `x` and `y`, and the pin count 2.
     fn model_items() -> Vec<DockItem> {
-        use rf_win::dock::model;
+        use rf_platform::dock::model;
         let pins = vec![pin_of("a"), pin_of("b")];
         model::merge(&pins, vec![running("x", 2), running("y", 3)], 0)
     }
@@ -847,11 +847,11 @@ mod tests {
 
     #[test]
     fn what_the_file_gets_is_the_order_the_model_shows() {
-        use rf_win::dock::ownpins::PinFile;
+        use rf_platform::dock::ownpins::PinFile;
         let items = model_items();
         let k = kinds(&items);
         let s = slots();
-        let file_of = |pins: &[rf_win::dock::PinnedApp]| {
+        let file_of = |pins: &[rf_platform::dock::PinnedApp]| {
             let mut f = PinFile::default();
             f.seed(pins);
             f

@@ -9,7 +9,7 @@
 //! hidden and dirty for nothing; a window is made in tens of milliseconds, which is why monitors that come and go simply get
 //! windows made and closed (after a quiet period: [`rf_core::desktop::cover::plan::Debounce`]).
 //!
-//! WHAT IT TOUCHES. Only its own windows (`rf_win::desktop::cover`); Explorer's windows are looked at, never changed. Stopping is
+//! WHAT IT TOUCHES. Only its own windows (`rf_platform::desktop::cover`); Explorer's windows are looked at, never changed. Stopping is
 //! therefore closing the windows: [`stop`]. The desktop folders are written by the user's own actions in the view (rename, delete
 //! to the Recycle Bin, paste, new), exactly as the preview's `--writable` mode does, for the user's own Desktop folder (Public and
 //! virtual items keep the view's protections). `RUSTYFILES_DESKTOP_DIR` makes a scratch folder the desktop on every monitor, with a
@@ -33,8 +33,8 @@ use rf_core::desktop::layout::MonitorSpec;
 use rf_core::desktop::store::Store;
 use rf_core::desktop::virtuals::VirtualKind;
 use rf_core::desktop::wallpaper::Wallpaper;
-use rf_win::desktop::monitors::{self, MonitorInfo};
-use rf_win::desktop::wallwatch::{Follower, SystemWatch, WallpaperReader};
+use rf_platform::desktop::monitors::{self, MonitorInfo};
+use rf_platform::desktop::wallwatch::{Follower, SystemWatch, WallpaperReader};
 
 use super::desktop::shared::{Peers, SharedStore};
 use super::desktop::source::{self, Backend, Loaded};
@@ -215,7 +215,7 @@ struct CoverHost {
     debounce_running: bool,
     // (kept alive: dropping them stops them)
     _follower: Follower,
-    _zwatch: Option<rf_win::desktop::cover::ZWatch>,
+    _zwatch: Option<rf_platform::desktop::cover::ZWatch>,
 }
 
 impl Global for CoverHost {}
@@ -229,9 +229,9 @@ impl WallpaperReader for SystemWallpaper {
     fn read(&self) -> Wallpaper {
         let infos = monitors::list();
         // with no shell desktop window the registry alone is read: the COM object may never answer without Explorer (see bare.rs)
-        match rf_core::desktop::cover::bare::route_for(rf_win::desktop::bare::state_now()) {
+        match rf_core::desktop::cover::bare::route_for(rf_platform::desktop::bare::state_now()) {
             rf_core::desktop::cover::bare::Route::ComThenRegistry => source::read_wallpaper(&infos),
-            route => rf_win::desktop::wallpaper::current_via(route, Arc::new(rf_win::desktop::registry::SystemRegistry), &monitors::device_rects(&infos)),
+            route => rf_platform::desktop::wallpaper::current_via(route, Arc::new(rf_platform::desktop::registry::SystemRegistry), &monitors::device_rects(&infos)),
         }
     }
 }
@@ -268,11 +268,11 @@ pub fn on_settings(cx: &mut App) {
 /// again, by the route that fits (see `rf_core::desktop::cover::bare`). Nothing at all while cover mode is off.
 pub fn shell_changed(cx: &mut App) {
     let Some(host) = cx.try_global::<CoverHost>() else { return };
-    host._follower.poke(rf_win::desktop::wallwatch::Cause::Manual);
+    host._follower.poke(rf_platform::desktop::wallwatch::Cause::Manual);
     // (from the message loop, with the app not borrowed: moving a window answers messages the toolkit must be able to take)
     cx.foreground_executor()
         .spawn(async {
-            rf_win::desktop::bare::shell_changed();
+            rf_platform::desktop::bare::shell_changed();
         })
         .detach();
 }
@@ -350,17 +350,17 @@ fn start(cx: &mut App) {
         // The first start of cover mode on the real Desktop: take Explorer's icon positions once, BEFORE the first placement of the
         // items (the first placement would otherwise claim cells for all of them), so that the icons stand where the user left them.
         let scratch = loaded.backend.is_scratch();
-        let (user, public) = (rf_win::desktop::items::user_desktop_dir(), rf_win::desktop::items::public_desktop_dir());
+        let (user, public) = (rf_platform::desktop::items::user_desktop_dir(), rf_platform::desktop::items::public_desktop_dir());
         let specs = loaded.backend.specs.clone();
         // (a protected Desktop imports nothing either: it is not meant to be touched, and the layout file is not ours to settle yet)
-        let outcome = import_view_once(&mut loaded.store, scratch || loaded.backend.read_only, &specs, || rf_win::desktop::import::read_explorer_positions(user, public).map(|p| RawView { positions: p.positions, spacing: p.spacing, icon_px: p.icon_px }));
+        let outcome = import_view_once(&mut loaded.store, scratch || loaded.backend.read_only, &specs, || rf_platform::desktop::import::read_explorer_positions(user, public).map(|p| RawView { positions: p.positions, spacing: p.spacing, icon_px: p.icon_px }));
         match &outcome {
             ImportOutcome::Imported { fit, total } => log::info!("cover: imported the positions of {fit} of {total} icons from Explorer"),
             ImportOutcome::Failed(why) => log::warn!("cover: Explorer's icon positions were not imported: {why}"),
             ImportOutcome::NotNeeded(why) => log::info!("cover: no import: {why}"),
         }
         // (also for a scratch folder: its system icons, when the user chose to show them, carry the shell's own names too)
-        let names = rf_win::sta::call(Duration::from_secs(5), || VirtualKind::ALL.iter().filter_map(|k| rf_win::shellfolder::display_name(&k.parsing_name()).map(|n| (*k, n))).collect::<Vec<_>>()).unwrap_or_default();
+        let names = rf_platform::sta::call(Duration::from_secs(5), || VirtualKind::ALL.iter().filter_map(|k| rf_platform::shellfolder::display_name(&k.parsing_name()).map(|n| (*k, n))).collect::<Vec<_>>()).unwrap_or_default();
         let _ = load_tx.unbounded_send(Event::Loaded(Box::new(Ready { loaded, names })));
     });
     if let Err(e) = spawned {
@@ -371,11 +371,11 @@ fn start(cx: &mut App) {
     crate::dock::parts_status::note(crate::dock::parts::Part::Desktop, None);
 
     let wall_tx = parking_lot::Mutex::new(tx.clone());
-    let follower = Follower::start(&SystemWatch::standard(), Arc::new(SystemWallpaper), Arc::new(rf_win::desktop::wallpaper::DiskStamper), Duration::from_millis(400), move |wp, _| {
+    let follower = Follower::start(&SystemWatch::standard(), Arc::new(SystemWallpaper), Arc::new(rf_platform::desktop::wallpaper::DiskStamper), Duration::from_millis(400), move |wp, _| {
         let _ = wall_tx.lock().unbounded_send(Event::Wallpaper(Box::new(wp)));
     });
     let z_tx = parking_lot::Mutex::new(tx.clone());
-    let zwatch = match rf_win::desktop::cover::ZWatch::start(move || {
+    let zwatch = match rf_platform::desktop::cover::ZWatch::start(move || {
         let _ = z_tx.lock().unbounded_send(Event::ZMoved);
     }) {
         Ok(z) => Some(z),
@@ -384,7 +384,7 @@ fn start(cx: &mut App) {
             None
         }
     };
-    rf_win::desktop::bare::begin();
+    rf_platform::desktop::bare::begin();
     cx.set_global(CoverHost {
         generation,
         windows: Vec::new(),
@@ -458,7 +458,7 @@ fn on_event(ev: Event, cx: &mut App) {
         Event::ZMoved => {
             cx.foreground_executor()
                 .spawn(async {
-                    rf_win::desktop::cover::reinsert_if_needed();
+                    rf_platform::desktop::cover::reinsert_if_needed();
                 })
                 .detach();
         }
@@ -516,21 +516,21 @@ fn reconcile(cx: &mut App) {
     }
     // the wallpaper's pictures follow the monitors' order: read it again
     if let Some(host) = cx.try_global::<CoverHost>() {
-        host._follower.poke(rf_win::desktop::wallwatch::Cause::Manual);
+        host._follower.poke(rf_platform::desktop::wallwatch::Cause::Manual);
     }
     // (a window made just now is not on the screen yet and gets its patches when it is: see `create`)
     sync_corner_patches(cx);
 }
 
 /// The black pixels under the wallpaper's rounded bottom corners, in the pixel row the cover windows leave out
-/// (`rf_win::desktop::cornerpatch`): brought in line with the setting and with the monitors the windows were last placed for. The
+/// (`rf_platform::desktop::cornerpatch`): brought in line with the setting and with the monitors the windows were last placed for. The
 /// radius is the setting's logical px at each monitor's own scale, as the view draws it.
 fn sync_corner_patches(cx: &mut App) {
     let radius = cx.try_global::<Settings>().map_or(0, |s| i32::from(s.desktop_corner_radius));
     let Some(host) = cx.try_global::<CoverHost>() else { return };
     for w in &host.windows {
         let px = (radius as f32 * w.seen.scale_percent as f32 / 100.0).round() as i32;
-        rf_win::desktop::cornerpatch::set(w.hwnd, &corners::bottom_patches(w.seen.rect, px, TRIMMED_ROWS));
+        rf_platform::desktop::cornerpatch::set(w.hwnd, &corners::bottom_patches(w.seen.rect, px, TRIMMED_ROWS));
     }
 }
 
@@ -587,9 +587,9 @@ fn create(infos: &[MonitorInfo], index: usize, cx: &mut App) {
     let rect = m.rect;
     // the style, the procedure, the place and the show: from the message loop
     cx.spawn(async move |cx| {
-        match rf_win::desktop::cover::prepare(hwnd) {
+        match rf_platform::desktop::cover::prepare(hwnd) {
             Ok(()) => {
-                if !rf_win::desktop::cover::place(hwnd, rect) {
+                if !rf_platform::desktop::cover::place(hwnd, rect) {
                     log::warn!("cover: Windows refused to place the window of a monitor");
                 }
             }
@@ -610,7 +610,7 @@ fn place_again(m: &MonitorInfo, cx: &mut App) {
     let (hwnd, rect) = (w.hwnd, m.rect);
     cx.foreground_executor()
         .spawn(async move {
-            rf_win::desktop::cover::place(hwnd, rect);
+            rf_platform::desktop::cover::place(hwnd, rect);
         })
         .detach();
     sync_corner_patches(cx);
@@ -635,8 +635,8 @@ pub fn stop(cx: &mut App) {
         // (the view saves the layout when it goes)
         let _ = w.handle.update(cx, |_, window, _| window.remove_window());
     }
-    rf_win::desktop::cover::set_raised(false);
-    rf_win::desktop::bare::end();
+    rf_platform::desktop::cover::set_raised(false);
+    rf_platform::desktop::bare::end();
     drop(host);
     log::info!("cover: off");
 }

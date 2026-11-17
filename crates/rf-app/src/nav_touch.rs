@@ -6,7 +6,7 @@
 //! phone does the same for a local-looking path. Issue 16 (the window freezes when a WSL distribution is clicked in the sidebar)
 //! was a set of calls on the click path that touch the path: `Path::is_dir`, asked by `archive_view::split` while a folder view
 //! started its watcher (measured: 2262 ms for a UNC host that does not answer), and the localized-name lookup
-//! (`rf_win::localized::folder_label`: `GetFileAttributesW` and a read of `desktop.ini`) that the breadcrumb and the tab title made
+//! (`rf_platform::localized::folder_label`: `GetFileAttributesW` and a read of `desktop.ini`) that the breadcrumb and the tab title made
 //! for every folder of the path while drawing.
 //!
 //! What lives here:
@@ -15,7 +15,7 @@
 //!   archive, so a folder on a slow place is never touched to find out it is not one;
 //! * [`may_hold_archive`]: the same by name alone (no disk at all);
 //! * [`label_paths`]: the folders whose localized names a breadcrumb and a tab title ask for, so that a worker can read them before
-//!   the drawing needs them (the drawing looks in the cache only: see `rf_win::localized::label_if_known`).
+//!   the drawing needs them (the drawing looks in the cache only: see `rf_platform::localized::label_if_known`).
 
 use std::path::{Path, PathBuf};
 
@@ -70,7 +70,7 @@ pub fn may_hold_archive(path: &Path) -> bool {
 }
 
 /// The folders of `path` whose localized names the breadcrumb and the tab title ask for: the prefixes the breadcrumb builds
-/// (`C:`, `C:\Users`, ...) and the path with all its ancestors. A worker passes them to `rf_win::localized::warm`.
+/// (`C:`, `C:\Users`, ...) and the path with all its ancestors. A worker passes them to `rf_platform::localized::warm`.
 pub fn label_paths(path: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
     let mut acc = PathBuf::new();
@@ -319,14 +319,14 @@ mod tests {
     #[test]
     fn the_detector_finds_the_calls_that_froze_the_window() {
         let old_start_watch = "let patchable = crate::archive_view::split(&path).is_none();";
-        let old_breadcrumb = "let label = match rf_win::localized::folder_label(&acc, None) {";
-        let old_title = "if let Some(l) = rf_win::localized::folder_label(p, None) {";
+        let old_breadcrumb = "let label = match rf_platform::localized::folder_label(&acc, None) {";
+        let old_title = "if let Some(l) = rf_platform::localized::folder_label(p, None) {";
         let old_icon = "Location::Path(p) if crate::archive_view::is_browsable_path(p) => L::FileArchive,";
         for old in [old_start_watch, old_breadcrumb, old_title, old_icon] {
             assert!(!offenders(old).is_empty(), "{old}");
         }
         assert!(offenders("let patchable = !crate::nav_touch::may_hold_archive(&path);").is_empty());
-        assert!(offenders("match rf_win::localized::label_if_known(&acc) {").is_empty());
+        assert!(offenders("match rf_platform::localized::label_if_known(&acc) {").is_empty());
     }
 
     /// The functions a click on a place walks through before the first frame of the new folder, and the ones that draw that
@@ -389,21 +389,21 @@ mod probe {
                 println!("{name:5} {round:6} archive_view::split           {:9.2} ms  -> {}", ms(t), r.is_some());
                 let t = Instant::now();
                 for q in super::label_paths(p) {
-                    let _ = rf_win::localized::label_if_known(&q);
+                    let _ = rf_platform::localized::label_if_known(&q);
                 }
                 println!("{name:5} {round:6} localized::label_if_known (UI)  {:9.3} ms", ms(t));
                 let t = Instant::now();
                 let mut acc = PathBuf::new();
                 for c in p.components() {
                     acc.push(c.as_os_str());
-                    let _ = rf_win::localized::folder_label(&acc, None);
+                    let _ = rf_platform::localized::folder_label(&acc, None);
                 }
                 println!("{name:5} {round:6} localized::folder_label x{}   {:9.2} ms", p.components().count(), ms(t));
                 let t = Instant::now();
                 let _ = crate::archive_view::is_browsable_path(p);
                 let _ = super::may_hold_archive(p);
-                let _ = rf_win::network::server_root(p);
-                let _ = rf_win::ftp::is_ftp(p);
+                let _ = rf_platform::network::server_root(p);
+                let _ = rf_platform::ftp::is_ftp(p);
                 let _ = rf_core::history::Location::Path(p.to_path_buf()).cleaned();
                 println!("{name:5} {round:6} name-only checks              {:9.2} ms", ms(t));
             }
@@ -433,7 +433,7 @@ mod probe {
         for round in 0..3 {
             let t = Instant::now();
             let mut count = 0usize;
-            rf_win::list_dir(&dir, 512, &|| false, &mut |b| count += b.len()).unwrap();
+            rf_platform::list_dir(&dir, 512, &|| false, &mut |b| count += b.len()).unwrap();
             let list = ms(t);
             let t = Instant::now();
             let _ = crate::archive_view::split(&dir);

@@ -3,7 +3,7 @@
 //! with this pop-up as the destination), the app's large icon for a minimised window, the title, and on the card under the pointer a
 //! small x. A click on a card brings that window to the front with the switcher's activation sequence; the x asks the window to close.
 //!
-//! THE TIMING is `rf_win::dock::preview::Machine` (pure, tested): this file feeds it the icons' hover events and the preview's own, carries
+//! THE TIMING is `rf_platform::dock::preview::Machine` (pure, tested): this file feeds it the icons' hover events and the preview's own, carries
 //! out what it answers, and sleeps until its next deadline (no polling for the timing). Moving from the icon into the preview keeps it
 //! open, moving to a neighbouring running icon swaps it at once, leaving both closes it after 300 ms, a click on an icon closes it, a
 //! right click replaces it with the menu (the menu blocks the machine while it is open), and it closes when the dock hides.
@@ -33,13 +33,13 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::island;
-use rf_win::dock::layout::Rect;
-use rf_win::dock::panel as geo;
-use rf_win::dock::preview::{self, Input, Layout, Machine, Output};
-use rf_win::dock::winops::{self, WinRef};
-use rf_win::dock::DockApp;
-use rf_win::switcher::thumbs::{Dwm, Picture, ThumbSet, probe_size};
+use rf_platform::dock::island;
+use rf_platform::dock::layout::Rect;
+use rf_platform::dock::panel as geo;
+use rf_platform::dock::preview::{self, Input, Layout, Machine, Output};
+use rf_platform::dock::winops::{self, WinRef};
+use rf_platform::dock::DockApp;
+use rf_platform::switcher::thumbs::{Dwm, Picture, ThumbSet, probe_size};
 
 use super::backdrop::IslandGlass;
 use super::host;
@@ -326,7 +326,7 @@ fn show_now(key: String, started: Instant, cx: &mut App) {
     };
     // show without activating (never brought to the front: the program in front keeps the keyboard), then glass and pictures
     cx.spawn(async move |cx| {
-        rf_win::window::set_dark_mode(hwnd, dark);
+        rf_platform::window::set_dark_mode(hwnd, dark);
         geo::show_at(hwnd, rect);
         cx.update(|cx| {
             let live = handle.update(cx, |v, _, cx| v.on_shown(dark, cx)).unwrap_or(0);
@@ -428,7 +428,7 @@ fn activate_window(win: WinRef, cx: &mut App) {
     }
     let hwnd = win.hwnd;
     std::thread::spawn(move || {
-        use rf_win::switcher::activate::{self, Outcome, Win32Ops};
+        use rf_platform::switcher::activate::{self, Outcome, Win32Ops};
         match activate::activate(&mut Win32Ops, hwnd) {
             Outcome::Done => {}
             Outcome::Gone => log::debug!("dock: the window of a preview card is gone"),

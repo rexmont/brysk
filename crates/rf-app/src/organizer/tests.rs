@@ -136,7 +136,7 @@ fn the_plan_of_a_real_folder_uses_the_apps_kinds_and_labels() {
 
 #[test]
 fn the_result_line_says_what_happened() {
-    use rf_win::organize::{Report, Skip, Why};
+    use rf_platform::organize::{Report, Skip, Why};
     let mut rep = Report::default();
     rep.record.moves = vec![(PathBuf::from("a"), PathBuf::from("b")); 3];
     rep.record.recycled = vec![(PathBuf::from("c"), PathBuf::from("d"))];
@@ -199,7 +199,7 @@ fn a_run_is_undone_once_whoever_asks() {
 #[test]
 fn a_run_comes_off_the_ctrl_z_stack_by_its_token_only_once() {
     use crate::undo::{UndoOp, forget_organized, push};
-    let rec = |token| rf_win::organize::Record { token, moves: vec![(PathBuf::from("a"), PathBuf::from("b"))], ..Default::default() };
+    let rec = |token| rf_platform::organize::Record { token, moves: vec![(PathBuf::from("a"), PathBuf::from("b"))], ..Default::default() };
     push(UndoOp::Organized { rec: rec(0xfeed_0002) });
     push(UndoOp::Organized { rec: rec(0xfeed_0003) });
     assert!(forget_organized(0xfeed_0002), "found in the middle of the stack");
@@ -243,7 +243,7 @@ fn a_junction_to_a_protected_place_is_refused_like_the_place_itself() {
 
 #[test]
 fn skipped_files_are_named_by_reason() {
-    use rf_win::organize::{Skip, Why};
+    use rf_platform::organize::{Skip, Why};
     let skip = |n: &str, why| Skip { path: PathBuf::from(format!(r"C:\x\{n}")), why };
     let lines = super::skipped_lines(&[skip("a.zip", Why::InUse), skip("b.zip", Why::InUse), skip("c.txt", Why::Hidden), skip("d.zip", Why::InUse), skip("e.zip", Why::InUse), skip("f.zip", Why::InUse)]);
     assert_eq!(lines.len(), 2, "one line per reason: {lines:?}");

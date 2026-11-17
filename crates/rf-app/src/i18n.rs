@@ -189,15 +189,30 @@ fn match_tag(tag: &str) -> Lang {
         .map_or(Lang::En, |i| Lang::Other(i as u16))
 }
 
-/// The Windows UI language's best translation (English when there is none).
+/// The system UI language's best translation (English when there is none).
 fn system_lang() -> Lang {
-    use windows::Win32::Globalization::{GetUserDefaultUILanguage, LCIDToLocaleName};
-    let mut buf = [0u16; 85];
-    let n = unsafe { LCIDToLocaleName(GetUserDefaultUILanguage() as u32, Some(&mut buf), 0) };
-    if n <= 1 {
-        return Lang::En;
+    #[cfg(windows)]
+    {
+        use windows::Win32::Globalization::{GetUserDefaultUILanguage, LCIDToLocaleName};
+        let mut buf = [0u16; 85];
+        let n = unsafe { LCIDToLocaleName(GetUserDefaultUILanguage() as u32, Some(&mut buf), 0) };
+        if n <= 1 {
+            return Lang::En;
+        }
+        return match_tag(&String::from_utf16_lossy(&buf[..n as usize - 1]));
     }
-    match_tag(&String::from_utf16_lossy(&buf[..n as usize - 1]))
+    #[cfg(not(windows))]
+    {
+        // The first of the user's preferred languages, as `AppleLanguages` lists them.
+        let out = std::process::Command::new("/usr/bin/defaults").args(["read", "-g", "AppleLocale"]).output().ok();
+        let tag = out
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| std::env::var("LANG").ok().map(|l| l.split('.').next().unwrap_or(&l).replace('_', "-")))
+            .unwrap_or_else(|| "en".into());
+        match_tag(&tag)
+    }
 }
 
 // 0 = Tr, 1 = En, 2 + i = LOCALES[i] (resolved; never System).

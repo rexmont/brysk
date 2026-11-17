@@ -18,9 +18,9 @@ use rf_core::desktop::registry::{Hive, RegRead};
 use rf_core::desktop::store::{LoadOutcome, Store};
 use rf_core::desktop::virtuals::{KEY_ADVANCED, VirtualKind, VirtualSettings, Why};
 use rf_core::desktop::wallpaper::Wallpaper;
-use rf_win::desktop::items::{ChosenVirtuals, DesktopItems, Folders, PathFolders, SystemFolders, SystemVirtuals, VirtualSource};
-use rf_win::desktop::monitors::{self, MonitorInfo};
-use rf_win::desktop::registry::SystemRegistry;
+use rf_platform::desktop::items::{ChosenVirtuals, DesktopItems, Folders, PathFolders, SystemFolders, SystemVirtuals, VirtualSource};
+use rf_platform::desktop::monitors::{self, MonitorInfo};
+use rf_platform::desktop::registry::SystemRegistry;
 
 use super::args::PreviewArgs;
 
@@ -255,8 +255,8 @@ fn pick_canvas(infos: &[MonitorInfo], wanted: Option<usize>) -> usize {
 
 /// Lists the folders, finds the monitors and loads the layout. `on_change` is called from watcher threads.
 pub fn load(args: &PreviewArgs, visibility: Visibility, config_dir: Option<PathBuf>, on_change: impl Fn(Vec<ItemChange>) + Send + Sync + 'static) -> Loaded {
-    let real_user = rf_win::desktop::items::user_desktop_dir();
-    let real_public = rf_win::desktop::items::public_desktop_dir();
+    let real_user = rf_platform::desktop::items::user_desktop_dir();
+    let real_public = rf_platform::desktop::items::public_desktop_dir();
     let (mode, note) = resolve_mode(args, real_user.as_deref(), real_public.as_deref());
     let (folders, virtuals, watch_registry): (Arc<dyn Folders>, Arc<dyn VirtualSource>, bool) = match &mode {
         Mode::Scratch(dir) => (Arc::new(ScratchFolders { user: PathFolders { user: Some(dir.clone()), public: None } }), chosen(Arc::new(ScratchVirtuals { bin: SystemVirtuals::new(Arc::new(SystemRegistry)) })), false),
@@ -298,7 +298,7 @@ pub fn with_windows_grid(store: &mut Store) {
 
 /// The user's wallpaper (read-only), for the monitors given.
 pub fn read_wallpaper(infos: &[MonitorInfo]) -> Wallpaper {
-    rf_win::desktop::wallpaper::current(Arc::new(SystemRegistry), &monitors::device_rects(infos))
+    rf_platform::desktop::wallpaper::current(Arc::new(SystemRegistry), &monitors::device_rects(infos))
 }
 
 #[cfg(test)]

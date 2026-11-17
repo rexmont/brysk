@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use rf_win::bench::{App, AppKind, Machine, OpenResult};
+use rf_platform::bench::{App, AppKind, Machine, OpenResult};
 
 /// Each app opens each folder this many times (after one warm-up run that isn't counted).
 pub const RUNS: usize = 3;
@@ -288,8 +288,8 @@ fn median(mut v: Vec<f64>) -> Option<f64> {
 
 /// Our engine exactly as a paste uses it (thread count chosen for the disks).
 fn our_copy(sources: &[PathBuf], dest: &Path) -> anyhow::Result<()> {
-    let tracker = Arc::new(rf_win::fileops::Tracker::new(Box::new(|_, _, _| {}), Arc::new(AtomicBool::new(false))));
-    anyhow::ensure!(rf_win::fastcopy::transfer(rf_win::fileops::Transfer::Copy, sources, dest, tracker)?, "the copy stopped");
+    let tracker = Arc::new(rf_platform::fileops::Tracker::new(Box::new(|_, _, _| {}), Arc::new(AtomicBool::new(false))));
+    anyhow::ensure!(rf_platform::fastcopy::transfer(rf_platform::fileops::Transfer::Copy, sources, dest, tracker)?, "the copy stopped");
     Ok(())
 }
 
@@ -306,7 +306,7 @@ fn versus(runs: usize, scratch: &Path, ours: &dyn Fn(&Path) -> anyhow::Result<()
             if std::fs::create_dir_all(&dest).is_err() {
                 continue;
             }
-            match rf_win::bench::measure_in_process(|| f(&dest)) {
+            match rf_platform::bench::measure_in_process(|| f(&dest)) {
                 (Ok(()), cost) => {
                     [&mut a, &mut b][which].push(cost.ms);
                     [&mut ac, &mut bc][which].push(cost.cpu_ms);
@@ -418,7 +418,7 @@ pub fn run(plan: &Plan, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> any
     let root = bench_dir();
     std::fs::create_dir_all(&root)?;
     prepare_rustyfiles_settings()?;
-    let machine = rf_win::bench::machine(&root);
+    let machine = rf_platform::bench::machine(&root);
 
     // test folders
     for t in &plan.open {
@@ -465,7 +465,7 @@ pub fn run(plan: &Plan, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> any
                 if per_app[k].error.is_some() {
                     continue;
                 }
-                match rf_win::bench::measure_open(app, &dir, OPEN_TIMEOUT, cancel) {
+                match rf_platform::bench::measure_open(app, &dir, OPEN_TIMEOUT, cancel) {
                     Ok(res) if r > 0 => per_app[k].runs.push(res),
                     Ok(_) => {}
                     Err(e) => {
@@ -487,13 +487,13 @@ pub fn run(plan: &Plan, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> any
     if let (true, Some((small, big))) = (copy_ok, &copy_src) {
         step("copy: 10 000 small files".into());
         let s = [small.clone()];
-        let mut v = versus(2, &scratch, &|d| our_copy(&s, d), &|d| rf_win::bench::shell_copy_quiet(&s, d), cancel);
+        let mut v = versus(2, &scratch, &|d| our_copy(&s, d), &|d| rf_platform::bench::shell_copy_quiet(&s, d), cancel);
         v.files = 10_000;
         v.bytes = 10_000 * 4096;
         engines.copy_small = Some(v);
         step("copy: one 1 GB file".into());
         let b = [big.clone()];
-        let mut v = versus(2, &scratch, &|d| our_copy(&b, d), &|d| rf_win::bench::shell_copy_quiet(&b, d), cancel);
+        let mut v = versus(2, &scratch, &|d| our_copy(&b, d), &|d| rf_platform::bench::shell_copy_quiet(&b, d), cancel);
         v.files = 1;
         v.bytes = 1 << 30;
         engines.copy_big = Some(v);
@@ -512,15 +512,15 @@ pub fn run(plan: &Plan, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> any
                 2,
                 &scratch,
                 &|d| rf_archive::extract(&zip, d, &mut |_| {}, &|| false).map(|_| ()).map_err(|e| anyhow::anyhow!("{e}")),
-                &|d| rf_win::bench::shell_copy_quiet(std::slice::from_ref(&inner), d),
+                &|d| rf_platform::bench::shell_copy_quiet(std::slice::from_ref(&inner), d),
                 cancel,
             );
             v.files = 10_000;
             engines.unzip = Some(v);
         }
         step("search".into());
-        let q = rf_win::search::SearchQuery { root: root.clone(), pattern: "file 0999".into(), include_hidden: false, max_results: 50_000 };
-        if let (Ok(s), cost) = rf_win::bench::measure_in_process(|| rf_win::search::search(&q, &|| false, &mut |_| {})) {
+        let q = rf_platform::search::SearchQuery { root: root.clone(), pattern: "file 0999".into(), include_hidden: false, max_results: 50_000 };
+        if let (Ok(s), cost) = rf_platform::bench::measure_in_process(|| rf_platform::search::search(&q, &|| false, &mut |_| {})) {
             engines.search_ms = Some(cost.ms);
             engines.search_cpu_ms = Some(cost.cpu_ms);
             engines.search_mb = Some(cost.extra_mb);
@@ -557,7 +557,7 @@ mod tests {
         let scratch = root.join("scratch");
         std::fs::create_dir_all(&scratch).unwrap();
         let s = [src.clone()];
-        let v = versus(1, &scratch, &|d| our_copy(&s, d), &|d| rf_win::bench::shell_copy_quiet(&s, d), &AtomicBool::new(false));
+        let v = versus(1, &scratch, &|d| our_copy(&s, d), &|d| rf_platform::bench::shell_copy_quiet(&s, d), &AtomicBool::new(false));
         assert!(v.ours_ms.is_some() && v.windows_ms.is_some(), "{v:?}");
         assert!(v.ours_cpu_ms.is_some_and(|c| c >= 0.0) && v.windows_cpu_ms.is_some_and(|c| c > 0.0), "{v:?}");
         assert!(v.ours_mb.is_some_and(|m| m >= 0.0) && v.windows_mb.is_some_and(|m| m >= 0.0), "{v:?}");
@@ -607,7 +607,7 @@ mod files_live {
     #[test]
     #[ignore]
     fn files_session_survives_a_real_test() {
-        let Some(files) = rf_win::bench::detect().into_iter().find(|a| a.kind == rf_win::bench::AppKind::Files) else { return };
+        let Some(files) = rf_platform::bench::detect().into_iter().find(|a| a.kind == rf_platform::bench::AppKind::Files) else { return };
         let path = super::FilesSession::settings_path().unwrap();
         let before = super::FilesSession::read(&path).unwrap();
         let plan = super::Plan { apps: vec![files], open: vec![super::OpenTest::Files1k], copy: false, engines: false };
@@ -632,7 +632,7 @@ mod live_100k {
     #[test]
     #[ignore]
     fn open_100k() {
-        use rf_win::bench::{App, AppKind};
+        use rf_platform::bench::{App, AppKind};
         let fresh = super::rustyfiles_app();
         let others = std::process::Command::new("tasklist").args(["/FI", "IMAGENAME eq rustyfiles.exe", "/NH"]).output().map(|o| String::from_utf8_lossy(&o.stdout).contains("rustyfiles.exe")).unwrap_or(true);
         assert!(!others, "a rustyfiles is running: the warm runs would go to it");
@@ -653,7 +653,7 @@ directlook_enabled = false
             env: vec![("RUSTYFILES_CONFIG_DIR".into(), cfg.to_string_lossy().into_owned()), ("RUSTYFILES_MUTE".into(), "1".into())],
         };
         let mut apps = vec![fresh, warm];
-        apps.extend(rf_win::bench::detect().into_iter().filter(|a| matches!(a.kind, AppKind::Explorer | AppKind::Files)));
+        apps.extend(rf_platform::bench::detect().into_iter().filter(|a| matches!(a.kind, AppKind::Explorer | AppKind::Files)));
         let names = ["rustyfiles, from scratch", "rustyfiles, already running", "File Explorer", "Files"];
         let plan = super::Plan { apps, open: vec![super::OpenTest::Files100k], copy: false, engines: false };
         let r = super::run(&plan, &|_| {}, &std::sync::atomic::AtomicBool::new(false)).unwrap();

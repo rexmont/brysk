@@ -1,27 +1,18 @@
-//! Time conversions. ZIP stores DOS local time (no zone), so we convert through the Windows
-//! time-zone APIs to match what Explorer shows.
+//! Time conversions. ZIP stores DOS local time (no zone), so we convert through the system's
+//! time-zone APIs to match what the platform's own file manager shows.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[cfg(windows)]
 use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
+#[cfg(windows)]
 use windows::Win32::System::Time::{
     FileTimeToSystemTime, SystemTimeToFileTime, SystemTimeToTzSpecificLocalTime, TzSpecificLocalTimeToSystemTime,
 };
 
 /// 100 ns ticks between 1601-01-01 and 1970-01-01.
+#[cfg(windows)]
 const EPOCH_DIFF_TICKS: u64 = 116_444_736_000_000_000;
-
-pub fn systemtime_to_filetime(t: SystemTime) -> Option<FILETIME> {
-    let d = t.duration_since(UNIX_EPOCH).ok()?;
-    let ticks = EPOCH_DIFF_TICKS + (d.as_nanos() / 100) as u64;
-    Some(FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 })
-}
-
-pub fn filetime_to_systemtime(ft: FILETIME) -> Option<SystemTime> {
-    let ticks = ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64;
-    let since = ticks.checked_sub(EPOCH_DIFF_TICKS)?;
-    Some(UNIX_EPOCH + Duration::from_nanos(since.checked_mul(100)?))
-}
 
 pub fn unix_ms(t: SystemTime) -> i64 {
     match t.duration_since(UNIX_EPOCH) {
@@ -30,7 +21,22 @@ pub fn unix_ms(t: SystemTime) -> i64 {
     }
 }
 
+#[cfg(windows)]
+pub fn systemtime_to_filetime(t: SystemTime) -> Option<FILETIME> {
+    let d = t.duration_since(UNIX_EPOCH).ok()?;
+    let ticks = EPOCH_DIFF_TICKS + (d.as_nanos() / 100) as u64;
+    Some(FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 })
+}
+
+#[cfg(windows)]
+pub fn filetime_to_systemtime(ft: FILETIME) -> Option<SystemTime> {
+    let ticks = ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64;
+    let since = ticks.checked_sub(EPOCH_DIFF_TICKS)?;
+    Some(UNIX_EPOCH + Duration::from_nanos(since.checked_mul(100)?))
+}
+
 /// DOS local time fields -> `SystemTime` (UTC based).
+#[cfg(windows)]
 pub fn dos_local_to_systemtime(y: u16, mo: u8, d: u8, h: u8, mi: u8, s: u8) -> Option<SystemTime> {
     let local = SYSTEMTIME {
         wYear: y,
@@ -52,6 +58,7 @@ pub fn dos_local_to_systemtime(y: u16, mo: u8, d: u8, h: u8, mi: u8, s: u8) -> O
 }
 
 /// `SystemTime` -> local (year, month, day, hour, minute, second).
+#[cfg(windows)]
 pub fn systemtime_to_local_fields(t: SystemTime) -> Option<(u16, u8, u8, u8, u8, u8)> {
     let ft = systemtime_to_filetime(t)?;
     let mut utc = SYSTEMTIME::default();
@@ -61,4 +68,33 @@ pub fn systemtime_to_local_fields(t: SystemTime) -> Option<(u16, u8, u8, u8, u8,
         SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).ok()?;
     }
     Some((local.wYear, local.wMonth as u8, local.wDay as u8, local.wHour as u8, local.wMinute as u8, local.wSecond as u8))
+}
+
+// ---------------------------------------------------------------- macOS / Unix
+
+/// DOS local time fields -> `SystemTime` (UTC based), through `mktime`, which reads the
+/// process time zone (the same zone the Finder shows).
+#[cfg(not(windows))]
+pub fn dos_local_to_systemtime(y: u16, mo: u8, d: u8, h: u8, mi: u8, s: u8) -> Option<SystemTime> {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    tm.tm_year = y as i32 - 1900;
+    tm.tm_mon = mo as i32 - 1;
+    tm.tm_mday = d as i32;
+    tm.tm_hour = h as i32;
+    tm.tm_min = mi as i32;
+    tm.tm_sec = s as i32;
+    tm.tm_isdst = -1;
+    let secs = unsafe { libc::mktime(&mut tm) };
+    (secs != -1).then(|| UNIX_EPOCH + Duration::from_secs(secs as u64))
+}
+
+/// `SystemTime` -> local (year, month, day, hour, minute, second).
+#[cfg(not(windows))]
+pub fn systemtime_to_local_fields(t: SystemTime) -> Option<(u16, u8, u8, u8, u8, u8)> {
+    let secs = t.duration_since(UNIX_EPOCH).ok()?.as_secs() as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    if unsafe { libc::localtime_r(&secs, &mut tm) }.is_null() {
+        return None;
+    }
+    Some((tm.tm_year as u16 + 1900, tm.tm_mon as u8 + 1, tm.tm_mday as u8, tm.tm_hour as u8, tm.tm_min as u8, tm.tm_sec as u8))
 }

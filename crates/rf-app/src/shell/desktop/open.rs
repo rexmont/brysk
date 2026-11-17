@@ -5,7 +5,7 @@
 //! there would be a second, half-wired copy of the app inside the thing that draws the user's taskbar and desktop, and it would
 //! die with it. There the place is handed to the main rustyfiles, in this order:
 //!
-//! 1. THROUGH ITS PIPE. A running rustyfiles serves a named pipe (`rf_win::single_instance`) that every second launch writes its
+//! 1. THROUGH ITS PIPE. A running rustyfiles serves a named pipe (`rf_platform::single_instance`) that every second launch writes its
 //!    argument to; the host writes the same line itself, at once, without starting a process. Before, every open started a new
 //!    `rustyfiles.exe` (a large program: the loader, Velopack's start-up check, the panic log, GDI+ and the logger) that had to find
 //!    the pipe and write the same line before the window could appear.
@@ -113,7 +113,7 @@ pub fn open_location(parsing_name: Option<&str>, loc: Location, cx: &mut App) {
         let how = deliver(
             message.as_deref(),
             pipe_allowed(),
-            |m| rf_win::single_instance::send_to(&rf_win::single_instance::instance_name(), m),
+            |m| rf_platform::single_instance::send_to(&rf_platform::single_instance::instance_name(), m),
             || {
                 let exe = std::env::current_exe()?;
                 std::process::Command::new(exe).arg(&arg).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map(|_| ())

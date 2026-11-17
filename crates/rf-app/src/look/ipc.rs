@@ -122,7 +122,7 @@ pub fn exe() -> Option<PathBuf> {
 pub fn send(msg: Msg, start: bool) {
     std::thread::spawn(move || {
         let text = msg.encode();
-        if rf_win::single_instance::send_to(&app_name(), &text) {
+        if rf_platform::single_instance::send_to(&app_name(), &text) {
             return;
         }
         if !start {

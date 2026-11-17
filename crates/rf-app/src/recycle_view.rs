@@ -14,7 +14,7 @@ use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::format;
-use rf_win::recycle::RecycleItem;
+use rf_platform::recycle::RecycleItem;
 
 use crate::actions::{DeleteItems, DeletePermanently, InvertSelection, SelectAll};
 use crate::fluent_menu::{self, Item, Menu, MenuIcon};
@@ -111,8 +111,8 @@ impl RecycleView {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         self.loading = true;
         let work = cx.background_spawn(async move {
-            rf_win::shell::ensure_com();
-            rf_win::recycle::list().unwrap_or_default()
+            rf_platform::shell::ensure_com();
+            rf_platform::recycle::list().unwrap_or_default()
         });
         self._task = Some(cx.spawn(async move |this, cx| {
             let items = work.await;
@@ -147,7 +147,7 @@ impl RecycleView {
     fn run(&mut self, cx: &mut Context<Self>, f: impl FnOnce() -> anyhow::Result<()> + Send + 'static) {
         self.busy = true;
         let work = cx.background_spawn(async move {
-            rf_win::shell::ensure_com();
+            rf_platform::shell::ensure_com();
             if let Err(e) = f() {
                 log::warn!("recycle: {e:#}");
             }
@@ -165,14 +165,14 @@ impl RecycleView {
         let items: Vec<RecycleItem> = rf_core::recycle_bin::command_targets(&self.order, &self.selected).into_iter().filter_map(|i| self.items.get(i).cloned()).collect();
         if !items.is_empty() {
             self.status = None;
-            self.run(cx, move || rf_win::recycle::restore(&items));
+            self.run(cx, move || rf_platform::recycle::restore(&items));
         }
     }
 
     fn empty_bin(&mut self, cx: &mut Context<Self>) {
         self.status = None;
         // confirm = true → Windows asks the user first
-        self.run(cx, || rf_win::recycle::empty(true));
+        self.run(cx, || rf_platform::recycle::empty(true));
     }
 
     /// Delete, Shift+Delete and Ctrl+D reach the page also while the search box has the keyboard (the box does not take the
@@ -220,7 +220,7 @@ impl RecycleView {
     fn delete_now(&mut self, keys: Vec<String>, cx: &mut Context<Self>) {
         self.busy = true;
         self.status = None;
-        let work = cx.background_spawn(async move { rf_core::recycle_bin::delete_through(&rf_win::recycle::ShellBin, &keys) });
+        let work = cx.background_spawn(async move { rf_core::recycle_bin::delete_through(&rf_platform::recycle::ShellBin, &keys) });
         cx.spawn(async move |this, cx| {
             let report = work.await;
             if report.error.is_some() || report.collateral > 0 {
@@ -239,7 +239,7 @@ impl RecycleView {
         if self.settings.is_some() {
             return;
         }
-        let store: Store = std::sync::Arc::new(rf_win::recycle_settings::SystemBinSettings);
+        let store: Store = std::sync::Arc::new(rf_platform::recycle_settings::SystemBinSettings);
         let dlg = cx.new(|cx| BinSettingsDialog::new(store, window, cx));
         self._settings_sub = Some(cx.subscribe_in(&dlg, window, |this, _, ev: &BinDialogEvent, window, cx| {
             let BinDialogEvent::Closed(saved) = ev;
@@ -566,7 +566,7 @@ impl Render for RecycleView {
 #[cfg(test)]
 mod tests {
     use super::{Col, arrange};
-    use rf_win::recycle::RecycleItem;
+    use rf_platform::recycle::RecycleItem;
 
     fn item(name: &str, from: &str, deleted_ms: i64, size: u64) -> RecycleItem {
         RecycleItem { name: name.into(), original_location: from.into(), deleted_ms, size, parsing_path: String::new(), is_dir: false }

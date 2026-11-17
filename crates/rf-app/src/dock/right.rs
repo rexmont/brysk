@@ -9,7 +9,7 @@
 //! Wi-Fi in four strengths, or not connected (`sysstate.rs` keeps the sources, which call back when Windows says something changed).
 //!
 //! THE ISLAND'S OWN BUTTONS are those two symbols, Windows Security and safe removal (while a removable drive holds a volume). Their
-//! order and which of them are shown are the user's (Settings > Dock > "Durum simgeleri"; `rf_win::dock::status_order`). A button
+//! order and which of them are shown are the user's (Settings > Dock > "Durum simgeleri"; `rf_platform::dock::status_order`). A button
 //! can also be DRAGGED to another place among them, as the programs' tray icons beside them are: the press is followed by looks at
 //! the pointer (`tray_strip::step`, the same rule and the same four logical px before a press is a drag), the dragged button is drawn
 //! faint, a thin mark in the accent colour shows where it would land, and the release writes the new order to the settings. A press
@@ -17,7 +17,7 @@
 //!
 //! ON A SECONDARY MONITOR (`mon` is not the home dock) the island holds the clock and the bell only: the tray strip, the network and
 //! volume symbols and the separator after them stay on the primary monitor's, as on Windows' secondary taskbars; on a narrow monitor the
-//! bell goes too (`rf_win::dock::monitors::content`).
+//! bell goes too (`rf_platform::dock::monitors::content`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,11 +27,11 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::clock::{self, ClockLines};
-use rf_win::dock::monitors::Content;
-use rf_win::dock::panel as geo;
-use rf_win::dock::status_order::{self, Status};
-use rf_win::dock::tray_strip::{self as ts, PointerButton, Press, Step};
+use rf_platform::dock::clock::{self, ClockLines};
+use rf_platform::dock::monitors::Content;
+use rf_platform::dock::panel as geo;
+use rf_platform::dock::status_order::{self, Status};
+use rf_platform::dock::tray_strip::{self as ts, PointerButton, Press, Step};
 
 use super::backdrop::IslandGlass;
 use super::host::{Kind, MonId};
@@ -55,9 +55,9 @@ pub struct RightIsland {
     drives_read: bool,
     /// One of the island's own buttons is held, or dragged to another place.
     status_press: Option<StatusPress>,
-    /// The input language of the window in front and how many keyboard layouts the user has (`rf_win::inputlang`; the primary
+    /// The input language of the window in front and how many keyboard layouts the user has (`rf_platform::inputlang`; the primary
     /// monitor's island reads it). The button is there with two layouts or more.
-    lang: rf_win::inputlang::Current,
+    lang: rf_platform::inputlang::Current,
 }
 
 /// A button held on one of the island's own buttons, from the press to the release.
@@ -115,7 +115,7 @@ impl RightIsland {
             // The input language of the window in front (issue 21: "i don't see language switcher icon"). Read on a worker, which
             // comes back when it changed (or after a while, so that the looking ends with the island).
             cx.spawn(async move |this, cx| {
-                let mut last = rf_win::inputlang::Current::default();
+                let mut last = rf_platform::inputlang::Current::default();
                 loop {
                     let (prev, timers) = (last.clone(), cx.background_executor().clone());
                     let now = cx
@@ -144,7 +144,7 @@ impl RightIsland {
 
     /// The input language was read: the button follows it. A reading without a window in front keeps the name that was shown.
     /// Returns what the island now holds.
-    fn set_language(&mut self, mut now: rf_win::inputlang::Current, cx: &mut Context<Self>) -> rf_win::inputlang::Current {
+    fn set_language(&mut self, mut now: rf_platform::inputlang::Current, cx: &mut Context<Self>) -> rf_platform::inputlang::Current {
         if now.code.is_empty() && now.layouts >= 2 {
             now.code = self.lang.code.clone();
         }
@@ -182,10 +182,10 @@ impl RightIsland {
 
     /// The island's own buttons on the screen (device px): the first one's left edge, the distance from one's left edge to the next
     /// one's, a button's width, and the glass they stand in as it is drawn now.
-    fn status_geo(&self, cx: &App) -> Option<(i32, i32, i32, rf_win::dock::layout::Rect)> {
+    fn status_geo(&self, cx: &App) -> Option<(i32, i32, i32, rf_platform::dock::layout::Rect)> {
         let glass = super::host::current_glass_rect_on(self.mon, Kind::Right, cx)?;
         let unit = super::host::dock_unit_on(self.mon, cx)?;
-        let u = |v: f32| rf_win::dock::layout::px(v, unit);
+        let u = |v: f32| rf_platform::dock::layout::px(v, unit);
         Some((glass.left + u(plan::SIDE_PAD + self.tray_extra), u(plan::BUTTON + plan::RIGHT_GAP), u(plan::BUTTON), glass))
     }
 
@@ -201,7 +201,7 @@ impl RightIsland {
     fn status_hit(&self, which: Status, cursor: (i32, i32), cx: &App) -> bool {
         let Some((first, step, button, glass)) = self.status_geo(cx) else { return false };
         let Some(i) = self.status_buttons(cx).iter().position(|s| *s == which) else { return false };
-        rf_win::dock::layout::Rect::from_xywh(first + i as i32 * step, glass.top + (glass.height() - button) / 2, button, button).contains(cursor.0, cursor.1)
+        rf_platform::dock::layout::Rect::from_xywh(first + i as i32 * step, glass.top + (glass.height() - button) / 2, button, button).contains(cursor.0, cursor.1)
     }
 
     /// The left button went down on one of the island's own buttons: the pointer is looked at until it is up again.
@@ -349,7 +349,7 @@ fn run_status(which: Status, cx: &mut App) {
         Status::Eject => super::panel::toggle_eject(cx),
         Status::Security => super::panel_parts::open_uri("windowsdefender:"),
         Status::Language => {
-            if !rf_win::inputlang::switch_foreground_to_next() {
+            if !rf_platform::inputlang::switch_foreground_to_next() {
                 log::info!("dock: the input language was not switched (no window in front, or one layout)");
             }
         }
@@ -378,10 +378,10 @@ fn icon_button(id: &'static str, icon: L, pal: Palette, k: f32) -> impl IntoElem
 /// The input language as the island reads it. `RUSTYFILES_DOCK_LANG=ENG` stands in for a second keyboard layout on a PC that has one,
 /// so that the button can be looked at there (a developer's switch: a click still asks the window in front, which then has nothing
 /// to switch to).
-fn read_language() -> rf_win::inputlang::Current {
+fn read_language() -> rf_platform::inputlang::Current {
     match std::env::var("RUSTYFILES_DOCK_LANG") {
-        Ok(code) if !code.trim().is_empty() => rf_win::inputlang::Current { layouts: 2, code: rf_win::inputlang::short_code(&code, "") },
-        _ => rf_win::inputlang::current(),
+        Ok(code) if !code.trim().is_empty() => rf_platform::inputlang::Current { layouts: 2, code: rf_platform::inputlang::short_code(&code, "") },
+        _ => rf_platform::inputlang::current(),
     }
 }
 
@@ -430,7 +430,7 @@ fn open_calendar(mon: MonId, cx: &mut App) {
     if own_calendar(cx) {
         super::panel::toggle_calendar_on(mon, cx);
     } else {
-        rf_win::dock::triggers::notification_center();
+        rf_platform::dock::triggers::notification_center();
     }
 }
 
@@ -439,7 +439,7 @@ fn open_notifications(mon: MonId, cx: &mut App) {
     if own_notifications(cx) {
         super::panel::toggle_notifications_on(mon, cx);
     } else {
-        rf_win::dock::triggers::notification_center();
+        rf_platform::dock::triggers::notification_center();
     }
 }
 
@@ -467,7 +467,7 @@ fn open_controls(cx: &mut App) {
     if own_control_centre(cx) {
         super::panel::toggle_control_centre_on(MonId::HOME, cx);
     } else {
-        rf_win::dock::triggers::quick_settings();
+        rf_platform::dock::triggers::quick_settings();
     }
 }
 
@@ -587,7 +587,7 @@ impl Render for RightIsland {
                 // the island's own buttons (`status_row` above), then the separator
                 .children(status_row)
                 .when(!buttons.is_empty(), |d| {
-                    d.child(div().ml(px(plan::RIGHT_SEP_GAP * k)).w(px(rf_win::dock::layout::SEPARATOR_WIDTH * k)).h(px(plan::RIGHT_SEP_HEIGHT * k)).bg(pal.separator().hsla()))
+                    d.child(div().ml(px(plan::RIGHT_SEP_GAP * k)).w(px(rf_platform::dock::layout::SEPARATOR_WIDTH * k)).h(px(plan::RIGHT_SEP_HEIGHT * k)).bg(pal.separator().hsla()))
                 })
                 .child(clock)
                 .when(self.content.bell, |d| d.child(div().ml(px(plan::RIGHT_GAP * k)).child(bell_button(pal, dot, k, move |cx| open_notifications(mon, cx))))),

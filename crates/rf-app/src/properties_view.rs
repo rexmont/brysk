@@ -27,8 +27,8 @@ use gpui_kit::component::{Icon, TitleBar, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::{Entry, EntryKind, format};
-use rf_win::compat::Compat;
-use rf_win::fileinfo::{ARCHIVE, COMPRESSED, ENCRYPTED, Info, NOT_INDEXED};
+use rf_platform::compat::Compat;
+use rf_platform::fileinfo::{ARCHIVE, COMPRESSED, ENCRYPTED, Info, NOT_INDEXED};
 
 use crate::image_cache::ImageCache;
 use crate::select_box::{Choice, select_box};
@@ -183,18 +183,18 @@ struct Loaded {
     streams: Vec<(String, u64)>,
     /// The volume can compress / encrypt.
     caps: (bool, bool),
-    drive: Option<rf_win::drives::Drive>,
+    drive: Option<rf_platform::drives::Drive>,
     share: Option<String>,
-    pe: Option<rf_win::pe::PeInfo>,
-    signatures: Option<rf_win::signature::Signatures>,
-    link: Option<rf_win::shortcut::Details>,
+    pe: Option<rf_platform::pe::PeInfo>,
+    signatures: Option<rf_platform::signature::Signatures>,
+    link: Option<rf_platform::shortcut::Details>,
     /// The program the Compatibility tab is about (the file, or the shortcut's target).
     compat_exe: Option<PathBuf>,
     compat: Compat,
     compat_all_users: bool,
     folder_icon: Option<(String, i32)>,
     /// Title, tags and the like, when the file's type lets them be written.
-    desc: Option<rf_win::props::Editable>,
+    desc: Option<rf_platform::props::Editable>,
 }
 
 /// The shortcut tab's text fields.
@@ -210,7 +210,7 @@ pub struct PropsView {
     images: Entity<ImageCache>,
     page: Page,
     info: Option<Result<Info, String>>,
-    folder: Option<Option<rf_win::foldersize::FolderSize>>,
+    folder: Option<Option<rf_platform::foldersize::FolderSize>>,
     totals: Option<Totals>,
     media: Vec<(&'static str, String)>,
     name: Option<Entity<InputState>>,
@@ -225,21 +225,21 @@ pub struct PropsView {
     /// Named data streams (NTFS alternate data streams): (name, bytes).
     streams: Vec<(String, u64)>,
     unblock: bool,
-    drive: Option<rf_win::drives::Drive>,
+    drive: Option<rf_platform::drives::Drive>,
     share: Option<String>,
-    pe: Option<rf_win::pe::PeInfo>,
-    signatures: Option<rf_win::signature::Signatures>,
+    pe: Option<rf_platform::pe::PeInfo>,
+    signatures: Option<rf_platform::signature::Signatures>,
     sig_sel: usize,
-    security: Option<Result<rf_win::security::Security, String>>,
+    security: Option<Result<rf_platform::security::Security, String>>,
     sec_sel: usize,
-    link: Option<rf_win::shortcut::Details>,
-    link_loaded: Option<rf_win::shortcut::Details>,
+    link: Option<rf_platform::shortcut::Details>,
+    link_loaded: Option<rf_platform::shortcut::Details>,
     link_inputs: Option<LinkInputs>,
     /// The Shortcut tab's "Shortcut key" field (see hotkey_field.rs).
     hotkey: crate::hotkey_field::HotkeyState,
     /// The Details tab's writable fields as loaded, and their text boxes (title, subject, tags,
     /// comment, authors).
-    desc_loaded: Option<rf_win::props::Editable>,
+    desc_loaded: Option<rf_platform::props::Editable>,
     desc_inputs: Option<[Entity<InputState>; 5]>,
     /// A drive's label as loaded, and its text box.
     label_loaded: String,
@@ -433,7 +433,7 @@ impl PropsView {
             self.totals = Some(Totals::default());
             let paths = self.paths.clone();
             if let Some(first) = paths.first().cloned() {
-                let task = cx.background_spawn(async move { rf_win::fileinfo::volume_caps(&first) });
+                let task = cx.background_spawn(async move { rf_platform::fileinfo::volume_caps(&first) });
                 cx.spawn(async move |this, cx| {
                     let caps = task.await;
                     let _ = this.update(cx, |v, cx| {
@@ -455,7 +455,7 @@ impl PropsView {
                         if cancel.load(Ordering::Relaxed) {
                             return;
                         }
-                        let Ok(info) = rf_win::fileinfo::info(p) else { continue };
+                        let Ok(info) = rf_platform::fileinfo::info(p) else { continue };
                         merge_attrs(&mut acc, info.attrs, i == 0);
                         if info.is_dir {
                             t.sel_dirs += 1;
@@ -526,7 +526,7 @@ impl PropsView {
             })
             .detach();
         } else {
-            let task = cx.background_spawn(async move { rf_win::props::media_props(&path) });
+            let task = cx.background_spawn(async move { rf_platform::props::media_props(&path) });
             cx.spawn(async move |this, cx| {
                 let r = task.await;
                 let _ = this.update(cx, |v, cx| {
@@ -544,7 +544,7 @@ impl PropsView {
             return;
         }
         let p = self.paths[0].clone();
-        let task = cx.background_spawn(async move { rf_win::security::read(&p).map_err(|e| format!("{e:#}")) });
+        let task = cx.background_spawn(async move { rf_platform::security::read(&p).map_err(|e| format!("{e:#}")) });
         cx.spawn(async move |this, cx| {
             let r = task.await;
             let _ = this.update(cx, |v, cx| {
@@ -576,7 +576,7 @@ impl PropsView {
         cx.notify();
     }
 
-    fn link_now(&self, cx: &App) -> Option<rf_win::shortcut::Details> {
+    fn link_now(&self, cx: &App) -> Option<rf_platform::shortcut::Details> {
         let mut d = self.link.clone()?;
         if let Some(i) = &self.link_inputs {
             d.target = i.target.read(cx).value().trim().to_string();
@@ -588,10 +588,10 @@ impl PropsView {
     }
 
     /// The Details tab's writable fields as typed.
-    fn desc_now(&self, cx: &App) -> Option<rf_win::props::Editable> {
+    fn desc_now(&self, cx: &App) -> Option<rf_platform::props::Editable> {
         let i = self.desc_inputs.as_ref()?;
         let get = |n: usize| i[n].read(cx).value().trim().to_string();
-        Some(rf_win::props::Editable { title: get(0), subject: get(1), tags: get(2), comment: get(3), authors: get(4) })
+        Some(rf_platform::props::Editable { title: get(0), subject: get(1), tags: get(2), comment: get(3), authors: get(4) })
     }
 
     /// The drive's label as typed, when it differs from the one it has.
@@ -678,15 +678,15 @@ impl PropsView {
             let mut paths = paths;
             let named = |p: &Path, e: &dyn std::fmt::Display| format!("{}: {e}", file_name(p));
             if unblock {
-                rf_win::fileinfo::unblock(&paths[0]).map_err(|e| named(&paths[0], &e))?;
+                rf_platform::fileinfo::unblock(&paths[0]).map_err(|e| named(&paths[0], &e))?;
             }
             for p in &paths {
                 let tree = recurse && p.is_dir();
                 if set != 0 || clear != 0 {
                     if tree {
-                        rf_win::fileinfo::set_attrs_tree(p, set, clear, &|| cancel.load(Ordering::Relaxed)).map_err(|e| named(p, &e))?;
+                        rf_platform::fileinfo::set_attrs_tree(p, set, clear, &|| cancel.load(Ordering::Relaxed)).map_err(|e| named(p, &e))?;
                     } else {
-                        rf_win::fileinfo::set_attrs(p, set, clear).map_err(|e| named(p, &e))?;
+                        rf_platform::fileinfo::set_attrs(p, set, clear).map_err(|e| named(p, &e))?;
                     }
                 }
                 // (encryption and compression exclude each other: the one switched off first)
@@ -700,29 +700,29 @@ impl PropsView {
                 for (is_compress, on) in switches {
                     let items = if tree { walk(p, &cancel) } else { vec![p.clone()] };
                     for it in &items {
-                        let r = if is_compress { rf_win::fileinfo::set_compressed(it, on) } else { rf_win::fileinfo::set_encrypted(it, on) };
+                        let r = if is_compress { rf_platform::fileinfo::set_compressed(it, on) } else { rf_platform::fileinfo::set_encrypted(it, on) };
                         r.map_err(|e| named(it, &e))?;
                     }
                 }
             }
             if let Some(d) = &link {
-                rf_win::shortcut::save(&paths[0], d).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
+                rf_platform::shortcut::save(&paths[0], d).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
             }
             if let Some((was, now)) = &desc {
-                rf_win::props::set_editable(&paths[0], was, now).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
+                rf_platform::props::set_editable(&paths[0], was, now).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
             }
             if let Some(l) = &label {
                 // (a fixed drive needs an administrator: Windows says "access denied", we never elevate)
-                rf_win::volume::set_label(&paths[0], l).map_err(|e| match e.kind() {
+                rf_platform::volume::set_label(&paths[0], l).map_err(|e| match e.kind() {
                     std::io::ErrorKind::PermissionDenied => t!("Bu sürücünün etiketini değiştirmek yönetici izni ister").to_string(),
                     _ => named(&paths[0], &e),
                 })?;
             }
             if let Some((Some(exe), c)) = &compat {
-                rf_win::compat::write(exe, c).map_err(|e| named(exe, &format!("{e:#}")))?;
+                rf_platform::compat::write(exe, c).map_err(|e| named(exe, &format!("{e:#}")))?;
             }
             if let Some(icon) = &icon {
-                rf_win::folder_custom::set_folder_icon(&paths[0], icon.as_ref().map(|(f, i)| (f.as_str(), *i))).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
+                rf_platform::folder_custom::set_folder_icon(&paths[0], icon.as_ref().map(|(f, i)| (f.as_str(), *i))).map_err(|e| named(&paths[0], &format!("{e:#}")))?;
                 // the list and the tree show the new icon, not the one they kept (issue 65)
                 crate::image_cache::refresh_folder_icons();
             }
@@ -781,8 +781,8 @@ impl PropsView {
 
     fn windows_properties(&self) {
         let p = self.paths[0].clone();
-        rf_win::sta::run(move |_| {
-            let _ = rf_win::shell::properties(&p);
+        rf_platform::sta::run(move |_| {
+            let _ = rf_platform::shell::properties(&p);
         });
     }
 
@@ -800,9 +800,9 @@ impl PropsView {
         let Some(p) = self.single().map(Path::to_path_buf) else { return };
         let owner = Self::hwnd(window);
         let (tx, rx) = futures::channel::oneshot::channel();
-        rf_win::sta::run(move |_| {
-            let _ = rf_win::shell::open_with_dialog(windows::Win32::Foundation::HWND(owner as *mut _), &p);
-            let _ = tx.send(rf_win::fileinfo::opens_with(&p));
+        rf_platform::sta::run(move |_| {
+            let _ = rf_platform::shell::open_with_dialog(windows::Win32::Foundation::HWND(owner as *mut _), &p);
+            let _ = tx.send(rf_platform::fileinfo::opens_with(&p));
         });
         cx.spawn(async move |this, cx| {
             if let Ok(app) = rx.await {
@@ -821,8 +821,8 @@ impl PropsView {
     fn pick_icon(&mut self, start: (String, i32), for_link: bool, window: &mut Window, cx: &mut Context<Self>) {
         let owner = Self::hwnd(window);
         let (tx, rx) = futures::channel::oneshot::channel();
-        rf_win::sta::run(move |_| {
-            let _ = tx.send(rf_win::folder_custom::pick_icon(windows::Win32::Foundation::HWND(owner as *mut _), &start.0, start.1));
+        rf_platform::sta::run(move |_| {
+            let _ = tx.send(rf_platform::folder_custom::pick_icon(windows::Win32::Foundation::HWND(owner as *mut _), &start.0, start.1));
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Some((file, index))) = rx.await {
@@ -1057,8 +1057,8 @@ impl PropsView {
         card(p, rows)
     }
 
-    fn render_drive(&self, d: &rf_win::drives::Drive, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        use rf_win::drives::DriveKind;
+    fn render_drive(&self, d: &rf_platform::drives::Drive, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        use rf_platform::drives::DriveKind;
         let kind = match d.kind {
             DriveKind::Removable => t!("Çıkarılabilir disk"),
             DriveKind::Network => t!("Ağ sürücüsü"),
@@ -1133,7 +1133,7 @@ impl PropsView {
 
     fn render_shortcut(&self, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let (Some(d), Some(inp)) = (&self.link, &self.link_inputs) else { return vec![] };
-        let target = PathBuf::from(rf_win::localized::expand_env(&d.target));
+        let target = PathBuf::from(rf_platform::localized::expand_env(&d.target));
         let target_type = if d.target.is_empty() {
             t!("Kabuk öğesi").to_string()
         } else if target.is_dir() {
@@ -1240,7 +1240,7 @@ impl PropsView {
     }
 
     fn render_compat(&self, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        use rf_win::compat::{Color, Dpi, Mode};
+        use rf_platform::compat::{Color, Dpi, Mode};
         let Some(exe) = &self.compat_exe else { return vec![] };
         let c = &self.compat;
         let me = cx.entity().downgrade();
@@ -1344,7 +1344,7 @@ impl PropsView {
     }
 
     fn render_security(&self, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        use rf_win::security::{RIGHTS, Right};
+        use rf_platform::security::{RIGHTS, Right};
         let s = match &self.security {
             None => return vec![note(p, t!("Yükleniyor…"))],
             Some(Err(e)) => return vec![card(p, vec![row(p, t!("Hata"), e.clone())]), self.win_props_link(p, cx)],
@@ -1391,8 +1391,8 @@ impl PropsView {
         }
         out.push(card(p, list));
         if let Some(e) = s.entries.get(sel) {
-            let allow = rf_win::security::ticks(e.allow, is_dir);
-            let deny = rf_win::security::ticks(e.deny, is_dir);
+            let allow = rf_platform::security::ticks(e.allow, is_dir);
+            let deny = rf_platform::security::ticks(e.deny, is_dir);
             let mark = |on: bool| {
                 div()
                     .w(px(70.))
@@ -1656,51 +1656,51 @@ impl PropsView {
 /// Everything the window shows about one item, read on a background thread.
 fn load_one(p: &Path) -> Loaded {
     let mut l = Loaded::default();
-    let info = rf_win::fileinfo::info(p).map_err(|e| e.to_string());
+    let info = rf_platform::fileinfo::info(p).map_err(|e| e.to_string());
     let is_dir = info.as_ref().is_ok_and(|i| i.is_dir);
     let is_file = info.as_ref().is_ok_and(|i| !i.is_dir);
-    l.blocked = is_file && rf_win::fileinfo::zone_blocked(p);
-    l.streams = rf_win::fileinfo::streams(p);
+    l.blocked = is_file && rf_platform::fileinfo::zone_blocked(p);
+    l.streams = rf_platform::fileinfo::streams(p);
     if is_file {
-        l.desc = rf_win::props::editable(p);
+        l.desc = rf_platform::props::editable(p);
     }
-    l.caps = rf_win::fileinfo::volume_caps(p);
+    l.caps = rf_platform::fileinfo::volume_caps(p);
     if is_dir && is_root(p) {
         let letter = p.to_string_lossy().chars().next().unwrap_or('C').to_ascii_uppercase();
-        l.drive = rf_win::drives::list_drives().into_iter().find(|d| d.letter.to_ascii_uppercase() == letter);
+        l.drive = rf_platform::drives::list_drives().into_iter().find(|d| d.letter.to_ascii_uppercase() == letter);
     }
     if is_dir {
-        l.share = rf_win::fileinfo::share_of(p);
+        l.share = rf_platform::fileinfo::share_of(p);
         if l.drive.is_none() {
-            l.folder_icon = rf_win::folder_custom::folder_icon(p);
+            l.folder_icon = rf_platform::folder_custom::folder_icon(p);
         }
     }
     if is_file {
         if is_pe(p) {
-            l.pe = rf_win::pe::info(p);
+            l.pe = rf_platform::pe::info(p);
         }
         if signable(p) {
-            l.signatures = rf_win::signature::read(p);
+            l.signatures = rf_platform::signature::read(p);
         }
         if ext_of(p) == "lnk" {
-            l.link = rf_win::shortcut::details(p).ok();
+            l.link = rf_platform::shortcut::details(p).ok();
         }
         // the program the Compatibility tab is about
         let exe = match &l.link {
-            Some(d) => Some(PathBuf::from(rf_win::localized::expand_env(&d.target))),
+            Some(d) => Some(PathBuf::from(rf_platform::localized::expand_env(&d.target))),
             None => Some(p.to_path_buf()),
         };
         l.compat_exe = exe.filter(|e| ext_of(e) == "exe");
         if let Some(e) = &l.compat_exe {
-            l.compat = rf_win::compat::read(e);
-            l.compat_all_users = rf_win::compat::read_all_users(e) != Compat::default();
+            l.compat = rf_platform::compat::read(e);
+            l.compat_all_users = rf_platform::compat::read_all_users(e) != Compat::default();
         }
     }
     l.info = Some(info);
     l
 }
 
-/// WinVerifyTrust's reason (English, from rf_win::signature) in the UI language.
+/// WinVerifyTrust's reason (English, from rf_platform::signature) in the UI language.
 fn verdict_reason(e: &str) -> String {
     let l = e.to_ascii_lowercase();
     let k = if l.contains("does not match") {
@@ -1901,7 +1901,7 @@ impl Render for PropsView {
             self.frame_dark = Some(p.dark);
             let h = Self::hwnd(window);
             if h != 0 {
-                rf_win::window::set_dark_mode(h, p.dark);
+                rf_platform::window::set_dark_mode(h, p.dark);
             }
         }
         let title = match (self.single(), &self.drive) {

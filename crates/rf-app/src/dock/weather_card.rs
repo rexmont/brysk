@@ -4,11 +4,11 @@
 //! know about it.
 //!
 //! Nothing here asks Windows for the position (that would be a consent prompt on the user's screen): the line is from the privacy
-//! switches in the registry, read-only (`rf_win::weather_location::windows_permission_cached`).
+//! switches in the registry, read-only (`rf_platform::weather_location::windows_permission_cached`).
 
 use gpui_kit::assets::IconName as L;
 use gpui_kit::*;
-use rf_win::weather_location::{Permission, SETTINGS_PAGE};
+use rf_platform::weather_location::{Permission, SETTINGS_PAGE};
 
 use crate::settings::{self, Settings};
 use crate::settings_view::{button, card, switch};
@@ -30,7 +30,7 @@ pub fn cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
         Some(t!("Bilgisayarın yaklaşık konumu (yaklaşık bir kilometreye yuvarlanmış) Windows'tan istenir ve hava durumunu almak için Open-Meteo'ya gönderilir; başka hiçbir yere gönderilmez.")),
         switch("dock-weather-location", p, on, move |_, cx| settings::update(cx, |s| s.dock_weather_location = !on)),
     )];
-    if refusal_line_shown(on, rf_win::weather_location::windows_permission_cached()) {
+    if refusal_line_shown(on, rf_platform::weather_location::windows_permission_cached()) {
         out.push(card(
             p,
             L::TriangleAlert,
@@ -38,7 +38,7 @@ pub fn cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
             None,
             button("dock-weather-location-open", p, t!("Konum ayarlarını aç"), |_, _| {
                 std::thread::spawn(|| {
-                    let _ = rf_win::shell::open(std::path::Path::new(SETTINGS_PAGE));
+                    let _ = rf_platform::shell::open(std::path::Path::new(SETTINGS_PAGE));
                 });
             }),
         ));

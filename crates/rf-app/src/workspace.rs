@@ -142,7 +142,7 @@ pub struct Workspace {
     glass_shown: bool,
     /// How the engine last said it keeps the windows out of the capture: the settings page's note depends on it, and the engine can
     /// change it later (a session that fails makes it fall back).
-    glass_capture: rf_win::glass::CaptureMode,
+    glass_capture: rf_platform::glass::CaptureMode,
     /// Counts the attach attempts; a watcher of an older attempt stops.
     glass_gen: u32,
     /// Set by `render` around the call that builds the sidebar: the selected row of that sidebar is a glass lens (the engine draws the
@@ -233,7 +233,7 @@ fn update_jump_list(places: &crate::places::Places) {
         .iter()
         .filter(|r| r.is_dir && !pins.iter().any(|(_, p)| *p == r.target))
         .take(6)
-        .map(|r| (rf_win::localized::label_if_known(&r.target).map_or_else(|| r.name.clone(), |l| l.to_string()), r.target.clone()))
+        .map(|r| (rf_platform::localized::label_if_known(&r.target).map_or_else(|| r.name.clone(), |l| l.to_string()), r.target.clone()))
         .collect();
     let labels = [t!("Yeni pencere"), t!("Yeni sekme"), t!("Sabitlenenler"), t!("Son klasörler")];
     {
@@ -246,7 +246,7 @@ fn update_jump_list(places: &crate::places::Places) {
     let Ok(exe) = std::env::current_exe() else { return };
     // A run of changes is ONE write: of the last of them, a moment after it (`TURN` says which change is the last). WHY: the recent
     // folders can change several times within a second (nine times in five seconds in a user's log), every change started a write
-    // on a thread of its own, and the writes collided ("unable to remove the file to be replaced", see `rf_win::jumplist::set`).
+    // on a thread of its own, and the writes collided ("unable to remove the file to be replaced", see `rf_platform::jumplist::set`).
     use std::sync::atomic::Ordering::Relaxed;
     static TURN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -256,9 +256,9 @@ fn update_jump_list(places: &crate::places::Places) {
         if TURN.load(Relaxed) != turn {
             return;
         }
-        let tasks = [(labels[0], rf_win::jumplist::NEW_WINDOW_ARG), (labels[1], "")];
+        let tasks = [(labels[0], rf_platform::jumplist::NEW_WINDOW_ARG), (labels[1], "")];
         let cats = [(labels[2].to_string(), pins), (labels[3].to_string(), recent)];
-        if let Err(e) = rf_win::jumplist::set(&exe, &tasks, &cats) {
+        if let Err(e) = rf_platform::jumplist::set(&exe, &tasks, &cats) {
             // (not written: the next look at the places writes it, even when nothing has changed by then)
             if TURN.load(Relaxed) == turn {
                 *LAST.lock().unwrap() = None;
@@ -343,7 +343,7 @@ pub fn any_main_window(cx: &App) -> bool {
 pub const SELECT_PREFIX: &str = "\u{1}select:";
 
 /// A file to select in the window that just opened its folder ("Show in folder" from another app,
-/// see rf_win::shell_window): selected in place, or its folder opened when no window shows it.
+/// see rf_platform::shell_window): selected in place, or its folder opened when no window shows it.
 pub const SELECT_HERE_PREFIX: &str = "\u{1}select-here:";
 
 /// A second launch on a shell folder (a phone, Network…) reaches the running window as this
@@ -516,7 +516,7 @@ pub fn route_ipc(msg: String, cx: &mut App) {
 }
 
 /// [`route_ipc`], saying whether the request is taken care of: false only when it needed a window and none could be made. The
-/// launch of a second process waits for this answer (see `rf_win::handover`) and shows the folder itself on false.
+/// launch of a second process waits for this answer (see `rf_platform::handover`) and shows the folder itself on false.
 pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
     // the dock's file search asks this app over the pipe (the dock does not hold the name index), and a window-less start greets it
     if crate::search_pipe::handle_private(&msg, cx.global::<crate::settings::Settings>().name_index) {
@@ -548,7 +548,7 @@ pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
         }
         return true;
     }
-    if msg.trim() == rf_win::jumplist::NEW_WINDOW_ARG {
+    if msg.trim() == rf_platform::jumplist::NEW_WINDOW_ARG {
         return crate::open_main_window_made(Some(Location::Home), None, None, cx);
     }
     if msg.trim() == crate::quick_search::LAUNCH_ARG {
@@ -649,7 +649,7 @@ impl Workspace {
                 if text.trim().to_lowercase().starts_with("shell:") {
                     // resolve in the background (shell namespace), then navigate
                     let t = text.trim().to_string();
-                    let work = cx.background_spawn(async move { rf_win::shell::resolve_shell_path(&t) });
+                    let work = cx.background_spawn(async move { rf_platform::shell::resolve_shell_path(&t) });
                     cx.spawn_in(window, async move |this, cx| {
                         if let Some(p) = work.await {
                             let _ = this.update_in(cx, |ws, window, cx| ws.navigate(Location::Path(p), window, cx));
@@ -794,7 +794,7 @@ impl Workspace {
             glass_dark: None,
             glass_failed: false,
             glass_shown: false,
-            glass_capture: rf_win::glass::CaptureMode::Off,
+            glass_capture: rf_platform::glass::CaptureMode::Off,
             glass_gen: 0,
             sidebar_lens: false,
             sidebar_lens_claimed: std::cell::Cell::new(false),
@@ -1035,7 +1035,7 @@ impl Workspace {
             FolderEvent::ToOtherPane(kind, paths) => {
                 if let Some(other) = this.other_pane(emitter) {
                     let dest = match other.read(cx).location() {
-                        Location::Path(p) if !rf_win::ftp::is_ftp(p) && rf_win::network::server_root(p).is_none() => Some(p.clone()),
+                        Location::Path(p) if !rf_platform::ftp::is_ftp(p) && rf_platform::network::server_root(p).is_none() => Some(p.clone()),
                         _ => None,
                     };
                     if let Some(dest) = dest {
@@ -1378,10 +1378,10 @@ impl Workspace {
         // List on a worker (can stall on network/optical drives); the shell thread only shows the menu.
         let listing = cx.background_spawn(async move {
             let mut entries: Vec<(String, PathBuf)> = match &dir {
-                None => rf_win::drives::visible_drives().into_iter().map(|d| (crate::places::drive_name(&d), d.root)).collect(),
+                None => rf_platform::drives::visible_drives().into_iter().map(|d| (crate::places::drive_name(&d), d.root)).collect(),
                 Some(d) => {
                     let mut v = Vec::new();
-                    let _ = rf_win::list_dir(d, 4096, &|| false, &mut |b| {
+                    let _ = rf_platform::list_dir(d, 4096, &|| false, &mut |b| {
                         for e in b {
                             if e.is_dir() && !e.is_hidden() {
                                 v.push((e.name.to_string(), d.join(&*e.name)));
@@ -1599,7 +1599,7 @@ impl Workspace {
             ShelfEvent::Transfer(kind, items) => {
                 let dest = match self.active_tab().read(cx).location() {
                     Location::Path(p)
-                        if !rf_win::ftp::is_ftp(p) && rf_win::network::server_root(p).is_none() =>
+                        if !rf_platform::ftp::is_ftp(p) && rf_platform::network::server_root(p).is_none() =>
                     {
                         Some(p.clone())
                     }
@@ -1607,7 +1607,7 @@ impl Workspace {
                 };
                 if let Some(dest) = dest {
                     crate::status_center::transfer(cx, *kind, items.clone(), dest);
-                    if *kind == rf_win::fileops::Transfer::Move {
+                    if *kind == rf_platform::fileops::Transfer::Move {
                         // moved items leave their old place; the shelf is done with them
                         self.shelf.update(cx, |s, cx| s.clear(cx));
                     }
@@ -1731,21 +1731,21 @@ impl Workspace {
         if let Some(r) = self.compact.take() {
             let (rect, maximized, topmost) = (r.rect, r.maximized, r.topmost);
             cx.spawn(async move |_, _| {
-                rf_win::window::set_min_size(hwnd, None);
-                rf_win::window::place(hwnd, rect);
+                rf_platform::window::set_min_size(hwnd, None);
+                rf_platform::window::place(hwnd, rect);
                 if maximized {
-                    rf_win::window::maximize(hwnd);
+                    rf_platform::window::maximize(hwnd);
                 }
                 if !topmost {
-                    let _ = rf_win::window::set_topmost(hwnd, false);
+                    let _ = rf_platform::window::set_topmost(hwnd, false);
                 }
             })
             .detach();
         } else {
-            let Some((rect, maximized)) = rf_win::window::rect(hwnd) else { return };
+            let Some((rect, maximized)) = rf_platform::window::rect(hwnd) else { return };
             // restore to the normal (not maximized) rectangle later
             let normal = if maximized { None } else { Some(rect) };
-            let topmost = rf_win::window::is_topmost(hwnd);
+            let topmost = rf_platform::window::is_topmost(hwnd);
             let scale = window.scale_factor();
             let (w, h) = ((COMPACT_W * scale) as i32, (COMPACT_H * scale) as i32);
             // keep the top-right corner where it was: the overlay hugs the side it came from
@@ -1757,9 +1757,9 @@ impl Workspace {
             });
             let small = [right - w, top, right, top + h];
             cx.spawn(async move |_, _| {
-                rf_win::window::set_min_size(hwnd, Some((COMPACT_MIN.0, COMPACT_MIN.1)));
-                rf_win::window::place(hwnd, small);
-                let _ = rf_win::window::set_topmost(hwnd, true);
+                rf_platform::window::set_min_size(hwnd, Some((COMPACT_MIN.0, COMPACT_MIN.1)));
+                rf_platform::window::place(hwnd, small);
+                let _ = rf_platform::window::set_topmost(hwnd, true);
             })
             .detach();
             self.compact = Some(CompactRestore { rect: restore, maximized, topmost });
@@ -1772,8 +1772,8 @@ impl Workspace {
         if let Ok(h) = window.window_handle() {
             if let RawWindowHandle::Win32(w) = h.as_raw() {
                 let hwnd = w.hwnd.get();
-                let on = !rf_win::window::is_topmost(hwnd);
-                if let Err(e) = rf_win::window::set_topmost(hwnd, on) {
+                let on = !rf_platform::window::is_topmost(hwnd);
+                if let Err(e) = rf_platform::window::set_topmost(hwnd, on) {
                     log::warn!("always on top: {e}");
                 }
             }
@@ -1802,13 +1802,13 @@ impl Workspace {
             return;
         }
         let expanded = expand_env(text.trim());
-        if !rf_win::complete::completable(&expanded) {
+        if !rf_platform::complete::completable(&expanded) {
             self.clear_suggestions();
             cx.notify();
             return;
         }
         let hidden = cx.global::<crate::settings::Settings>().show_hidden;
-        let work = cx.background_spawn(async move { rf_win::complete::complete_dirs(&expanded, 8, hidden) });
+        let work = cx.background_spawn(async move { rf_platform::complete::complete_dirs(&expanded, 8, hidden) });
         self._addr_task = Some(cx.spawn(async move |this, cx| {
             let list = work.await;
             let _ = this.update(cx, |ws, cx| {
@@ -2276,7 +2276,7 @@ impl Workspace {
     /// plus open in new tab/window and pin/unpin.
     fn sidebar_menu(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let shift = unsafe {
-            windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState(windows::Win32::UI::Input::KeyboardAndMouse::VK_SHIFT.0 as i32) < 0
+            rf_platform::input::shift_down()
         };
         self.sidebar_menu_at(path, shift, window.mouse_position(), window, cx);
     }
@@ -2287,12 +2287,9 @@ impl Workspace {
         if classic {
             // the classic Explorer menu, extended verbs included
             let p2 = path.clone();
-            rf_win::sta::run(move |owner| {
-                let mut pt = windows::Win32::Foundation::POINT::default();
-                unsafe {
-                    let _ = windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pt);
-                }
-                if let Err(e) = rf_win::ctxmenu::show_for_one(owner, &p2, (pt.x, pt.y), true, &[]) {
+            rf_platform::sta::run(move |owner| {
+                let pt = rf_platform::input::cursor_pos();
+                if let Err(e) = rf_platform::ctxmenu::show_for_one(owner, &p2, (pt.x, pt.y), true, &[]) {
                     log::warn!("sidebar menu: {e:#}");
                 }
             });
@@ -2333,7 +2330,7 @@ impl Workspace {
             })),
             Item::action(t!("Terminalde aç"), MenuIcon::Lucide(L::SquareTerminal), with(|_, p, _, _| {
                 std::thread::spawn(move || {
-                    let _ = rf_win::shell::open_terminal(&p);
+                    let _ = rf_platform::shell::open_terminal(&p);
                 });
             })),
             // our Properties window (a drive gets its own page there)
@@ -2358,21 +2355,21 @@ impl Workspace {
         let root = path.parent().is_none();
         let quick = {
             use crate::fluent_menu::Quick;
-            let clip = |kind: rf_win::fileops::Transfer| {
+            let clip = |kind: rf_platform::fileops::Transfer| {
                 let p = path.clone();
                 move |_: &mut Window, _: &mut App| {
                     let p = p.clone();
-                    rf_win::sta::run(move |owner| {
-                        if let Err(e) = rf_win::clipboard::set_files(owner, &[p], kind) {
+                    rf_platform::sta::run(move |owner| {
+                        if let Err(e) = rf_platform::clipboard::set_files(owner, &[p], kind) {
                             log::warn!("clipboard: {e:#}");
                         }
                     });
                 }
             };
             vec![
-                Quick::new(L::Scissors, t!("Kes  (Ctrl+X)"), !root, clip(rf_win::fileops::Transfer::Move)),
-                Quick::new(L::Copy, t!("Kopyala  (Ctrl+C)"), true, clip(rf_win::fileops::Transfer::Copy)),
-                Quick::new(L::ClipboardPaste, t!("Yapıştır  (Ctrl+V)"), rf_win::clipboard::can_paste(), with(|ws, p, w, cx| {
+                Quick::new(L::Scissors, t!("Kes  (Ctrl+X)"), !root, clip(rf_platform::fileops::Transfer::Move)),
+                Quick::new(L::Copy, t!("Kopyala  (Ctrl+C)"), true, clip(rf_platform::fileops::Transfer::Copy)),
+                Quick::new(L::ClipboardPaste, t!("Yapıştır  (Ctrl+V)"), rf_platform::clipboard::can_paste(), with(|ws, p, w, cx| {
                     ws.active_tab().clone().update(cx, |v, cx| v.paste_to(p, w, cx))
                 })),
                 Quick::new(L::TextCursorInput, t!("Yeniden adlandır  (F2)"), !root, with(|ws, p, w, cx| ws.rename_place(p, w, cx))),
@@ -2399,7 +2396,7 @@ impl Workspace {
         };
         let menu = crate::fluent_menu::show(Menu { quick, items }, at, window, cx);
         let view = self.active_tab().downgrade();
-        crate::ctx_menu::load_shell_more(menu.downgrade(), rf_win::ctxmenu::ShellTarget::One(path), view, cx);
+        crate::ctx_menu::load_shell_more(menu.downgrade(), rf_platform::ctxmenu::ShellTarget::One(path), view, cx);
     }
 
     /// Renames a folder of the sidebar or the folder tree (its menu's Rename, issue 53): asks the new name, renames it off the
@@ -2429,7 +2426,7 @@ impl Workspace {
                     let (from, me) = (path.clone(), me.clone());
                     let done = cx.background_spawn({
                         let (from, name) = (from.clone(), name.clone());
-                        async move { rf_win::fileops::rename(&from, &name) }
+                        async move { rf_platform::fileops::rename(&from, &name) }
                     });
                     cx.spawn(async move |cx| match done.await {
                         Ok(true) => {
@@ -2762,7 +2759,7 @@ impl Workspace {
         let writable_sel = has_sel && !matches!(tab.location(), Location::Shell { .. });
         let preview_open = self.preview_open;
         let filter_on = self.filter_bar;
-        let paste_ok = in_folder && rf_win::clipboard::can_paste();
+        let paste_ok = in_folder && rf_platform::clipboard::can_paste();
 
         let cmd = |id: &'static str, icon: L, tip: &'static str, enabled: bool, cx: &mut Context<Self>, run: fn(&mut Self, &mut Window, &mut Context<Self>)| {
             div()
@@ -2831,12 +2828,12 @@ impl Workspace {
             .children(on("new").then(sep))
             .children(on("cut").then(|| {
                 cmd("cb-cut", L::Scissors, "Kes  (Ctrl+X)", writable_sel, cx, |this, w, cx| {
-                    this.with_tab(cx, |v, cx| v.copy_to_clipboard(rf_win::fileops::Transfer::Move, w, cx))
+                    this.with_tab(cx, |v, cx| v.copy_to_clipboard(rf_platform::fileops::Transfer::Move, w, cx))
                 })
             }))
             .children(on("copy").then(|| {
                 cmd("cb-copy", L::Copy, "Kopyala  (Ctrl+C)", has_sel, cx, |this, w, cx| {
-                    this.with_tab(cx, |v, cx| v.copy_to_clipboard(rf_win::fileops::Transfer::Copy, w, cx))
+                    this.with_tab(cx, |v, cx| v.copy_to_clipboard(rf_platform::fileops::Transfer::Copy, w, cx))
                 })
             }))
             .children(on("paste").then(|| cmd("cb-paste", L::ClipboardPaste, "Yapıştır  (Ctrl+V)", paste_ok, cx, |this, w, cx| this.with_tab(cx, |v, cx| v.paste(w, cx)))))
@@ -3579,14 +3576,19 @@ fn tooltip_text(id: &str) -> &'static str {
 /// Opens `dir` in the user's editor (`ide` path, else VS Code's `code` launcher).
 pub fn open_in_ide(dir: PathBuf, ide: String) {
     std::thread::spawn(move || {
-        use std::os::windows::process::CommandExt;
+        #[cfg(windows)]
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt;
         let r = if ide.is_empty() {
-            // "automatic": the first of the editors we know that is installed (`rf_win::editors`; looked for here, on this thread)
-            match rf_win::editors::installed().first() {
+            // "automatic": the first of the editors we know that is installed (`rf_platform::editors`; looked for here, on this thread)
+            match rf_platform::editors::installed().first() {
                 Some(editor) => std::process::Command::new(&editor.exe).arg(&dir).spawn(),
                 // none of them: `code` on the PATH, as it always was (a .cmd launcher: through cmd, without a console window)
+                #[cfg(windows)]
                 None => std::process::Command::new("cmd").args(["/c", "code", "."]).current_dir(&dir).creation_flags(CREATE_NO_WINDOW).spawn(),
+                #[cfg(not(windows))]
+                None => std::process::Command::new("code").arg(".").current_dir(&dir).spawn(),
             }
         } else {
             std::process::Command::new(&ide).arg(&dir).spawn()
@@ -3599,14 +3601,13 @@ pub fn open_in_ide(dir: PathBuf, ide: String) {
 
 fn drop_files(paths: &ExternalPaths, dest: PathBuf, cx: &mut App) {
     let sources: Vec<PathBuf> = paths.paths().to_vec();
-    if sources.is_empty() || rf_win::dnd::is_invalid_drop(&sources, &dest) {
+    if sources.is_empty() || rf_platform::dnd::is_invalid_drop(&sources, &dest) {
         return;
     }
     let (ctrl, shift) = unsafe {
-        use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL, VK_SHIFT};
-        (GetKeyState(VK_CONTROL.0 as i32) < 0, GetKeyState(VK_SHIFT.0 as i32) < 0)
+        (rf_platform::input::ctrl_down(), rf_platform::input::shift_down())
     };
-    let kind = rf_win::dnd::default_transfer(&sources, &dest, ctrl, shift);
+    let kind = rf_platform::dnd::default_transfer(&sources, &dest, ctrl, shift);
     crate::status_center::transfer(cx, kind, sources, dest);
 }
 
@@ -3659,7 +3660,7 @@ fn breadcrumbs(path: &Path) -> Vec<(String, Location)> {
             continue;
         }
         // (the cache only: this runs while drawing; FolderView::warm_labels fills it from a worker)
-        let label = match rf_win::localized::label_if_known(&acc) {
+        let label = match rf_platform::localized::label_if_known(&acc) {
             Some(l) => l.to_string(),
             None => rf_core::history::redact_credentials(comp.as_os_str().to_string_lossy().trim_end_matches('\\')),
         };
@@ -3727,10 +3728,10 @@ impl Workspace {
     fn start_glass(&mut self, dark: bool, window: &mut Window, cx: &mut Context<Self>) {
         let hwnd = crate::look::window::hwnd_of(window);
         self.glass_gen = self.glass_gen.wrapping_add(1);
-        let attached = hwnd != 0 && rf_win::glass::attach(hwnd, dark);
+        let attached = hwnd != 0 && rf_platform::glass::attach(hwnd, dark);
         if !attached {
-            let why = match rf_win::glass::state(hwnd) {
-                rf_win::glass::GlassState::Failed(why) => why,
+            let why = match rf_platform::glass::state(hwnd) {
+                rf_platform::glass::GlassState::Failed(why) => why,
                 _ => "the window has no handle".into(),
             };
             self.glass_hwnd = hwnd;
@@ -3741,7 +3742,7 @@ impl Workspace {
         self.glass_dark = Some(dark);
         // this is a window the user works in: its glass may freeze while it is not in front, if the setting is on (a dock island or a
         // menu never does)
-        rf_win::glass::set_freezable(hwnd, true);
+        rf_platform::glass::set_freezable(hwnd, true);
         // The engine reports from its own thread, so ask it: every 50 ms until it has drawn (then the window turns see-through), and
         // after that every 500 ms, so a glass that is lost later (a removed graphics device) is noticed within half a second.
         let generation = self.glass_gen;
@@ -3764,14 +3765,14 @@ impl Workspace {
         if generation != self.glass_gen || self.glass_hwnd == 0 {
             return false;
         }
-        match rf_win::glass::state(self.glass_hwnd) {
-            rf_win::glass::GlassState::Failed(why) => {
+        match rf_platform::glass::state(self.glass_hwnd) {
+            rf_platform::glass::GlassState::Failed(why) => {
                 self.give_up_glass(why, cx);
                 false
             }
             // taken off from elsewhere
-            rf_win::glass::GlassState::Off => false,
-            rf_win::glass::GlassState::Running => {
+            rf_platform::glass::GlassState::Off => false,
+            rf_platform::glass::GlassState::Running => {
                 if !self.glass_shown {
                     // the glass is on the window: now the scene may be see-through
                     self.glass_shown = true;
@@ -3780,7 +3781,7 @@ impl Workspace {
                     window.set_background_appearance(WindowBackgroundAppearance::Transparent);
                     cx.notify();
                 }
-                let mode = rf_win::glass::capture_mode();
+                let mode = rf_platform::glass::capture_mode();
                 if mode != self.glass_capture {
                     self.glass_capture = mode;
                     cx.notify(); // the settings page tells whether the windows show in screenshots
@@ -3788,7 +3789,7 @@ impl Workspace {
                 true
             }
             // still starting: the window keeps its Mica
-            rf_win::glass::GlassState::Starting => true,
+            rf_platform::glass::GlassState::Starting => true,
         }
     }
 
@@ -3797,7 +3798,7 @@ impl Workspace {
     fn give_up_glass(&mut self, why: String, cx: &mut Context<Self>) {
         log::warn!("glass: giving up on this window, Mica is used: {why}");
         if self.glass_hwnd != 0 {
-            rf_win::glass::detach(self.glass_hwnd);
+            rf_platform::glass::detach(self.glass_hwnd);
             crate::glass::set_shown(self.glass_hwnd, false);
             crate::glass::forget_window(self.glass_hwnd); // the engine drops the lenses with the glass
         }
@@ -3813,7 +3814,7 @@ impl Workspace {
     fn stop_glass(&mut self, window: &mut Window) {
         self.glass_gen = self.glass_gen.wrapping_add(1);
         if self.glass_hwnd != 0 {
-            rf_win::glass::detach(self.glass_hwnd);
+            rf_platform::glass::detach(self.glass_hwnd);
             crate::glass::set_shown(self.glass_hwnd, false);
             crate::glass::forget_window(self.glass_hwnd); // the engine drops the lenses with the glass
             self.glass_hwnd = 0;
@@ -3829,7 +3830,7 @@ impl Drop for Workspace {
     fn drop(&mut self) {
         // the window closed
         if self.glass_hwnd != 0 {
-            rf_win::glass::detach(self.glass_hwnd);
+            rf_platform::glass::detach(self.glass_hwnd);
             crate::glass::set_shown(self.glass_hwnd, false);
             crate::glass::forget_window(self.glass_hwnd); // the engine drops the lenses with the glass
         }
@@ -3906,7 +3907,7 @@ impl Render for Workspace {
         // the theme changed: the glass changes its tint
         if self.glass_hwnd != 0 && self.glass_dark != Some(p.dark) {
             self.glass_dark = Some(p.dark);
-            rf_win::glass::set_dark(self.glass_hwnd, p.dark);
+            rf_platform::glass::set_dark(self.glass_hwnd, p.dark);
         }
         // background color tint and picture (under everything)
         let mut backdrop_layers: Vec<AnyElement> = Vec::new();
@@ -3932,7 +3933,7 @@ impl Render for Workspace {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
             if let Ok(h) = window.window_handle() {
                 if let RawWindowHandle::Win32(w) = h.as_raw() {
-                    rf_win::window::set_dark_mode(w.hwnd.get(), p.dark);
+                    rf_platform::window::set_dark_mode(w.hwnd.get(), p.dark);
                 }
             }
         }
@@ -4048,7 +4049,7 @@ impl Render for Workspace {
             panel
                 .with_animation(
                     ("rail-peek-move", serial as usize),
-                    Animation::new(std::time::Duration::from_millis(ms)).with_easing(move |t| rf_win::dock::spring::curve_with(t, bounce)),
+                    Animation::new(std::time::Duration::from_millis(ms)).with_easing(move |t| rf_platform::dock::spring::curve_with(t, bounce)),
                     move |el, t| {
                         let shown = if opening { t } else { 1.0 - t };
                         // (the width alone moves: the panel is matte from its first frame, nothing shows through it on the way)
@@ -4078,7 +4079,7 @@ impl Render for Workspace {
                     .on_click(move |_, _, cx| {
                         if star {
                             std::thread::spawn(|| {
-                                let _ = rf_win::shell::open(std::path::Path::new(crate::installer::REPO));
+                                let _ = rf_platform::shell::open(std::path::Path::new(crate::installer::REPO));
                             });
                         }
                         crate::settings::update(cx, |s| s.star_asked = true);
@@ -4118,7 +4119,7 @@ impl Render for Workspace {
                     .on_click(move |_, _, cx| {
                         if kind == 0 {
                             std::thread::spawn(|| {
-                                let _ = rf_win::shell::open(std::path::Path::new(crate::installer::DONATE));
+                                let _ = rf_platform::shell::open(std::path::Path::new(crate::installer::DONATE));
                             });
                         }
                         crate::settings::update(cx, |s| match kind {
@@ -4302,7 +4303,7 @@ impl Render for Workspace {
             // it moves
             .on_hover(cx.listener(|this, over: &bool, _, _| {
                 if *over && this.glass_hwnd != 0 {
-                    rf_win::glass::pointer_over(this.glass_hwnd);
+                    rf_platform::glass::pointer_over(this.glass_hwnd);
                 }
             }))
             .on_action(cx.listener(|this, _: &GoBack, _, cx| this.with_tab(cx, |v, cx| v.back(cx))))
@@ -4314,11 +4315,11 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_named_session(window, cx)))
             .on_action(cx.listener(|_, _: &MapNetworkDrive, window, _| {
                 let owner = Self::hwnd(window).unwrap_or(0);
-                std::thread::spawn(move || rf_win::network::map_drive_dialog(owner));
+                std::thread::spawn(move || rf_platform::network::map_drive_dialog(owner));
             }))
             .on_action(cx.listener(|_, _: &DisconnectNetworkDrive, window, _| {
                 let owner = Self::hwnd(window).unwrap_or(0);
-                std::thread::spawn(move || rf_win::network::disconnect_drive_dialog(owner));
+                std::thread::spawn(move || rf_platform::network::disconnect_drive_dialog(owner));
             }))
             .on_action(cx.listener(|this, _: &GoForward, _, cx| this.with_tab(cx, |v, cx| v.forward(cx))))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.with_tab(cx, |v, cx| v.up(cx))))
@@ -4369,7 +4370,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &OpenTerminalAdmin, _, cx| {
                 if let Some(dir) = this.active_tab().read(cx).location().path().map(Path::to_path_buf) {
                     std::thread::spawn(move || {
-                        if let Err(e) = rf_win::shell::open_terminal_admin(&dir) {
+                        if let Err(e) = rf_platform::shell::open_terminal_admin(&dir) {
                             log::warn!("terminal (admin): {e:#}");
                         }
                     });
@@ -4434,7 +4435,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &OpenTerminal, _, cx| {
                 if let Some(dir) = this.active_tab().read(cx).location().path().map(Path::to_path_buf) {
                     std::thread::spawn(move || {
-                        let _ = rf_win::shell::open_terminal(&dir);
+                        let _ = rf_platform::shell::open_terminal(&dir);
                     });
                 }
             }))
@@ -4474,7 +4475,7 @@ impl Render for Workspace {
                                         let height = f32::from(window.viewport_size().height);
                                         let at = |v: f32| (v * s) as i32;
                                         // (over glass the screen shows the desktop behind the window, not the window's tint)
-                                        this.rail_peek_bg = rf_win::window::screen_color(crate::look::window::hwnd_of(window), at(3.), at(110.), at(height - 60.))
+                                        this.rail_peek_bg = rf_platform::window::screen_color(crate::look::window::hwnd_of(window), at(3.), at(110.), at(height - 60.))
                                             .filter(|_| this.glass_hwnd == 0)
                                             .map(|[r, g, b]| Hsla::from(gpui_kit::rgb(u32::from(r) << 16 | u32::from(g) << 8 | u32::from(b))));
                                     }
@@ -4545,11 +4546,11 @@ mod tests {
     #[test]
     fn crumbs() {
         // the names are read on a worker in the app (FolderView::warm_labels); here the same call, first
-        rf_win::localized::warm(crate::nav_touch::label_paths(Path::new(r"C:\Users\demo")));
+        rf_platform::localized::warm(crate::nav_touch::label_paths(Path::new(r"C:\Users\demo")));
         let c = breadcrumbs(Path::new(r"C:\Users\demo"));
         let labels: Vec<_> = c.iter().map(|(l, _)| l.as_str()).collect();
         // C:\Users shows Explorer's localized name ("Kullanıcılar" on Turkish Windows)
-        let users = rf_win::localized::label_if_known(Path::new(r"C:\Users")).map_or("Users".to_string(), |l| l.to_string());
+        let users = rf_platform::localized::label_if_known(Path::new(r"C:\Users")).map_or("Users".to_string(), |l| l.to_string());
         assert_eq!(labels, vec!["C:", users.as_str(), "demo"]);
         assert_ne!(users, "");
         assert_eq!(c[0].1, Location::Path(PathBuf::from(r"C:\")));

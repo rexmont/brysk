@@ -50,7 +50,7 @@ impl PickSession {
     fn answer(&self, resp: Response) {
         if let Some(mut f) = self.pipe.borrow_mut().take() {
             if self.req.owner != 0 {
-                rf_win::window::hand_foreground(self.req.owner);
+                rf_platform::window::hand_foreground(self.req.owner);
             }
             if let Err(e) = write_msg(&mut f, &resp) {
                 log::warn!("picker answer: {e}");
@@ -58,7 +58,7 @@ impl PickSession {
                 // dialog and can no longer enable it again; left so, that window ignored every
                 // click (a Chrome window whose print to PDF ended mid-way)
                 if self.req.owner != 0 {
-                    rf_win::window::enable(self.req.owner);
+                    rf_platform::window::enable(self.req.owner);
                 }
             }
         }
@@ -164,12 +164,12 @@ fn open_window(pipe: File, req: Request, cx: &mut App) {
         sh.set(hwnd);
         if owner != 0 {
             // stays above the app that asked, like its own dialog would
-            rf_win::window::set_owner(hwnd, owner);
+            rf_platform::window::set_owner(hwnd, owner);
         }
-        rf_win::window::bring_to_front(hwnd);
+        rf_platform::window::bring_to_front(hwnd);
         if owner != 0 {
             // setting the owner did not move us above it (see raise_above_owner)
-            dialog_log(&format!("app picker: shown, above its owner: {:?}", rf_win::window::is_above(hwnd, owner)));
+            dialog_log(&format!("app picker: shown, above its owner: {:?}", rf_platform::window::is_above(hwnd, owner)));
             raise_off_thread(hwnd);
         }
         let pipe = pipe.borrow_mut().take();
@@ -208,18 +208,18 @@ fn open_window(pipe: File, req: Request, cx: &mut App) {
             cx.background_executor().timer(std::time::Duration::from_millis(ms)).await;
             waited += ms;
             let hwnd = shown_hwnd.get();
-            if hwnd == 0 || rf_win::window::is_foreground(hwnd) {
+            if hwnd == 0 || rf_platform::window::is_foreground(hwnd) {
                 break;
             }
             log::info!("picker: not in front after {ms} ms, bringing it forward");
             retries += 1;
-            rf_win::window::bring_to_front(hwnd);
+            rf_platform::window::bring_to_front(hwnd);
         }
         let hwnd = shown_hwnd.get();
         // next to the dialog DLL's own lines: a picker that opened behind is visible there
         dialog_log(&format!(
             "app picker: owner 0x{owner:x}, in front: {}, {retries} retries in {waited} ms",
-            hwnd != 0 && rf_win::window::is_foreground(hwnd)
+            hwnd != 0 && rf_platform::window::is_foreground(hwnd)
         ));
         // Chrome: the picker is in front at first, yet users find it behind Chrome afterwards.
         // For the next 10 s, every change of what is in front, whether the picker still has its
@@ -230,22 +230,22 @@ fn open_window(pipe: File, req: Request, cx: &mut App) {
         while hwnd != 0 && t < 10_000 && lines < 20 {
             cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
             t += 100;
-            if !rf_win::window::exists(hwnd) {
+            if !rf_platform::window::exists(hwnd) {
                 dialog_log(&format!("app picker: closed at {t} ms"));
                 break;
             }
             // For the first seconds, whoever puts the app back over the picker (the app's own
             // activation, a late show) is answered: the picker goes back above it.
-            if owner != 0 && t <= 3_000 && rf_win::window::is_above(hwnd, owner) == Some(false) {
+            if owner != 0 && t <= 3_000 && rf_platform::window::is_above(hwnd, owner) == Some(false) {
                 dialog_log(&format!("app picker at {t} ms: under its owner again, raised"));
                 raise_off_thread(hwnd);
             }
-            let front = rf_win::window::foreground();
+            let front = rf_platform::window::foreground();
             let state = format!(
                 "front {}, picker's owner 0x{:x}, picker above its owner: {:?}",
-                if front == hwnd { "picker".to_string() } else { rf_win::window::describe(front) },
-                rf_win::window::owner_of(hwnd),
-                if owner != 0 { rf_win::window::is_above(hwnd, owner) } else { None },
+                if front == hwnd { "picker".to_string() } else { rf_platform::window::describe(front) },
+                rf_platform::window::owner_of(hwnd),
+                if owner != 0 { rf_platform::window::is_above(hwnd, owner) } else { None },
             );
             if state != last {
                 dialog_log(&format!("app picker at {t} ms: {state}"));
@@ -260,7 +260,7 @@ fn open_window(pipe: File, req: Request, cx: &mut App) {
 /// Raises the picker above its owner on a short-lived thread: the owner moves with it, and a
 /// hung owner would block the caller (measured: 7.7 s), here the whole file manager.
 fn raise_off_thread(hwnd: isize) {
-    let _ = std::thread::Builder::new().name("picker-raise".into()).spawn(move || rf_win::window::raise_above_owner(hwnd));
+    let _ = std::thread::Builder::new().name("picker-raise".into()).spawn(move || rf_platform::window::raise_above_owner(hwnd));
 }
 
 /// The selected entries of the current folder, with whether each is a folder.

@@ -12,7 +12,7 @@
 use std::path::Path;
 
 use rf_core::desktop::items::Origin;
-use rf_win::fileops::Transfer;
+use rf_platform::fileops::Transfer;
 
 /// Why something was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -228,6 +228,7 @@ impl AudioDecoder {
     /// Opus: where the sound ends once `DiscardPadding` is taken off the last packet. Packets
     /// are taken to last as long as the first one (the encoders make them so), the last by its
     /// own table of contents.
+    #[cfg(windows)]
     fn opus_end(&mut self) -> Option<i64> {
         let Kind_::Mft(MftCodec::Opus, _) = self.kind else { return None };
         if self.track.discard_padding_ns == 0 || self.track.samples.len() < 2 {
@@ -243,6 +244,13 @@ impl AudioDecoder {
         let delay = (self.track.codec_delay_ns as i128 * rate + 500_000_000) / 1_000_000_000;
         let pad = (self.track.discard_padding_ns as i128 * rate + 500_000_000) / 1_000_000_000;
         Some(((n as i128 - 1) * first as i128 + last as i128 - delay - pad) as i64)
+    }
+
+    /// The Media Foundation decoders are Windows-only; elsewhere the stream simply ends where
+    /// its last packet says (no `DiscardPadding` correction).
+    #[cfg(not(windows))]
+    fn opus_end(&mut self) -> Option<i64> {
+        None
     }
 
     pub fn info(&self) -> &AudioInfo {

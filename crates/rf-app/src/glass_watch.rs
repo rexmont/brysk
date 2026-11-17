@@ -8,7 +8,7 @@
 use std::time::{Duration, Instant};
 
 use gpui_kit::{Context, Task};
-use rf_win::glass::GlassState;
+use rf_platform::glass::GlassState;
 
 /// How long to wait before trying again after the 1st, 2nd and 3rd failure. After the third retry fails the surface keeps its own fill
 /// for good (the dock's island until the dock is restarted, a popup until it closes): a glass that cannot be kept should not be
@@ -65,7 +65,7 @@ impl Machine {
         self.phase = Phase::Failed { at_ms: now_ms };
     }
 
-    /// One look at the engine's report (`state` is what `rf_win::glass::state` says) at `now_ms`.
+    /// One look at the engine's report (`state` is what `rf_platform::glass::state` says) at `now_ms`.
     pub fn observe(&mut self, engine: &GlassState, now_ms: u64) -> Act {
         match self.phase {
             Phase::Failed { at_ms } => match RETRY_AFTER_MS.get(self.retries) {
@@ -141,18 +141,18 @@ impl PopupGlass {
     }
 
     /// [`start_panel`](Self::start_panel) for a small panel that wants a THIN edge: the glass's rim band is at most `rim_cap` CSS px
-    /// wide (`rf_win::glass::set_rim_cap`, set before the window is attached; it goes when the glass is released).
+    /// wide (`rf_platform::glass::set_rim_cap`, set before the window is attached; it goes when the glass is released).
     pub fn start_panel_thin_rim(hwnd: isize, dark: bool, rim_cap: f32) -> PopupGlass {
-        rf_win::glass::set_rim_cap(hwnd, Some(rim_cap));
+        rf_platform::glass::set_rim_cap(hwnd, Some(rim_cap));
         Self::start_with(hwnd, dark, true)
     }
 
     /// [`start_panel`](Self::start_panel) for a panel that is a SHAPE inside its window while an island grows into it (the dock's
     /// `grow_host.rs`): the glass is `shape` (x, y, w, h in the window's device px) with `radius_px`, cuts its own corners, and the
-    /// caller moves both with `rf_win::glass::set_options`. The system's rounding is not asked for here: the caller has put it away
-    /// (`rf_win::dock::grow::set_frameless`).
+    /// caller moves both with `rf_platform::glass::set_options`. The system's rounding is not asked for here: the caller has put it away
+    /// (`rf_platform::dock::grow::set_frameless`).
     pub fn start_panel_shaped(hwnd: isize, dark: bool, shape: [f32; 4], radius_px: f32) -> PopupGlass {
-        let opts = rf_win::glass::GlassOptions { dark, radius_px: Some(radius_px), cut_corners: true, shape: Some(shape), shadow: None };
+        let opts = rf_platform::glass::GlassOptions { dark, radius_px: Some(radius_px), cut_corners: true, shape: Some(shape), shadow: None };
         Self::start_with_options(hwnd, dark, true, Some(opts))
     }
 
@@ -160,7 +160,7 @@ impl PopupGlass {
         Self::start_with_options(hwnd, dark, round, None)
     }
 
-    fn start_with_options(hwnd: isize, dark: bool, round: bool, shaped: Option<rf_win::glass::GlassOptions>) -> PopupGlass {
+    fn start_with_options(hwnd: isize, dark: bool, round: bool, shaped: Option<rf_platform::glass::GlassOptions>) -> PopupGlass {
         let mut g = PopupGlass { hwnd, machine: Machine::default(), started: Instant::now(), attached: false, gave_up: false };
         // (no glass at all on a Windows without materials: the popup is its plain fill, see `dock/backdrop.rs`)
         if hwnd == 0 || !crate::settings::materials_available() {
@@ -172,23 +172,23 @@ impl PopupGlass {
         if shaped.is_some() {
             // (the window cuts its own corners)
         } else if round {
-            rf_win::window::set_round_corners(hwnd);
+            rf_platform::window::set_round_corners(hwnd);
         } else {
-            rf_win::window::set_small_corners(hwnd);
+            rf_platform::window::set_small_corners(hwnd);
         }
         let attached = match shaped {
-            Some(opts) => rf_win::glass::attach_with(hwnd, opts),
-            None => rf_win::glass::attach(hwnd, dark),
+            Some(opts) => rf_platform::glass::attach_with(hwnd, opts),
+            None => rf_platform::glass::attach(hwnd, dark),
         };
         if attached {
             g.attached = true;
         } else {
-            let why = match rf_win::glass::state(hwnd) {
+            let why = match rf_platform::glass::state(hwnd) {
                 GlassState::Failed(why) => why,
                 _ => "the glass engine did not accept the window".into(),
             };
             log::warn!("popup glass: {why}");
-            rf_win::glass::detach(hwnd); // clears the failed entry
+            rf_platform::glass::detach(hwnd); // clears the failed entry
             g.machine.attach_failed(0);
             g.gave_up = true;
         }
@@ -217,7 +217,7 @@ impl PopupGlass {
         }
         let before = self.machine.fallback();
         let now_ms = self.started.elapsed().as_millis() as u64;
-        match self.machine.observe(&rf_win::glass::state(self.hwnd), now_ms) {
+        match self.machine.observe(&rf_platform::glass::state(self.hwnd), now_ms) {
             Act::GiveUp(why) => {
                 log::warn!("popup glass: giving up, the popup keeps its own fill: {why}");
                 self.release_glass();
@@ -231,7 +231,7 @@ impl PopupGlass {
 
     fn release_glass(&mut self) {
         if self.attached {
-            rf_win::glass::detach(self.hwnd);
+            rf_platform::glass::detach(self.hwnd);
             self.attached = false;
         }
     }

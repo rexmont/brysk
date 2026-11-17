@@ -2,7 +2,7 @@
 //! `rustyfiles --desktop-preview` opens it; see [`args`] for the command line, including the scratch rule that lets it be tried
 //! without touching the user's real Desktop.
 //!
-//! The view draws the model of `rf_core::desktop` / `rf_win::desktop` (F1, F2): the user's wallpaper placed for the window, and the
+//! The view draws the model of `rf_core::desktop` / `rf_platform::desktop` (F1, F2): the user's wallpaper placed for the window, and the
 //! desktop's items on the layout store's grid. It is written to be hosted later by F4's per-monitor desktop windows: it takes its
 //! items, monitors and layout file from a [`source::Backend`] and draws one monitor's CANVAS, which F4 shows 1:1 in a window that is
 //! the monitor, and this preview shows scaled down when the window is smaller ([`geometry`]).
@@ -97,7 +97,7 @@ fn bind_sizes(cx: &mut App) {
     let Ok(context) = KeyBindingContextPredicate::parse("DesktopView") else { return };
     let context = std::rc::Rc::new(context);
     let wanted: Vec<(String, rf_core::desktop::grid::IconSize)> =
-        size_keys::plain_keys().into_iter().map(|(k, s)| (k.to_string(), s)).chain(size_keys::layout_keys(rf_win::keys::shifted_char)).collect();
+        size_keys::plain_keys().into_iter().map(|(k, s)| (k.to_string(), s)).chain(size_keys::layout_keys(rf_platform::keys::shifted_char)).collect();
     let mut bindings = Vec::new();
     for (keys, size) in wanted {
         match KeyBinding::load(&keys, size_action(size), Some(context.clone()), false, None, cx) {

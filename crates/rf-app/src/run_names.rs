@@ -8,7 +8,7 @@
 //!   program's path), and
 //! * a query that is the bare name of a program the Run box would start gets a row for that program ([`resolve`]): `dxdiag`,
 //!   `regedit`, `msconfig`, `services.msc`, `appwiz.cpl`. The name is looked for the way the address field's commands are
-//!   (`rf_win::runfind`: System32, the Windows folder, `PATH`, the app execution aliases, then `App Paths`), read-only.
+//!   (`rf_platform::runfind`: System32, the Windows folder, `PATH`, the app execution aliases, then `App Paths`), read-only.
 //!
 //! The query is only ever COMPARED with file names. Nothing typed is run as a command line: a query with a space, a path separator,
 //! a quote or any other sign is no name ([`is_bare_name`]), and the row starts the file that was found, with no arguments, when the
@@ -76,10 +76,10 @@ fn look(name: &str) -> Option<PathBuf> {
     let lower = name.to_ascii_lowercase();
     // a management console or a Control Panel applet by its full file name: only in the two system folders
     if lower.ends_with(".msc") || lower.ends_with(".cpl") {
-        return rf_win::runfind::search_dirs().into_iter().take(2).map(|d| d.join(name)).find(|p| rf_win::runfind::is_program_file(p));
+        return rf_platform::runfind::search_dirs().into_iter().take(2).map(|d| d.join(name)).find(|p| rf_platform::runfind::is_program_file(p));
     }
     let line = rf_core::addrcmd::CommandLine { program: name.to_string(), args: String::new() };
-    rf_win::runfind::find(&[line], Path::new("")).map(|f| f.exe)
+    rf_platform::runfind::find(&[line], Path::new("")).map(|f| f.exe)
 }
 
 #[cfg(test)]

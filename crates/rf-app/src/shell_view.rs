@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use rf_win::shellfolder::ShellChild;
+use rf_platform::shellfolder::ShellChild;
 
 use crate::t;
 
@@ -23,11 +23,11 @@ pub fn copy_items(cx: &mut gpui_kit::App, items: Vec<ShellChild>) {
         return;
     }
     let (tx, rx) = std::sync::mpsc::channel();
-    rf_win::sta::run(move |owner| {
-        if let Err(e) = rf_win::clipboard::clear(owner) {
+    rf_platform::sta::run(move |owner| {
+        if let Err(e) = rf_platform::clipboard::clear(owner) {
             log::warn!("clipboard: {e:#}");
         }
-        let _ = tx.send(rf_win::clipboard::sequence());
+        let _ = tx.send(rf_platform::clipboard::sequence());
     });
     let names = items.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
     let title = format!("{} {}", t!("Cihazdan kopyalanıyor:"), names);
@@ -37,12 +37,12 @@ pub fn copy_items(cx: &mut gpui_kit::App, items: Vec<ShellChild>) {
         if real.is_empty() {
             return Ok(false);
         }
-        if rf_win::clipboard::sequence() != seq {
+        if rf_platform::clipboard::sequence() != seq {
             return Ok(true);
         }
         let (tx, rx) = std::sync::mpsc::channel();
-        rf_win::sta::run(move |owner| {
-            let _ = tx.send(rf_win::clipboard::set_files(owner, &real, rf_win::fileops::Transfer::Copy));
+        rf_platform::sta::run(move |owner| {
+            let _ = tx.send(rf_platform::clipboard::set_files(owner, &real, rf_platform::fileops::Transfer::Copy));
         });
         rx.recv().map_err(|_| anyhow::anyhow!("clipboard"))??;
         Ok(true)
@@ -60,21 +60,21 @@ impl crate::folder_view::FolderView {
         sel.sort_unstable();
         let items: Vec<PathBuf> = if background { Vec::new() } else { sel.iter().filter_map(|&i| self.shell_items.get(i as usize)).map(|c| PathBuf::from(&c.parsing)).collect() };
         let (tx, rx) = futures::channel::oneshot::channel();
-        rf_win::sta::run(move |owner| {
+        rf_platform::sta::run(move |owner| {
             let mut pt = windows::Win32::Foundation::POINT::default();
             unsafe {
                 let _ = windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pt);
             }
             let r = match items.as_slice() {
-                [] => rf_win::ctxmenu::show_for_background(owner, std::path::Path::new(&parsing), (pt.x, pt.y), false, &[]),
-                [one] => rf_win::ctxmenu::show_for_one(owner, one, (pt.x, pt.y), false, &[]),
-                many => rf_win::ctxmenu::show_for_items(owner, many, (pt.x, pt.y), false, &[]),
+                [] => rf_platform::ctxmenu::show_for_background(owner, std::path::Path::new(&parsing), (pt.x, pt.y), false, &[]),
+                [one] => rf_platform::ctxmenu::show_for_one(owner, one, (pt.x, pt.y), false, &[]),
+                many => rf_platform::ctxmenu::show_for_items(owner, many, (pt.x, pt.y), false, &[]),
             };
             let _ = tx.send(r.map_err(|e| format!("{e:#}")));
         });
         cx.spawn(async move |this, cx| {
             match rx.await {
-                Ok(Ok(rf_win::ctxmenu::MenuOutcome::Dismissed)) | Err(_) => {}
+                Ok(Ok(rf_platform::ctxmenu::MenuOutcome::Dismissed)) | Err(_) => {}
                 Ok(Ok(_)) => {
                     // the device may have changed (a deletion, a new folder): list it again
                     let _ = this.update(cx, |v, cx| v.refresh(cx));
@@ -97,7 +97,7 @@ fn copy_to_temp(items: &[ShellChild]) -> anyhow::Result<Vec<PathBuf>> {
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let dest = crate::archive_view::temp_root().join(format!("cihaz-{stamp:x}"));
     std::fs::create_dir_all(&dest)?;
-    if !rf_win::shellfolder::copy_out(&virtual_items, &dest)? {
+    if !rf_platform::shellfolder::copy_out(&virtual_items, &dest)? {
         return Ok(Vec::new());
     }
     // what arrived: the shell names the copies, so the folder is read rather than guessed at
@@ -128,7 +128,7 @@ mod tests {
             .success();
         assert!(ok);
         let mut kids = Vec::new();
-        rf_win::shellfolder::list(&zip.to_string_lossy(), &|| false, &mut |b| kids.extend(b)).unwrap();
+        rf_platform::shellfolder::list(&zip.to_string_lossy(), &|| false, &mut |b| kids.extend(b)).unwrap();
         let on_disk = ShellChild { name: "x".into(), parsing: src.to_string_lossy().into(), is_folder: false, fs_path: Some(src.clone()), size: None, modified_ms: None };
         kids.push(on_disk);
         let real = copy_to_temp(&kids).unwrap();

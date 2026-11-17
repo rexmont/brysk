@@ -3,14 +3,18 @@
 //! CP437 fallback turns "Şirket" into "×irket". Decode like Explorer does instead.
 
 use std::borrow::Cow;
-use std::sync::OnceLock;
 
+#[cfg(windows)]
+use std::sync::OnceLock;
+#[cfg(windows)]
 use windows::Win32::Globalization::{GetLocaleInfoEx, LOCALE_IDEFAULTCODEPAGE, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar};
+#[cfg(windows)]
 use windows::core::PCWSTR;
 
 /// The user locale's traditional OEM code page (857 for tr-TR, 437 for en-US). Deliberately
 /// not `GetOEMCP()`: with "Use Unicode UTF-8 for worldwide language support" enabled that is
 /// 65001, but old archives were still written in the legacy page.
+#[cfg(windows)]
 pub fn legacy_oem_codepage() -> u32 {
     static CP: OnceLock<u32> = OnceLock::new();
     *CP.get_or_init(|| {
@@ -21,6 +25,15 @@ pub fn legacy_oem_codepage() -> u32 {
     })
 }
 
+/// On macOS there is no OEM code page: archives written by Windows still name their entries in
+/// one, and 437 is the `zip` crate's fallback anyway, so a non-UTF-8 name goes through CP437
+/// unless the caller knows better.
+#[cfg(not(windows))]
+pub fn legacy_oem_codepage() -> u32 {
+    437
+}
+
+#[cfg(windows)]
 fn decode_codepage(raw: &[u8], cp: u32) -> Option<String> {
     let n = unsafe { MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), raw, None) };
     if n <= 0 {
@@ -29,6 +42,33 @@ fn decode_codepage(raw: &[u8], cp: u32) -> Option<String> {
     let mut out = vec![0u16; n as usize];
     let n = unsafe { MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), raw, Some(&mut out)) };
     (n > 0).then(|| String::from_utf16_lossy(&out[..n as usize]))
+}
+
+/// iconv, which macOS ships with (CP437, CP857, CP1254 … all present).
+#[cfg(not(windows))]
+fn decode_codepage(raw: &[u8], cp: u32) -> Option<String> {
+    let to = c"UTF-8";
+    let from = std::ffi::CString::new(format!("CP{cp}")).ok()?;
+    unsafe {
+        let cd = libc::iconv_open(to.as_ptr(), from.as_ptr());
+        if cd as isize == -1 {
+            return None;
+        }
+        // UTF-8 never needs more than 3 bytes per input byte for these single-byte pages;
+        // 4 leaves room for a replacement character.
+        let mut out = vec![0u8; raw.len() * 4 + 4];
+        let mut in_ptr = raw.as_ptr() as *mut libc::c_char;
+        let mut in_left = raw.len();
+        let mut out_ptr = out.as_mut_ptr() as *mut libc::c_char;
+        let mut out_left = out.len();
+        let n = libc::iconv(cd, &mut in_ptr, &mut in_left, &mut out_ptr, &mut out_left);
+        libc::iconv_close(cd);
+        if n == usize::MAX {
+            return None;
+        }
+        out.truncate(out.len() - out_left);
+        String::from_utf8(out).ok()
+    }
 }
 
 /// Best name for an entry: valid UTF-8 bytes are UTF-8 (flagged or not); anything else is the

@@ -1,5 +1,5 @@
 //! The shell host's tray host, the app's side (shell plan increment D2; the design, the forwarding rule and the steps of a first
-//! careful try are in `docs/design/tray-host.md`, the host itself is `rf_win::trayhost`).
+//! careful try are in `docs/design/tray-host.md`, the host itself is `rf_platform::trayhost`).
 //!
 //! One setting, OFF by default: `shell_tray_host`. While it is on, and only inside the shell host process (this module is called from
 //! `dock::host` only), the host owns a window of class `Shell_TrayWnd` in front of Explorer's, keeps a model of the icons programs
@@ -24,14 +24,14 @@
 //! fills only from what programs send by themselves); `RUSTYFILES_TRAY_RECT_PACKING=axes|corners` (answer `Shell_NotifyIconGetRect`
 //! from the interface's rectangles with that packing; unset, Explorer answers those queries); `RUSTYFILES_TRAY_VISIBLE=1` (make the
 //! window visible as a click-through, almost transparent rectangle); `RUSTYFILES_TRAY_ANSWER_AS_EXPLORER=1` (a comparison run: a
-//! program's first add that Explorer refuses is answered no, as until 0.8.0; see `rf_win::trayhost::core::CoreConfig`).
+//! program's first add that Explorer refuses is answered no, as until 0.8.0; see `rf_platform::trayhost::core::CoreConfig`).
 
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{RecvTimeoutError, Sender};
 use gpui_kit::*;
-use rf_win::trayhost::{Counts, StallEvent, StallWatch, TrayHost, TrayHostConfig, TrayView};
-use rf_win::tray_wire::rect::RectPacking;
+use rf_platform::trayhost::{Counts, StallEvent, StallWatch, TrayHost, TrayHostConfig, TrayView};
+use rf_platform::tray_wire::rect::RectPacking;
 
 use crate::dock::tray_feed::{self, Attachment};
 use crate::settings::Settings;
@@ -230,8 +230,8 @@ fn spawn_reporter(view: TrayView, quit: crossbeam_channel::Receiver<()>, log_onl
 #[cfg(test)]
 mod tests {
     use super::{Action, REPORT_EVERY, Settings, config_from, decide, log_only_from, no_start_broadcast_from, rect_packing_from, report_due, status_line, visible_from, wanted};
-    use rf_win::trayhost::Counts;
-    use rf_win::tray_wire::rect::RectPacking;
+    use rf_platform::trayhost::Counts;
+    use rf_platform::tray_wire::rect::RectPacking;
 
     #[test]
     fn the_tray_host_comes_with_the_dock_switch_unless_its_own_value_holds_it_off() {
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn the_app_side_calls_no_window_function_of_its_own() {
-        // the window, the messages and the broadcast are the host's (rf_win::trayhost::win); this file only starts and stops it
+        // the window, the messages and the broadcast are the host's (rf_platform::trayhost::win); this file only starts and stops it
         let code = code();
         for banned in ["SetWindowsHookEx", "SendInput", "RegisterHotKey", "SetWindowPos", "ShowWindow", "PostMessage", "SendMessage", "CreateWindow", "windows::", "Shell_TrayWnd"] {
             assert!(!code.contains(banned), "{banned}");

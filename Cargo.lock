@@ -3167,6 +3167,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99b18b06f5026b3d312488eacfdddbe78f82b4bf32bb2d2bc3186e31e552b797"
 
 [[package]]
+name = "gpui-windows-shim"
+version = "0.8.8"
+
+[[package]]
 name = "gpustress"
 version = "0.8.8"
 dependencies = [
@@ -6154,7 +6158,9 @@ dependencies = [
  "futures",
  "gpui-kit",
  "gpui-pre-windows",
+ "gpui-windows-shim",
  "image",
+ "libc",
  "log",
  "mail-parser",
  "parking_lot",
@@ -6162,8 +6168,8 @@ dependencies = [
  "rf-archive",
  "rf-core",
  "rf-dialog",
+ "rf-platform",
  "rf-player",
- "rf-win",
  "rustdecoder",
  "serde",
  "serde_json",
@@ -6192,6 +6198,7 @@ dependencies = [
  "hadris-iso",
  "hadris-storage",
  "hadris-udf",
+ "libc",
  "lzma-rust2 0.25.0",
  "rarchive",
  "sevenz-rust2",
@@ -6227,6 +6234,50 @@ dependencies = [
  "serde_json",
  "windows 0.62.2",
  "windows-core 0.62.2",
+]
+
+[[package]]
+name = "rf-mac"
+version = "0.8.8"
+dependencies = [
+ "anyhow",
+ "block2 0.6.2",
+ "chrono",
+ "core-foundation 0.10.1",
+ "core-graphics 0.24.0",
+ "crc32fast",
+ "crossbeam-channel",
+ "dirs 6.0.0",
+ "encoding_rs",
+ "image",
+ "kamadak-exif",
+ "libc",
+ "log",
+ "md-5",
+ "notify",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "parking_lot",
+ "psd",
+ "rayon",
+ "resvg 0.46.0",
+ "rf-core",
+ "roxmltree 0.20.0",
+ "serde",
+ "serde_json",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "zip 9.3.0",
+]
+
+[[package]]
+name = "rf-platform"
+version = "0.8.8"
+dependencies = [
+ "rf-mac",
+ "rf-win",
 ]
 
 [[package]]

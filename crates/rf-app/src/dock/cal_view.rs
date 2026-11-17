@@ -9,7 +9,7 @@
 //!
 //! THE KEYBOARD. The arrow keys move the chosen day (left and right a day, up and down a week), Page Up and Page Down a month, Home
 //! goes to today, Escape closes. Tab visits the two month buttons, the month's name and the settings link. The arithmetic is
-//! `rf_win::dock::calendar` (pure and tested); [`CalModel`] below holds the chosen day and today.
+//! `rf_platform::dock::calendar` (pure and tested); [`CalModel`] below holds the chosen day and today.
 //!
 //! WHAT RUNS. The seconds tick only while the panel is open: one task, ended when the panel is hidden, that wakes at each second.
 //! Closed, the panel costs nothing (its window is made at the first click and kept hidden after that).
@@ -23,9 +23,9 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_win::dock::calendar::{self, Date, Grid, Key, Lang};
-use rf_win::dock::clock;
-use rf_win::dock::panel::{self as geo, CloseCause};
+use rf_platform::dock::calendar::{self, Date, Grid, Key, Lang};
+use rf_platform::dock::clock;
+use rf_platform::dock::panel::{self as geo, CloseCause};
 
 use super::backdrop::IslandGlass;
 use super::panel_parts::{self, Look};
@@ -470,7 +470,7 @@ impl Render for CalView {
 mod tests {
     // (not `use super::*`: that would bring GPUI's own `test` attribute in and take the place of the built-in one)
     use super::{CalModel, height, ms_to_next_second};
-    use rf_win::dock::calendar::{Date, Key};
+    use rf_platform::dock::calendar::{Date, Key};
 
     fn d(y: i32, m: u8, day: u8) -> Date {
         Date::new(y, m, day).unwrap()

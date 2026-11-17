@@ -1,6 +1,6 @@
 //! The desktop's commands that are not file operations proper: the system icons (open, Properties, Empty Recycle Bin), shortcuts,
 //! Open with, the arrangement switches (auto arrange, show desktop icons), and the shortcuts to Windows' own pages. Like
-//! `operations.rs`, the ENGINES are the app's own (`rf_win::recycle`, `rf_win::shortcut`, `crate::undo`, `status_center`); this file
+//! `operations.rs`, the ENGINES are the app's own (`rf_platform::recycle`, `rf_platform::shortcut`, `crate::undo`, `status_center`); this file
 //! decides what to hand them and what the view does afterwards.
 //!
 //! The only rule in this file that is not a call is the Recycle Bin's job ([`empty_bin_job`]): the emptying and then, whatever came
@@ -33,8 +33,8 @@ pub(super) struct SystemBin;
 
 impl BinOps for SystemBin {
     fn empty(&self) -> Result<(), String> {
-        rf_win::shell::ensure_com();
-        rf_win::recycle::empty(true).map_err(|e| format!("{e:#}"))
+        rf_platform::shell::ensure_com();
+        rf_platform::recycle::empty(true).map_err(|e| format!("{e:#}"))
     }
 }
 
@@ -107,8 +107,8 @@ impl DesktopView {
         let (tx, rx) = oneshot::channel();
         let asked = name.clone();
         let t0 = std::time::Instant::now();
-        rf_win::sta::run(move |_| {
-            let _ = tx.send(rf_win::shellfolder::browsable(&asked));
+        rf_platform::sta::run(move |_| {
+            let _ = tx.send(rf_platform::shellfolder::browsable(&asked));
         });
         cx.spawn(async move |_, cx| {
             let place = rx.await.ok().flatten();
@@ -123,8 +123,8 @@ impl DesktopView {
                     };
                     super::open::open_location(Some(&name), loc, cx);
                 }
-                None => rf_win::sta::run(move |_| {
-                    if let Err(e) = rf_win::shellfolder::open(&name) {
+                None => rf_platform::sta::run(move |_| {
+                    if let Err(e) = rf_platform::shellfolder::open(&name) {
                         log::warn!("desktop: open {name}: {e:#}");
                     }
                 }),
@@ -141,8 +141,8 @@ impl DesktopView {
         if k == VirtualKind::UserFiles {
             // (the profile folder is asked of the shell, which is not done on this thread)
             let (tx, rx) = oneshot::channel();
-            rf_win::sta::run(move |_| {
-                let _ = tx.send(rf_win::desktop::items::profile_dir());
+            rf_platform::sta::run(move |_| {
+                let _ = tx.send(rf_platform::desktop::items::profile_dir());
             });
             let images = self.images.clone();
             cx.spawn(async move |_, cx| {
@@ -155,8 +155,8 @@ impl DesktopView {
             return;
         }
         let name = k.parsing_name();
-        rf_win::sta::run(move |_| {
-            if let Err(e) = rf_win::shell::properties(Path::new(&name)) {
+        rf_platform::sta::run(move |_| {
+            if let Err(e) = rf_platform::shell::properties(Path::new(&name)) {
                 log::warn!("desktop: properties of {name}: {e:#}");
             }
         });
@@ -203,8 +203,8 @@ impl DesktopView {
         let at = self.take_menu_point(Via::Menu);
         // GetClipboardData can block on a slow source app
         let (tx, rx) = oneshot::channel();
-        rf_win::sta::run(move |owner| {
-            let _ = tx.send(rf_win::clipboard::get_files(owner).map_err(|e| log::warn!("desktop paste shortcut: {e:#}")).ok().flatten());
+        rf_platform::sta::run(move |owner| {
+            let _ = tx.send(rf_platform::clipboard::get_files(owner).map_err(|e| log::warn!("desktop paste shortcut: {e:#}")).ok().flatten());
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Some((paths, _))) = rx.await {
@@ -218,13 +218,13 @@ impl DesktopView {
         let (tx, rx) = oneshot::channel::<Vec<PathBuf>>();
         let word = t!("Kısayol").to_string();
         let spawned = std::thread::Builder::new().name("rf-op-shortcuts".into()).spawn(move || {
-            rf_win::shell::ensure_com();
+            rf_platform::shell::ensure_com();
             let mut made = Vec::new();
             for target in targets {
                 let Some(name) = target.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
                 let file = links::unique(&links::base_name(&name, style, &word), |n| dir.join(n).exists());
                 let link = dir.join(file);
-                match rf_win::shortcut::create(&link, &target) {
+                match rf_platform::shortcut::create(&link, &target) {
                     Ok(()) => made.push(link),
                     Err(e) => log::warn!("desktop shortcut {link:?}: {e:#}"),
                 }
@@ -255,8 +255,8 @@ impl DesktopView {
             return;
         }
         if let Some(path) = self.path_of(id) {
-            rf_win::sta::run(move |_| {
-                if let Err(e) = rf_win::shell::open_with(&path) {
+            rf_platform::sta::run(move |_| {
+                if let Err(e) = rf_platform::shell::open_with(&path) {
                     log::warn!("desktop open with: {e:#}");
                 }
             });
@@ -299,7 +299,7 @@ impl DesktopView {
     pub(super) fn open_terminal_here(&mut self) {
         if let Some(dir) = self.backend.as_ref().and_then(|b| b.target_dir()) {
             let spawned = std::thread::Builder::new().name("rf-op-terminal".into()).spawn(move || {
-                if let Err(e) = rf_win::shell::open_terminal(&dir) {
+                if let Err(e) = rf_platform::shell::open_terminal(&dir) {
                     log::warn!("desktop: terminal: {e:#}");
                 }
             });
@@ -311,8 +311,8 @@ impl DesktopView {
 
     /// A page of Windows' Settings app (`ms-settings:...`).
     pub(super) fn open_settings_page(&mut self, uri: &'static str) {
-        rf_win::sta::run(move |_| {
-            if let Err(e) = rf_win::shell::open(Path::new(uri)) {
+        rf_platform::sta::run(move |_| {
+            if let Err(e) = rf_platform::shell::open(Path::new(uri)) {
                 log::warn!("desktop: {uri}: {e:#}");
             }
         });

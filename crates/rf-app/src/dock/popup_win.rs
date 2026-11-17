@@ -1,10 +1,10 @@
 //! The window both of the dock's icon pop-ups (the app menu and the hover preview) are shown in: a transparent GPUI pop-up made hidden,
-//! kept after its first use and shown, moved and hidden by `rf_win::dock::panel::{show_at, hide}`. It is made WHEN FIRST NEEDED (a
+//! kept after its first use and shown, moved and hidden by `rf_platform::dock::panel::{show_at, hide}`. It is made WHEN FIRST NEEDED (a
 //! right click, a pointer that has rested on an icon), never at the dock's start: a hidden window costs memory and a swap chain for
 //! nothing until someone asks for it.
 
 use gpui_kit::*;
-use rf_win::dock::layout::Rect;
+use rf_platform::dock::layout::Rect;
 
 /// Makes a hidden pop-up window of `initial` logical px near `near` (device px; the real place is set by `show_at`). `on_close` is
 /// what Alt+F4 does in it: the window is never destroyed by the user (a destroyed window is never opened again), only put away.

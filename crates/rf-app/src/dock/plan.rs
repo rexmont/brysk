@@ -1,15 +1,15 @@
 //! The dock's arithmetic and decisions that need neither a window nor the system: how wide the side islands are, where the items of
 //! the middle island lie and what its window shows while the icons are magnified, which weather picture a code gets, how soon the
 //! weather is asked again. (The three rectangles and their windows, the magnification, the pointer region, the click decision and the
-//! full-screen decision are in `rf_win::dock`.)
+//! full-screen decision are in `rf_platform::dock`.)
 
 use std::time::Duration;
 
-use rf_win::dock::clock::ClockLines;
-use rf_win::dock::hover::Slot;
-use rf_win::dock::layout::{ICON_REST, MIDDLE_HEIGHT, Rect, SEPARATOR_WIDTH};
-use rf_win::dock::magnify::{self, Frame};
-use rf_win::weather::Condition;
+use rf_platform::dock::clock::ClockLines;
+use rf_platform::dock::hover::Slot;
+use rf_platform::dock::layout::{ICON_REST, MIDDLE_HEIGHT, Rect, SEPARATOR_WIDTH};
+use rf_platform::dock::magnify::{self, Frame};
+use rf_platform::weather::Condition;
 
 // ---- the left island: [Windows logo] [search field] [weather]
 
@@ -71,13 +71,13 @@ pub fn left_width(weather_text: Option<&str>) -> f32 {
 
 /// [`left_width`] with the condition line under the temperature.
 pub fn left_width_lines(temp: Option<&str>, condition: Option<&str>) -> f32 {
-    left_width_with(shown_search(rf_win::dock::monitors::Search::Field), temp, condition)
+    left_width_with(shown_search(rf_platform::dock::monitors::Search::Field), temp, condition)
 }
 
 /// The left island's width for a search shown as `search` (none: hidden): the padding, the logo, the search with its gap, the
 /// weather with its gap, the padding.
-pub fn left_width_with(search: Option<rf_win::dock::monitors::Search>, temp: Option<&str>, condition: Option<&str>) -> f32 {
-    use rf_win::dock::monitors::Search;
+pub fn left_width_with(search: Option<rf_platform::dock::monitors::Search>, temp: Option<&str>, condition: Option<&str>) -> f32 {
+    use rf_platform::dock::monitors::Search;
     let search_part = match search {
         Some(Search::Field) => LOGO_GAP + SEARCH_W,
         Some(Search::Button) => LOGO_GAP + SEARCH_BUTTON,
@@ -95,7 +95,7 @@ pub fn set_search_mode(mode: crate::settings::DockSearch) {
 }
 
 /// How the search shows on a monitor whose room allows `room` (a field, or a button on a narrow secondary monitor), with the setting.
-pub fn shown_search(room: rf_win::dock::monitors::Search) -> Option<rf_win::dock::monitors::Search> {
+pub fn shown_search(room: rf_platform::dock::monitors::Search) -> Option<rf_platform::dock::monitors::Search> {
     search_for(
         match SEARCH_MODE.load(std::sync::atomic::Ordering::Relaxed) {
             1 => crate::settings::DockSearch::Icon,
@@ -107,9 +107,9 @@ pub fn shown_search(room: rf_win::dock::monitors::Search) -> Option<rf_win::dock
 }
 
 /// [`shown_search`] as a rule: the setting can only make the search smaller than the monitor's room allows.
-pub fn search_for(mode: crate::settings::DockSearch, room: rf_win::dock::monitors::Search) -> Option<rf_win::dock::monitors::Search> {
+pub fn search_for(mode: crate::settings::DockSearch, room: rf_platform::dock::monitors::Search) -> Option<rf_platform::dock::monitors::Search> {
     use crate::settings::DockSearch;
-    use rf_win::dock::monitors::Search;
+    use rf_platform::dock::monitors::Search;
     match mode {
         DockSearch::Field => Some(room),
         DockSearch::Icon => Some(Search::Button),
@@ -122,7 +122,7 @@ pub const SEARCH_BUTTON: f32 = LOGO;
 
 /// A secondary monitor's left island: the logo and the search (a field, or a button on a narrow monitor), no weather (the weather is
 /// the primary monitor's). Dock units.
-pub fn left_width_secondary(search: rf_win::dock::monitors::Search) -> f32 {
+pub fn left_width_secondary(search: rf_platform::dock::monitors::Search) -> f32 {
     left_width_with(shown_search(search), None, None)
 }
 
@@ -132,7 +132,7 @@ pub fn left_width_secondary(search: rf_win::dock::monitors::Search) -> f32 {
 /// right island's width, the middle island's width and the left island's width WITH the line. When the answer is no (a narrow display,
 /// a big dock size, many icons) the weather is the picture and the temperature, as before, and the icons keep their size.
 pub fn condition_line_fits(display_units: f32, right_units: f32, middle_units: f32, left_units_with_line: f32) -> bool {
-    use rf_win::dock::layout::{MARGIN_SIDE, MIN_GAP};
+    use rf_platform::dock::layout::{MARGIN_SIDE, MIN_GAP};
     let others = 2.0 * MARGIN_SIDE + 2.0 * MIN_GAP + right_units + left_units_with_line;
     display_units - others >= middle_units.max(MIN_MIDDLE_ROOM)
 }
@@ -141,8 +141,8 @@ pub fn condition_line_fits(display_units: f32, right_units: f32, middle_units: f
 /// (Windows has no position yet after a wake or a change of network) is common and passes, so the picture does not flicker away; a
 /// typed city keeps the old behaviour (a failed request shows nothing). `since_good` is how long ago the shown reading was fetched
 /// (`None`: nothing is shown). A refusal or an unknown place is not a miss and always clears it.
-pub fn keeps_last_reading(location: bool, outcome: &rf_win::weather::Outcome, since_good: Option<Duration>) -> bool {
-    location && matches!(outcome, rf_win::weather::Outcome::Failed) && since_good.is_some_and(|d| d < STALE_AFTER)
+pub fn keeps_last_reading(location: bool, outcome: &rf_platform::weather::Outcome, since_good: Option<Duration>) -> bool {
+    location && matches!(outcome, rf_platform::weather::Outcome::Failed) && since_good.is_some_and(|d| d < STALE_AFTER)
 }
 
 // ---- the right island: [network] [volume] | [time / date] [bell]
@@ -172,7 +172,7 @@ pub fn right_width(lines: &ClockLines) -> f32 {
     right_width_for(lines, 2)
 }
 
-/// The right island's width with `buttons` of its own buttons before the clock (`rf_win::dock::status_order::shown`): the buttons with
+/// The right island's width with `buttons` of its own buttons before the clock (`rf_platform::dock::status_order::shown`): the buttons with
 /// a gap between two of them and the separator between its gaps after them; with none there is no separator either, and the clock
 /// starts at the padding (or right after the tray strip, which ends with a separator of its own).
 pub fn right_width_for(lines: &ClockLines, buttons: usize) -> f32 {
@@ -194,12 +194,12 @@ pub fn right_width_secondary(clock_width: f32, bell: bool) -> f32 {
 
 /// The middle island's width at rest for this many icons and separators (`rf_win` has the formula; icons at rest are 44 px).
 pub fn middle_width_at_rest(icons: usize, separators: usize) -> f32 {
-    rf_win::dock::layout::middle_width(&vec![ICON_REST; icons], separators)
+    rf_platform::dock::layout::middle_width(&vec![ICON_REST; icons], separators)
 }
 
 /// Where each slot lies at rest (`(x, width)` in logical px from the island's left edge, padding included) in an island that is
 /// `width` wide: 44 px icons with 10 px gaps, or, on a screen too narrow for that, the gaps and then the icons give way. This is
-/// `rf_win::dock::hover::slot_spans` whenever the island has its full width.
+/// `rf_platform::dock::hover::slot_spans` whenever the island has its full width.
 pub fn rest_layout(slots: &[Slot], width: f32) -> Vec<(f32, f32)> {
     let icons = slots.iter().filter(|s| **s == Slot::Icon).count();
     magnify::fit(slots, &vec![ICON_REST; icons], width)
@@ -268,7 +268,7 @@ pub enum WeatherPicture {
 }
 
 pub fn weather_picture(code: u8, is_day: bool) -> WeatherPicture {
-    match rf_win::weather::condition(code) {
+    match rf_platform::weather::condition(code) {
         Condition::Clear | Condition::MainlyClear => {
             if is_day {
                 WeatherPicture::Sun
@@ -302,10 +302,10 @@ const UNKNOWN_PLACE_RETRY: Duration = Duration::from_secs(60 * 60);
 
 /// When the weather is asked again. `failures` counts the failures in a row up to and including this one (0 after a success).
 /// Success: every 30 minutes. Failure: 5 minutes, doubling with each failure in a row up to 30 minutes. An unknown place: an hour.
-pub fn next_weather_refresh(outcome: &rf_win::weather::Outcome, failures: u32) -> Duration {
-    use rf_win::weather::Outcome;
+pub fn next_weather_refresh(outcome: &rf_platform::weather::Outcome, failures: u32) -> Duration {
+    use rf_platform::weather::Outcome;
     match outcome {
-        Outcome::Weather(_) => rf_win::weather::REFRESH_EVERY,
+        Outcome::Weather(_) => rf_platform::weather::REFRESH_EVERY,
         Outcome::UnknownPlace => UNKNOWN_PLACE_RETRY,
         Outcome::Failed => RETRY_FIRST.saturating_mul(1u32 << failures.saturating_sub(1).min(4)).min(RETRY_LONGEST),
     }
@@ -314,16 +314,16 @@ pub fn next_weather_refresh(outcome: &rf_win::weather::Outcome, failures: u32) -
 // ---- icons
 
 /// The key an icon is cached under (`IconSource` is not hashable).
-pub fn icon_key(src: &rf_win::dock::IconSource) -> String {
+pub fn icon_key(src: &rf_platform::dock::IconSource) -> String {
     format!("{src:?}")
 }
 
 /// The sizes the pictures of an icon are kept at, smallest first, for a dock unit `scale` (the monitor's scale times the dock's size, so
 /// a small dock on a 100 % monitor needs fewer pixels than a big one) and the magnification's `peak` factor (1 when it is off): the
 /// rest size, the peak size (44 dock units grown by the peak, in device px: the most an icon is ever drawn at, so every picture is
-/// only ever scaled DOWN) and the steps between (`rf_win::dock::iconpick::level_sizes`).
+/// only ever scaled DOWN) and the steps between (`rf_platform::dock::iconpick::level_sizes`).
 pub fn icon_sizes(scale: f32, peak: f32) -> Vec<u32> {
-    rf_win::dock::iconpick::level_sizes(rf_win::dock::iconpick::rest_px(scale), rf_win::dock::iconpick::peak_px(scale, peak))
+    rf_platform::dock::iconpick::level_sizes(rf_platform::dock::iconpick::rest_px(scale), rf_platform::dock::iconpick::peak_px(scale, peak))
 }
 
 /// Logical px of the small picture the hover preview's title row (16) and the app menu's name row (18) draw an app's icon at: the
@@ -335,7 +335,7 @@ pub const SMALL_ICON: f32 = 20.0;
 /// not follow the dock's size). The smallest kept size is the rest size, 37 dock units or more, so the small one is always below it.
 pub fn icon_sizes_with_small(unit: f32, peak: f32, monitor_scale: f32) -> Vec<u32> {
     let mut sizes = icon_sizes(unit, peak);
-    let small = ((SMALL_ICON * if monitor_scale.is_finite() && monitor_scale > 0.0 { monitor_scale } else { 1.0 }).round() as u32).max(rf_win::dock::iconpick::MIN_PX);
+    let small = ((SMALL_ICON * if monitor_scale.is_finite() && monitor_scale > 0.0 { monitor_scale } else { 1.0 }).round() as u32).max(rf_platform::dock::iconpick::MIN_PX);
     if sizes.first().is_some_and(|&rest| small < rest) {
         sizes.insert(0, small);
     }
@@ -350,11 +350,11 @@ pub fn initial(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_win::dock::hover::slot_spans;
+    use rf_platform::dock::hover::slot_spans;
 
     #[test]
     fn a_secondary_islands_are_the_primarys_without_what_stays_on_the_primary() {
-        use rf_win::dock::monitors::Search;
+        use rf_platform::dock::monitors::Search;
         // the left one: logo and field, no weather (the primary's is that plus the weather)
         assert_eq!(left_width_secondary(Search::Field), left_width(None), "no weather: the same as the primary's without a weather reading");
         // the field shrunk to a button: SEARCH_W - SEARCH_BUTTON less, and still room for the logo and the button
@@ -371,7 +371,7 @@ mod tests {
 
     /// The most device px an icon is drawn at with the strongest magnification, at this dock unit.
     fn icon_request_px(scale: f32) -> u32 {
-        rf_win::dock::iconpick::peak_px(scale, magnify::MAX_PEAK)
+        rf_platform::dock::iconpick::peak_px(scale, magnify::MAX_PEAK)
     }
 
     fn slots(n_icons: usize, sep_at: Option<usize>) -> Vec<Slot> {
@@ -414,8 +414,8 @@ mod tests {
     /// before it keep their proportions: the weather never reaches back into the field.
     #[test]
     fn at_every_dock_size_the_block_clears_the_search_field() {
-        use rf_win::dock::layout::{self, Rect, Widths};
-        use rf_win::dock::size::{self, DockSize};
+        use rf_platform::dock::layout::{self, Rect, Widths};
+        use rf_platform::dock::size::{self, DockSize};
         let units = left_width_lines(Some("-12°"), Some("Dondurucu yağmur"));
         let field_end = SIDE_PAD + LOGO + LOGO_GAP + SEARCH_W;
         let block = weather_width_lines("-12°", Some("Dondurucu yağmur"));
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn a_missed_refresh_keeps_the_reading_only_for_the_position_and_only_for_a_while() {
-        use rf_win::weather::Outcome;
+        use rf_platform::weather::Outcome;
         let fresh = Some(Duration::from_secs(40 * 60));
         let stale = Some(STALE_AFTER);
         // the position: a miss keeps what is shown ...
@@ -533,7 +533,7 @@ mod tests {
         let w = middle_width_at_rest(2, 1);
         let spans = rest_layout(&s, w);
         let (x, ww) = *spans.last().unwrap();
-        assert!(x + ww <= w - rf_win::dock::layout::DOCK_PADDING + 0.01);
+        assert!(x + ww <= w - rf_platform::dock::layout::DOCK_PADDING + 0.01);
     }
 
     #[test]
@@ -548,7 +548,7 @@ mod tests {
         let s = slots(8, None);
         let spans = rest_layout(&s, 300.0);
         let (last_x, last_w) = *spans.last().unwrap();
-        assert!(last_x + last_w <= 300.0 - rf_win::dock::layout::DOCK_PADDING + 0.01, "every icon is inside the window: {spans:?}");
+        assert!(last_x + last_w <= 300.0 - rf_platform::dock::layout::DOCK_PADDING + 0.01, "every icon is inside the window: {spans:?}");
     }
 
     /// One picture of the dock: the glass is the rest island plus what the magnification adds on both sides, its height is the
@@ -618,7 +618,7 @@ mod tests {
 
     #[test]
     fn the_weather_is_asked_again_by_how_the_last_ask_ended() {
-        use rf_win::weather::{Observation, Outcome};
+        use rf_platform::weather::{Observation, Outcome};
         let ok = Outcome::Weather(Observation { temp_c: 1.0, code: 0, is_day: true });
         assert_eq!(next_weather_refresh(&ok, 0), Duration::from_secs(30 * 60));
         // a failure: sooner, then slower and slower, never beyond the normal rate
@@ -661,7 +661,7 @@ mod tests {
 
     #[test]
     fn the_picture_drawn_is_one_to_one_at_rest_and_at_the_peak_and_never_reduced_much_between() {
-        use rf_win::dock::iconpick::{MAX_STEP, pick_level};
+        use rf_platform::dock::iconpick::{MAX_STEP, pick_level};
         // The layout (rest widths, the magnification's frames) decides the width an icon is drawn at; the kept sizes are chosen from the
         // unit and the peak alone. This ties the two together, for every dock size x monitor scale a user can have.
         let slots: Vec<Slot> = vec![Slot::Icon, Slot::Icon, Slot::Separator, Slot::Icon, Slot::Icon, Slot::Icon];
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn icon_keys_tell_sources_apart() {
-        use rf_win::dock::IconSource;
+        use rf_platform::dock::IconSource;
         let a = icon_key(&IconSource::File("C:\\a.exe".into()));
         let b = icon_key(&IconSource::File("C:\\b.exe".into()));
         let c = icon_key(&IconSource::Packaged("a!b".into()));
@@ -736,7 +736,7 @@ mod tests {
 mod search_setting_tests {
     use super::*;
     use crate::settings::DockSearch;
-    use rf_win::dock::monitors::Search;
+    use rf_platform::dock::monitors::Search;
 
     /// The search setting only ever makes the search smaller than the monitor allows, and the island is as wide as what it shows.
     #[test]

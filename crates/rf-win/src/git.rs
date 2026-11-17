@@ -4,7 +4,20 @@
 //! (ignore rules, submodules, sparse checkout, ...). Blocking: call off the UI thread.
 
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
+
+/// No `CREATE_NO_WINDOW` on macOS: child processes have no console to hide.
+#[cfg(not(windows))]
+trait CreationFlags {
+    fn creation_flags(&mut self, _flags: u32) -> &mut Self;
+}
+#[cfg(not(windows))]
+impl CreationFlags for std::process::Command {
+    fn creation_flags(&mut self, _flags: u32) -> &mut Self {
+        self
+    }
+}
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 

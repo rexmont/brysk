@@ -25,10 +25,40 @@ pub fn trash_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".Trash"))
 }
 
-/// Moves `path` to the Trash (the home volume's; a file on another volume would need that
-/// volume's Trash, which needs the user's permission on macOS and comes with the file-ops
-/// milestone). A name already taken gets " (2)".
+/// Moves `path` to the Trash with `NSFileManager`, so it lands in the right volume's Trash,
+/// keeps Finder's "Put Back" record when the system writes one, and needs no guessing about
+/// `/Volumes/*/.Trashes`. Falls back to a plain move into `~/.Trash` when AppKit refuses (an
+/// unusual volume, no permission).
 pub fn trash(path: &Path) -> anyhow::Result<PathBuf> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{MainThreadMarker, NSString, NSURL};
+
+    let (tx, rx) = std::sync::mpsc::channel::<Option<PathBuf>>();
+    let p = path.to_path_buf();
+    dispatch2::DispatchQueue::main().exec_async(move || {
+        let out = if MainThreadMarker::new().is_some() {
+            let fm = objc2_foundation::NSFileManager::defaultManager();
+            let url = NSURL::fileURLWithPath(&NSString::from_str(&p.to_string_lossy()));
+            let mut resulting: Option<objc2::rc::Retained<NSURL>> = None;
+            match fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut resulting)) {
+                Ok(()) => resulting.and_then(|u| u.path()).map(|s| PathBuf::from(s.to_string())),
+                Err(e) => {
+                    log::warn!("trash: {e}");
+                    None
+                }
+            }
+        } else {
+            // The main queue was not running (a test or a headless tool): the caller falls back.
+            let _ = NSWorkspace::sharedWorkspace();
+            None
+        };
+        let _ = tx.send(out);
+    });
+    if let Ok(Some(dest)) = rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        return Ok(dest);
+    }
+
+    // Fallback: the home volume's Trash, with a name that is free.
     let dir = trash_dir().ok_or_else(|| anyhow::anyhow!("Çöp Kutusu bulunamadı"))?;
     std::fs::create_dir_all(&dir)?;
     let name = path.file_name().ok_or_else(|| anyhow::anyhow!("ad yok"))?.to_string_lossy().into_owned();

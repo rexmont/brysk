@@ -132,7 +132,14 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path) -> anyhow::Result<bool> {
     for src in sources {
         let name = src.file_name().ok_or_else(|| anyhow::anyhow!("ad yok"))?;
-        let dest = unique_name(dest_dir, &name.to_string_lossy(), "");
+        // Never overwrite: a name that exists is kept apart (the tracked path asks the user).
+        let dest = if dest_dir.join(name).exists() {
+            let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "item".into());
+            let ext = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+            unique_name(dest_dir, &stem, &ext)
+        } else {
+            dest_dir.join(name)
+        };
         match kind {
             Transfer::Copy => copy_recursive(src, &dest)?,
             Transfer::Move => {

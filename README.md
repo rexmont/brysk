@@ -1,3 +1,9 @@
+> **macOS fork.** This tree is being ported to macOS; only the macOS build is maintained
+> here. Build and run: `./scripts/build-macos.sh && open target/rustyfiles.app`, or
+> `cargo mac` for a quick run. The plan, the module map and the remaining work are in
+> [`docs/port-macos.md`](docs/port-macos.md). The Windows code is still in the tree as the
+> reference implementation (and is no longer a build target of this fork).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">
   <img alt="rustyfiles: a file manager for Windows that never freezes. Written in Rust." src="docs/readme/banner-light.svg" width="100%">

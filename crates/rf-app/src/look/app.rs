@@ -130,7 +130,13 @@ pub fn main() {
 
     // (DirectLook opens on the card: the fast start is for the file manager's own window only, see `fast_start::before_app`)
     crate::fast_start::before_app(false);
-    gpui_kit::application().with_assets(gpui_kit::assets::AllAssets).run(move |cx| {
+    let app = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    // macOS: a preview helper, not a program of its own — Accessory policy keeps it out of the
+    // Dock and the app switcher (GPUI otherwise starts every app as Regular). Its preview
+    // window still shows and takes focus.
+    #[cfg(target_os = "macos")]
+    let app = app.with_windowing(gpui_kit::WindowingRequest::Headless);
+    app.run(move |cx| {
         gpui_kit::init(cx);
         // rustyfiles'ın ayarları: yalnız dil, tema, tarih biçimi için okunur, asla yazılmaz
         cx.set_global(crate::settings::Settings::load());

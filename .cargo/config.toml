@@ -1,3 +1,9 @@
 # Fetch git dependencies with the git CLI, so its credentials work for private repositories.
 [net]
 git-fetch-with-cli = true
+
+[alias]
+# `cargo mac` runs the file manager; `cargo app` builds it. The .app bundle is
+# `./scripts/build-macos.sh`.
+mac = "run -p rf-app --bin rustyfiles --"
+app = "build -p rf-app --bin rustyfiles"

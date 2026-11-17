@@ -2,6 +2,19 @@
 resolver = "3"
 members = ["crates/rf-core", "crates/rf-win", "crates/rf-mac", "crates/rf-platform", "crates/rf-app", "crates/rf-archive", "crates/rf-dialog", "crates/rf-shellguard", "crates/rf-player", "crates/rustdecoder", "crates/gpui-windows-shim", "tools/gpustress"]
 
+# macOS fork: plain `cargo build` / `cargo test` must not try to compile the Windows-only
+# crates. They stay in the tree (rf-platform still names rf-win for cfg(windows) builds).
+default-members = [
+    "crates/rf-app",
+    "crates/rf-mac",
+    "crates/rf-platform",
+    "crates/rf-core",
+    "crates/rf-archive",
+    "crates/rf-player",
+    "crates/rustdecoder",
+    "crates/gpui-windows-shim",
+]
+
 [workspace.package]
 version = "0.8.8"
 edition = "2024"

@@ -1317,19 +1317,44 @@ pub mod vfiles {
 pub mod share {
     use std::path::PathBuf;
 
+    use objc2::AnyThread;
+    use objc2::rc::Retained;
+    use objc2_app_kit::{NSApplication, NSSharingServicePicker};
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{MainThreadMarker, NSArray, NSRect, NSRectEdge, NSSize, NSPoint, NSString, NSURL};
+
     /// The items a share sheet would offer.
     pub struct Prepared {
         pub paths: Vec<PathBuf>,
     }
 
-    /// macOS shares with `NSSharingServicePicker`; that arrives with the AppKit integration.
     pub fn prepare(paths: &[PathBuf]) -> anyhow::Result<Prepared> {
         Ok(Prepared { paths: paths.to_vec() })
     }
 
+    /// The macOS share sheet (`NSSharingServicePicker`), anchored to the key window.
     pub fn show(_hwnd: isize, items: Prepared, _title: &str) -> anyhow::Result<()> {
-        let _ = items.paths;
-        anyhow::bail!("the share sheet comes with the AppKit integration")
+        if items.paths.is_empty() {
+            return Ok(());
+        }
+        let paths = items.paths;
+        dispatch2::DispatchQueue::main().exec_async(move || {
+            let Some(mtm) = MainThreadMarker::new() else { return };
+            let urls: Vec<Retained<NSURL>> = paths.iter().map(|p| NSURL::fileURLWithPath(&NSString::from_str(&p.to_string_lossy()))).collect();
+            let urls = NSArray::from_retained_slice(&urls);
+            let array: &NSArray<AnyObject> = unsafe { &*(&*urls as *const NSArray<NSURL> as *const NSArray<AnyObject>) };
+            let picker = unsafe { NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), array) };
+            let app = NSApplication::sharedApplication(mtm);
+            let Some(window) = app.keyWindow() else { return };
+            let Some(view) = window.contentView() else { return };
+            unsafe {
+                picker.showRelativeToRect_ofView_preferredEdge(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)), &view, NSRectEdge::MaxY);
+            }
+            // The picker owns itself while its menu is up; leaking one small object per share
+            // keeps it alive for the whole interaction.
+            std::mem::forget(picker);
+        });
+        Ok(())
     }
 }
 

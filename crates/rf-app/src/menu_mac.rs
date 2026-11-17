@@ -37,7 +37,6 @@ pub fn install(cx: &mut App) {
         MenuItem::os_action("Paste", PasteItems, OsAction::Paste),
         MenuItem::action("Paste Into Folder", PasteIntoSelected),
         MenuItem::separator(),
-        MenuItem::action("Select All", SelectAll),
         MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
         MenuItem::separator(),
         MenuItem::action("Rename", RenameItem),
@@ -63,6 +62,5 @@ pub fn install(cx: &mut App) {
         MenuItem::separator(),
         MenuItem::action("Go to Folder…", FocusAddress),
     ]);
-    let window = Menu::new("Window").items([MenuItem::action("Minimize", ToggleCompactOverlay)]);
-    cx.set_menus([app, file, edit, view, go, window]);
+    cx.set_menus([app, file, edit, view, go]);
 }

@@ -121,6 +121,9 @@ fn glob_match(spec: &[char], name: &[char]) -> bool {
 
 struct Slot {
     root: PathBuf,
+    /// How many folder levels below the root are indexed (Applications: one; the home folder:
+    /// everything). A folder at the limit is listed, its inside is not.
+    depth: usize,
     state: AtomicU8,
     count: AtomicU64,
     mem: AtomicU64,
@@ -143,7 +146,36 @@ fn excluded() -> &'static RwLock<Vec<String>> {
     E.get_or_init(|| RwLock::new(default_excluded()))
 }
 
-const DEFAULT_EXCLUDED: [&str; 8] = [".git", "node_modules", ".Trash", ".cache", ".Spotlight-V100", ".fseventsd", "target", "Library"];
+const DEFAULT_EXCLUDED: [&str; 12] = [
+    ".git",
+    "node_modules",
+    ".Trash",
+    ".cache",
+    ".Spotlight-V100",
+    ".fseventsd",
+    "target",
+    "Library",
+    "DerivedData",
+    "Pods",
+    ".npm",
+    ".cargo",
+];
+
+/// Folders whose inside is never indexed: app/plugin bundles are shown as one entry, and a
+/// dot-folder (a tool's profile) is not something a name search should walk.
+fn skip_inside(name: &str) -> bool {
+    name.starts_with('.')
+        || name.ends_with(".app")
+        || name.ends_with(".framework")
+        || name.ends_with(".bundle")
+        || name.ends_with(".plugin")
+        || name.ends_with(".kext")
+        || name.ends_with(".appex")
+        || name.ends_with(".xpc")
+        || name.ends_with(".photoslibrary")
+        || name.ends_with(".fcpbundle")
+        || name.ends_with(".logicx")
+}
 
 pub fn default_excluded_names() -> &'static [&'static str] {
     &DEFAULT_EXCLUDED
@@ -176,8 +208,8 @@ fn walk(slot: &Slot) {
     };
     let mut index = slot.index.write().unwrap();
     *index = Index::new(&slot.root);
-    let mut stack = vec![(rd, 0u32)];
-    while let Some((rd, dir_id)) = stack.pop() {
+    let mut stack = vec![(rd, 0u32, 0usize)];
+    while let Some((rd, dir_id, depth)) = stack.pop() {
         if slot.cancel.load(Ordering::Relaxed) {
             return;
         }
@@ -189,12 +221,12 @@ fn walk(slot: &Slot) {
             index.add(dir_id, &name);
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let is_link = e.file_type().map(|t| t.is_symlink()).unwrap_or(false);
-            if is_dir && !is_link {
+            if is_dir && !is_link && !skip_inside(&name) && depth < slot.depth {
                 if let Ok(sub) = std::fs::read_dir(e.path()) {
                     let path: Arc<Path> = Arc::from(e.path());
                     index.dirs.push(path);
                     let id = (index.dirs.len() - 1) as u32;
-                    stack.push((sub, id));
+                    stack.push((sub, id, depth + 1));
                 }
             }
         }
@@ -245,8 +277,10 @@ pub fn start(roots: Vec<PathBuf>, _dir: PathBuf) {
         // FSEvents reports canonical paths (`/private/var` for `/var`); the index keeps the
         // same spelling so a changed parent matches the walk's folders.
         let root = std::fs::canonicalize(&root).unwrap_or(root);
+        let depth = if root == Path::new("/Applications") { 1 } else { usize::MAX };
         let slot = Arc::new(Slot {
             root: root.clone(),
+            depth,
             state: AtomicU8::new(State::Building as u8),
             count: AtomicU64::new(0),
             mem: AtomicU64::new(0),

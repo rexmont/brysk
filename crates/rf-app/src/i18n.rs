@@ -21,7 +21,7 @@ include!(concat!(env!("OUT_DIR"), "/locales.rs"));
 /// The language setting. `Other(i)` is `LOCALES[i]`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Lang {
-    /// Follow the Windows UI language.
+    /// Follow the system's first preferred language (not its region).
     #[default]
     System,
     Tr,
@@ -153,7 +153,7 @@ const NATIVE: &[(&str, &str)] = &[
     ("zh-Hant", "繁體中文"),
 ];
 
-/// Picks the translation for a Windows language tag ("de-AT", "zh-TW", "sr-Cyrl-RS").
+/// Picks the translation for a BCP-47 language tag ("de-AT", "zh-TW", "sr-Cyrl-RS", "en-TR").
 fn match_tag(tag: &str) -> Lang {
     let tag = tag.trim();
     let lower = tag.to_ascii_lowercase();
@@ -189,7 +189,21 @@ fn match_tag(tag: &str) -> Lang {
         .map_or(Lang::En, |i| Lang::Other(i as u16))
 }
 
+/// The language named by `LANG` (for a build without a system UI-language API).
+#[cfg(not(windows))]
+fn env_language_tag() -> Option<String> {
+    let raw = ["LC_ALL", "LC_MESSAGES", "LANG"].iter().find_map(|v| std::env::var(v).ok())?;
+    let tag = raw.split('.').next().unwrap_or(&raw).replace('_', "-");
+    (!tag.is_empty() && tag != "C" && tag != "POSIX").then_some(tag)
+}
+
 /// The system UI language's best translation (English when there is none).
+///
+/// On macOS this follows the ORDERED preferred-language list (`AppleLanguages`, e.g.
+/// `(en-TR, tr-TR)` means English), never the region (`AppleLocale`, e.g. `en_TR` for
+/// Türkiye: the region only orders dates, times and numbers). The first entry decides; a
+/// secondary language in the list is a fallback for translations, not a UI language, and an
+/// unsupported first entry gives English rather than Turkish.
 fn system_lang() -> Lang {
     #[cfg(windows)]
     {
@@ -201,17 +215,21 @@ fn system_lang() -> Lang {
         }
         return match_tag(&String::from_utf16_lossy(&buf[..n as usize - 1]));
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
         // The first of the user's preferred languages, as `AppleLanguages` lists them.
-        let out = std::process::Command::new("/usr/bin/defaults").args(["read", "-g", "AppleLocale"]).output().ok();
-        let tag = out
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .or_else(|| std::env::var("LANG").ok().map(|l| l.split('.').next().unwrap_or(&l).replace('_', "-")))
-            .unwrap_or_else(|| "en".into());
-        match_tag(&tag)
+        if let Some(tag) = rf_win::encoding::preferred_language_tag() {
+            return match_tag(&tag);
+        }
+        // No preference list (a bare command-line run): the environment, then English.
+        if let Some(tag) = env_language_tag() {
+            return match_tag(&tag);
+        }
+        return Lang::En;
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        env_language_tag().map_or(Lang::En, |tag| match_tag(&tag))
     }
 }
 
@@ -231,6 +249,7 @@ thread_local! {
 /// Sets the UI language (resolving `System`) and the number-format words in rf-core.
 pub fn set(lang: Lang) {
     let l = lang.resolve();
+    log::info!("ui language: {l:?} (setting: {lang:?})");
     let code = match l {
         Lang::Tr | Lang::System => 0,
         Lang::En => 1,
@@ -241,6 +260,11 @@ pub fn set(lang: Lang) {
     #[cfg(not(test))]
     ACTIVE.store(code, Ordering::Relaxed);
     rf_core::format::set_english(l != Lang::Tr);
+    // The platform layer names the known folders by their Turkish string-table key (it has no
+    // access to the setting); give it the translator so a tab title, a breadcrumb or the Home
+    // page cannot bypass the UI language.
+    #[cfg(target_os = "macos")]
+    rf_win::localized::set_label_translator(td);
 }
 
 /// The active (resolved) language.
@@ -418,6 +442,9 @@ mod tests {
         assert_eq!(Lang::from_code("xx-YY"), Lang::System);
         assert_eq!(match_tag("tr-TR"), Lang::Tr);
         assert_eq!(match_tag("en-US"), Lang::En);
+        // macOS lists "en-TR" for English in Türkiye: the region must not make it Turkish
+        assert_eq!(match_tag("en-TR"), Lang::En);
+        assert_eq!(match_tag("xx-YY"), Lang::En, "an unsupported first language falls back to English");
         for l in Lang::all() {
             assert_eq!(Lang::from_code(l.code()), l);
             assert!(!l.native_name().is_empty());

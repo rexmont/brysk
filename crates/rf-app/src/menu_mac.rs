@@ -5,64 +5,65 @@
 use gpui_kit::*;
 
 use crate::actions::*;
+use crate::t;
 
 /// Installs the menu bar (once, after the actions are bound).
 pub fn install(cx: &mut App) {
     let app = Menu::new("Brysk").items([
-        MenuItem::action("About Brysk", About),
+        MenuItem::action(t!("Brysk Hakkında"), About),
         MenuItem::separator(),
-        MenuItem::action("Settings…", GoSettings),
+        MenuItem::action(t!("Ayarlar…"), GoSettings),
         MenuItem::separator(),
         MenuItem::os_submenu("Services", SystemMenuType::Services),
         MenuItem::separator(),
-        MenuItem::action("Quit Brysk", Quit),
+        MenuItem::action(t!("Brysk'tan çık"), Quit),
     ]);
-    let file = Menu::new("File").items([
-        MenuItem::action("New Tab", NewTab),
-        MenuItem::action("New Window", NewWindow),
+    let file = Menu::new(t!("Dosya")).items([
+        MenuItem::action(t!("Yeni sekme"), NewTab),
+        MenuItem::action(t!("Yeni pencere"), NewWindow),
         MenuItem::separator(),
-        MenuItem::action("New Folder", NewFolder),
-        MenuItem::action("New Text File", NewTextFile),
+        MenuItem::action(t!("Yeni klasör"), NewFolder),
+        MenuItem::action(t!("Yeni metin belgesi"), NewTextFile),
         MenuItem::separator(),
-        MenuItem::action("Close Tab", CloseTab),
-        MenuItem::action("Close Other Tabs", CloseOtherTabs),
-        MenuItem::action("Reopen Closed Tab", ReopenClosedTab),
+        MenuItem::action(t!("Sekmeyi kapat"), CloseTab),
+        MenuItem::action(t!("Diğer sekmeleri kapat"), CloseOtherTabs),
+        MenuItem::action(t!("Kapatılan sekmeyi yeniden aç"), ReopenClosedTab),
         MenuItem::separator(),
-        MenuItem::action("Get Info", Properties),
+        MenuItem::action(t!("Özellikler"), Properties),
     ]);
-    let edit = Menu::new("Edit").items([
-        MenuItem::os_action("Undo", Undo, OsAction::Undo),
-        MenuItem::os_action("Redo", Redo, OsAction::Redo),
+    let edit = Menu::new(t!("Düzen")).items([
+        MenuItem::os_action(t!("Geri al"), Undo, OsAction::Undo),
+        MenuItem::os_action(t!("Yinele"), Redo, OsAction::Redo),
         MenuItem::separator(),
-        MenuItem::os_action("Cut", CutItems, OsAction::Cut),
-        MenuItem::os_action("Copy", CopyItems, OsAction::Copy),
-        MenuItem::os_action("Paste", PasteItems, OsAction::Paste),
-        MenuItem::action("Paste Into Folder", PasteIntoSelected),
+        MenuItem::os_action(t!("Kes"), CutItems, OsAction::Cut),
+        MenuItem::os_action(t!("Kopyala"), CopyItems, OsAction::Copy),
+        MenuItem::os_action(t!("Yapıştır"), PasteItems, OsAction::Paste),
+        MenuItem::action(t!("Seçili klasöre yapıştır"), PasteIntoSelected),
         MenuItem::separator(),
-        MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+        MenuItem::os_action(t!("Tümünü seç"), SelectAll, OsAction::SelectAll),
         MenuItem::separator(),
-        MenuItem::action("Rename", RenameItem),
-        MenuItem::action("Delete", DeleteItems),
+        MenuItem::action(t!("Yeniden adlandır"), RenameItem),
+        MenuItem::action(t!("Sil"), DeleteItems),
     ]);
-    let view = Menu::new("View").items([
-        MenuItem::action("Details", ViewDetails),
-        MenuItem::action("Icons", ViewGrid),
-        MenuItem::action("Columns", ViewColumns),
+    let view = Menu::new(t!("Görünüm")).items([
+        MenuItem::action(t!("Ayrıntılar"), ViewDetails),
+        MenuItem::action(t!("Simgeler"), ViewGrid),
+        MenuItem::action(t!("Sütunlar"), ViewColumns),
         MenuItem::separator(),
-        MenuItem::action("Preview Pane", TogglePreview),
-        MenuItem::action("Sidebar", ToggleSidebar),
-        MenuItem::action("Hidden Items", ToggleHidden),
+        MenuItem::action(t!("Önizleme paneli"), TogglePreview),
+        MenuItem::action(t!("Kenar çubuğu"), ToggleSidebar),
+        MenuItem::action(t!("Gizli öğeleri göster/gizle"), ToggleHidden),
         MenuItem::separator(),
-        MenuItem::action("Refresh", Refresh),
-        MenuItem::action("Enter Full Screen", ToggleFullscreen),
+        MenuItem::action(t!("Yenile"), Refresh),
+        MenuItem::action(t!("Tam ekran"), ToggleFullscreen),
     ]);
-    let go = Menu::new("Go").items([
-        MenuItem::action("Back", GoBack),
-        MenuItem::action("Forward", GoForward),
-        MenuItem::action("Enclosing Folder", GoUp),
-        MenuItem::action("Home", GoHome),
+    let go = Menu::new(t!("Git")).items([
+        MenuItem::action(t!("Geri"), GoBack),
+        MenuItem::action(t!("İleri"), GoForward),
+        MenuItem::action(t!("Üst klasör"), GoUp),
+        MenuItem::action(t!("Ana sayfa"), GoHome),
         MenuItem::separator(),
-        MenuItem::action("Go to Folder…", FocusAddress),
+        MenuItem::action(t!("Klasöre git…"), FocusAddress),
     ]);
     cx.set_menus([app, file, edit, view, go]);
 }

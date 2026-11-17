@@ -3222,7 +3222,7 @@ impl Workspace {
         shown_elsewhere |= drives.iter().any(|d| cur == Location::Path(d.root.clone()));
         col = self.append_tree(col, &cur, shown_elsewhere, rail, p, cx);
         if !drives.is_empty() {
-            col = col.child(header(t!("Sürücüler")));
+            col = col.child(header(if cfg!(target_os = "macos") { t!("Birimler") } else { t!("Sürücüler") }));
         }
         for (i, d) in drives.into_iter().enumerate() {
             let loc = Location::Path(d.root.clone());
@@ -3263,7 +3263,7 @@ impl Workspace {
         }
         let cloud = self.places.read(cx).cloud.clone();
         if !cloud.is_empty() && shown("cloud") {
-            col = col.child(header(t!("Bulut ve Linux")));
+            col = col.child(header(if cfg!(target_os = "macos") { t!("Bulut") } else { t!("Bulut ve Linux") }));
             for (i, c) in cloud.into_iter().enumerate() {
                 let loc = Location::Path(c.path.clone());
                 let active = cur == loc;
@@ -3316,7 +3316,7 @@ impl Workspace {
             "sb-recycle".into(),
             L::Trash,
             p.text_secondary,
-            t!("Geri Dönüşüm Kutusu").into(),
+            if cfg!(target_os = "macos") { t!("Çöp Sepeti") } else { t!("Geri Dönüşüm Kutusu") }.into(),
             Location::RecycleBin,
             cur == Location::RecycleBin,
             None,
@@ -3411,7 +3411,12 @@ impl Workspace {
             };
             crate::transfer_view::strip(&self.ops, p, rf_core::transfer::strip_room(bar_w, held), cx)
         });
+        // The renderer badge and the timings are the Windows hybrid renderer's; macOS always
+        // uses one renderer, so an old settings file cannot bring the badge back.
+        #[cfg(windows)]
         let perf = cx.global::<crate::settings::Settings>().show_perf_info;
+        #[cfg(not(windows))]
+        let perf = false;
         h_flex()
             .h(px(32.))
             .flex_shrink_0()
@@ -3580,6 +3585,18 @@ pub fn open_in_ide(dir: PathBuf, ide: String) {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         #[cfg(windows)]
         use std::os::windows::process::CommandExt;
+        #[cfg(target_os = "macos")]
+        let r = {
+            // A .app is a bundle, not an executable: `open -a` starts it (and brings it forward).
+            // "automatic" means the `code` command on the PATH.
+            let program = if ide.is_empty() { "code".to_string() } else { ide.clone() };
+            if program.ends_with(".app") {
+                std::process::Command::new("/usr/bin/open").args(["-a", &program]).arg(&dir).spawn()
+            } else {
+                std::process::Command::new(&program).arg(&dir).spawn()
+            }
+        };
+        #[cfg(not(target_os = "macos"))]
         let r = if ide.is_empty() {
             // "automatic": the first of the editors we know that is installed (`rf_win::editors`; looked for here, on this thread)
             match rf_win::editors::installed().first() {
@@ -3612,6 +3629,7 @@ fn drop_files(paths: &ExternalPaths, dest: PathBuf, cx: &mut App) {
 }
 
 /// Shows which device draws the window (hybrid renderer) and cycles Auto → GPU → CPU on click.
+/// (Only reachable on Windows: the setting is hidden and forced off on macOS.)
 fn render_backend_badge(p: &Palette) -> impl IntoElement + use<> {
     use gpui_windows::hybrid::{self, RendererMode};
     let mode = hybrid::mode();

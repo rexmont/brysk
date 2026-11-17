@@ -114,14 +114,19 @@ impl Render for ShelfView {
         let body: AnyElement = if empty {
             div()
                 .flex_1()
+                .w_full()
+                .min_w_0()
                 .flex()
+                .flex_col()
                 .items_center()
                 .justify_center()
                 .px_4()
                 .text_xs()
                 .text_center()
+                .whitespace_normal()
+                .overflow_hidden()
                 .text_color(p.text_tertiary)
-                .child(crate::t!("Öğeleri sağ tık → \"Rafa ekle\" (Ctrl+Shift+S) ile buraya toplayın, sonra hepsini istediğiniz klasöre kopyalayın veya taşıyın."))
+                .child(crate::shortcuts::hint(crate::t!("Öğeleri sağ tık → \"Rafa ekle\" (Ctrl+Shift+S) ile buraya toplayın, sonra hepsini istediğiniz klasöre kopyalayın veya taşıyın.")))
                 .into_any_element()
         } else {
             let mut list = v_flex().id("shelf-list").flex_1().overflow_y_scroll().gap_0p5();

@@ -42,12 +42,12 @@ impl Index {
     fn add(&mut self, dir: u32, name: &str) {
         let idx = self.recs.len() as u32;
         self.recs.push(Rec { dir, name: name.into() });
-        self.by_name.entry(name.to_lowercase()).or_default().push(idx);
+        self.by_name.entry(fold(name)).or_default().push(idx);
     }
 
     fn remove(&mut self, dir: u32, name: &str) {
         let d = dir;
-        let key = name.to_lowercase();
+        let key = fold(name);
         let Some(list) = self.by_name.get_mut(&key) else { return };
         if let Some(pos) = list.iter().position(|&i| self.recs[i as usize].dir == d && self.recs[i as usize].name.as_ref() == name) {
             let idx = list.remove(pos);
@@ -63,8 +63,22 @@ impl Index {
         self.dirs[r.dir as usize].join(&*r.name)
     }
 
+    /// Forgets everything below `path` (a folder that is gone). The folder ids stay: other
+    /// records may still name them, and an id is never reused.
+    fn remove_tree(&mut self, path: &Path) {
+        let gone: Vec<(u32, String)> = self
+            .recs
+            .iter()
+            .filter(|r| !r.name.is_empty() && self.dirs[r.dir as usize].starts_with(path))
+            .map(|r| (r.dir, r.name.to_string()))
+            .collect();
+        for (dir, name) in gone {
+            self.remove(dir, &name);
+        }
+    }
+
     fn search(&self, pattern: &str, under: &Path, include_hidden: bool, max: usize) -> Vec<PathBuf> {
-        let pat = pattern.to_lowercase();
+        let pat = fold(pattern);
         let glob = pattern.contains('*') || pattern.contains('?');
         let mut out = Vec::new();
         if glob {
@@ -166,15 +180,49 @@ impl Index {
     }
 }
 
+/// Case folding for matching, with the Turkish letters as the plain ones a keyboard without
+/// them types: "sarki" finds "Şarkı listesi.mp3", as the quick search's own matching does.
+/// Names are kept as they are; only the index's key is folded.
+fn fold(name: &str) -> String {
+    rf_core::entry::fold_case(name)
+        .chars()
+        .map(|c| match c {
+            'ş' => 's',
+            'ğ' => 'g',
+            'ü' | 'û' => 'u',
+            'ö' => 'o',
+            'ç' => 'c',
+            'î' => 'i',
+            'â' | 'á' | 'à' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            c => c,
+        })
+        .collect()
+}
+
 fn glob_match(spec: &[char], name: &[char]) -> bool {
-    if spec.is_empty() {
-        return name.is_empty();
+    let (mut pi, mut ni) = (0, 0);
+    let (mut star, mut mark) = (usize::MAX, 0);
+    while ni < name.len() {
+        if pi < spec.len() && spec[pi] == '*' {
+            star = pi;
+            mark = ni;
+            pi += 1;
+        } else if pi < spec.len() && (spec[pi] == '?' || spec[pi] == name[ni]) {
+            pi += 1;
+            ni += 1;
+        } else if star != usize::MAX {
+            pi = star + 1;
+            mark += 1;
+            ni = mark;
+        } else {
+            return false;
+        }
     }
-    match spec[0] {
-        '*' => (0..=name.len()).any(|i| glob_match(&spec[1..], &name[i..])),
-        '?' => !name.is_empty() && glob_match(&spec[1..], &name[1..]),
-        c => name.first() == Some(&c) && glob_match(&spec[1..], &name[1..]),
+    while pi < spec.len() && spec[pi] == '*' {
+        pi += 1;
     }
+    pi == spec.len()
 }
 
 struct Slot {
@@ -309,23 +357,66 @@ fn install(slot: &Slot, index: Index) {
     slot.state.store(State::Ready as u8, Ordering::Release);
 }
 
-/// Re-reads one directory of a slot (a change arrived for it).
+/// Adds `dir`'s entries and the new folders below it to the index; `depth` is how many folder
+/// levels below the slot's root they are (the root's own entries: 0).
+fn index_dir(slot: &Slot, index: &mut Index, dir: &Path, depth: usize) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let dir_id = match index.dirs.iter().position(|d| d.as_ref() == dir) {
+        Some(i) => i as u32,
+        None => {
+            index.dirs.push(Arc::from(dir));
+            (index.dirs.len() - 1) as u32
+        }
+    };
+    for e in rd.flatten() {
+        if slot.cancel.load(Ordering::Relaxed) {
+            return;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        if is_excluded(&name) {
+            continue;
+        }
+        index.add(dir_id, &name);
+        let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        if is_dir && !skip_inside(&name) && depth < slot.depth {
+            index_dir(slot, index, &e.path(), depth + 1);
+        }
+    }
+}
+
+/// Re-reads one directory of a slot (a change arrived for it). A folder that appeared with its
+/// contents (a download, an app in a vendor's folder) is walked here; one that went takes its
+/// contents with it, so no result names a path that is no longer there.
 fn refresh_dir(slot: &Slot, dir: &Path) {
     if slot.cancel.load(Ordering::Relaxed) {
         return;
     }
+    let depth = dir.strip_prefix(&slot.root).map(|p| p.components().count()).unwrap_or(0);
     let mut index = slot.index.write().unwrap();
     let Some(dir_id) = index.dirs.iter().position(|d| d.as_ref() == dir).map(|i| i as u32) else { return };
-    let old: Vec<String> = index.recs.iter().filter(|r| r.dir == dir_id).map(|r| r.name.to_string()).collect();
-    for n in old {
-        index.remove(dir_id, &n);
+    let old: Vec<String> = index.recs.iter().filter(|r| r.dir == dir_id && !r.name.is_empty()).map(|r| r.name.to_string()).collect();
+    let entries: Vec<(String, bool)> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| {
+                    let name = e.file_name().to_string_lossy().into_owned();
+                    (!is_excluded(&name)).then(|| (name, e.file_type().map(|t| t.is_dir()).unwrap_or(false)))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    for n in &old {
+        let p = dir.join(n);
+        if !entries.iter().any(|(name, _)| name == n) && index.dirs.iter().any(|d| d.as_ref() == p) {
+            index.remove_tree(&p);
+        }
+        index.remove(dir_id, n);
     }
-    if let Ok(rd) = std::fs::read_dir(dir) {
-        for e in rd.flatten() {
-            let name = e.file_name().to_string_lossy().into_owned();
-            if !is_excluded(&name) {
-                index.add(dir_id, &name);
-            }
+    for (name, is_dir) in entries {
+        let is_new = !old.contains(&name);
+        index.add(dir_id, &name);
+        if is_new && is_dir && !skip_inside(&name) && depth < slot.depth {
+            index_dir(slot, &mut index, &dir.join(&name), depth + 1);
         }
     }
     let n = index.recs.len() as u64;
@@ -554,6 +645,7 @@ mod tests {
         std::fs::write(d.join("alpha.txt"), b"a").unwrap();
         std::fs::write(d.join("sub/beta.txt"), b"b").unwrap();
         std::fs::write(d.join("node_modules/gamma.txt"), b"c").unwrap();
+        std::fs::write(d.join("Şarkı listesi.txt"), b"t").unwrap();
         let canon = std::fs::canonicalize(&d).unwrap();
 
         start(vec![d.clone()], d.join("index"));
@@ -568,6 +660,9 @@ mod tests {
         };
         assert!(names("alpha").contains(&"alpha.txt".to_string()));
         assert!(names("beta").contains(&"sub/beta.txt".to_string()));
+        // Turkish letters are found by the plain ones a keyboard without them types
+        assert!(names("sarki").contains(&"Şarkı listesi.txt".to_string()), "{:?}", names("sarki"));
+        assert!(names("ŞARKI").contains(&"Şarkı listesi.txt".to_string()));
         // excluded folders are not indexed
         assert!(names("gamma").is_empty(), "{:?}", names("gamma"));
         // a glob
@@ -586,6 +681,23 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
         }
         assert!(names("later").is_empty(), "the watcher did not remove the deleted file");
+
+        // a folder that arrives with its contents (a download) is searchable without a restart
+        std::fs::create_dir_all(d.join("gelen/alt")).unwrap();
+        std::fs::write(d.join("gelen/alt/icerde.txt"), b"i").unwrap();
+        let began = Instant::now();
+        while began.elapsed() < Duration::from_secs(5) && !names("icerde").contains(&"gelen/alt/icerde.txt".to_string()) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(names("icerde").contains(&"gelen/alt/icerde.txt".to_string()), "the watcher did not walk the new folder: {:?}", names("icerde"));
+
+        // and a folder that goes takes its contents with it
+        std::fs::remove_dir_all(d.join("gelen")).unwrap();
+        let began = Instant::now();
+        while began.elapsed() < Duration::from_secs(5) && !names("icerde").is_empty() {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(names("icerde").is_empty(), "the watcher kept the deleted folder's file: {:?}", names("icerde"));
 
         stop();
         let _ = std::fs::remove_dir_all(&d);

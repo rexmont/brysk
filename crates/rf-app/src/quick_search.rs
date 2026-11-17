@@ -1,8 +1,9 @@
 //! Quick search (Alt+Space by default): a small window over whatever app is in front that finds
 //! installed apps, files and folders (Brysk' name index), Chrome / Edge bookmarks, and
-//! offers a web search. Enter opens, Ctrl+Enter shows the item in its folder, Shift+Enter
-//! previews it with DirectLook, Esc closes. What is opened often comes first, and what was chosen
-//! for the same typed letters before comes first of all ("En iyi eşleşme": see `Picks`).
+//! offers a web search. Enter opens, Cmd+Enter (Ctrl+Enter on Windows) shows the item in its
+//! folder, Shift+Enter previews it with DirectLook, Esc closes. What is opened often comes first,
+//! and what was chosen for the same typed letters before comes first of all ("En iyi eşleşme":
+//! see `Picks`).
 //!
 //! The hotkey is registered by the running Brysk (`rf_win::hotkey`); with "keep running in
 //! the background" on it works while no window is open.
@@ -34,6 +35,7 @@ const ROW_H: f32 = 46.;
 /// What a match on an app's program file name is worth less than the same match on its display name.
 const FILE_NAME_MATCH: i32 = 60;
 /// A run command's rank: under an app whose own name is exactly the query (1000), above every other app.
+#[cfg(windows)]
 const RUN_COMMAND: i32 = 990;
 /// Results per kind.
 const MAX_APPS: usize = 4;
@@ -163,12 +165,79 @@ static LISTING: Mutex<()> = Mutex::new(());
 /// Reads "All apps" from the shell. In the dock process this runs on the one shell thread that pumps messages: a worker thread that
 /// asks the shell becomes an apartment that never pumps, and several of those asking at once hang the shell (see `rf_win::sta::call`).
 /// The main app has always asked from its own worker threads and keeps doing so.
+#[cfg(not(target_os = "macos"))]
 fn read_apps() -> anyhow::Result<Vec<rf_win::apps::App>> {
     if crate::background::DOCK_PROCESS.load(std::sync::atomic::Ordering::Relaxed) {
         let limit = Duration::from_secs(20);
         return rf_win::sta::call(limit, rf_win::apps::list).unwrap_or_else(|| anyhow::bail!("the shell did not list the apps in {limit:?}"));
     }
     rf_win::apps::list()
+}
+
+/// The folders `.app` bundles are installed in on macOS, in the order a copy of the same name
+/// wins: the local Applications folder before the system one, and the user's own last.
+#[cfg(target_os = "macos")]
+fn app_folders_in(home: Option<&Path>) -> Vec<PathBuf> {
+    let mut out = vec![PathBuf::from("/Applications"), PathBuf::from("/System/Applications")];
+    if let Some(home) = home {
+        let user = home.join("Applications");
+        if !out.contains(&user) {
+            out.push(user);
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "macos")]
+fn app_folders() -> Vec<PathBuf> {
+    app_folders_in(dirs::home_dir().as_deref())
+}
+
+/// The `.app` bundles in `dir` and in the folders directly below it (Adobe's or Microsoft
+/// Office's own folder), one app per bundle: the inside of a bundle is never walked. `out` may
+/// already hold the platform's list; the caller deduplicates.
+#[cfg(target_os = "macos")]
+fn collect_apps(dir: &Path, levels: usize, out: &mut Vec<rf_win::apps::App>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let mut folders = Vec::new();
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let p = e.path();
+        if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("app")) && p.is_dir() {
+            let name = p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if !name.trim().is_empty() {
+                out.push(rf_win::apps::App { name, id: p.to_string_lossy().into_owned() });
+            }
+        } else if levels > 1 && e.file_type().is_ok_and(|t| t.is_dir()) {
+            folders.push(p);
+        }
+    }
+    for f in folders {
+        collect_apps(&f, levels - 1, out);
+    }
+}
+
+/// One row per app name (a copy in `/Applications` and one in `~/Applications`, or the same
+/// system app reached twice, shows once), sorted by name.
+fn dedupe_apps(apps: Vec<rf_win::apps::App>) -> Vec<rf_win::apps::App> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<rf_win::apps::App> = apps.into_iter().filter(|a| !a.name.trim().is_empty() && seen.insert(fold(&a.name))).collect();
+    out.sort_by(|a, b| fold(&a.name).cmp(&fold(&b.name)));
+    out
+}
+
+/// macOS: the platform's list of the three usual folders, plus the `.app` bundles vendors keep
+/// one folder down (`/Applications/Adobe…/*.app`); `apps` keeps one row per name.
+#[cfg(target_os = "macos")]
+fn read_apps() -> anyhow::Result<Vec<rf_win::apps::App>> {
+    let mut list = rf_win::apps::list().unwrap_or_default();
+    for dir in app_folders() {
+        collect_apps(&dir, 2, &mut list);
+    }
+    Ok(list)
 }
 
 /// "All apps": cached; a stale list is served while a fresh one is read. Blocks while the very first list is read (a second to
@@ -181,7 +250,7 @@ pub(crate) fn apps() -> Arc<Vec<rf_win::apps::App>> {
                 *APPS.lock().unwrap() = Some((Instant::now(), list.clone()));
                 std::thread::spawn(|| {
                     if let Ok(l) = read_apps() {
-                        *APPS.lock().unwrap() = Some((Instant::now(), Arc::new(l)));
+                        *APPS.lock().unwrap() = Some((Instant::now(), Arc::new(dedupe_apps(l))));
                     }
                 });
             }
@@ -194,7 +263,7 @@ pub(crate) fn apps() -> Arc<Vec<rf_win::apps::App>> {
             }
             match read_apps() {
                 Ok(l) if !l.is_empty() => {
-                    let list = Arc::new(l);
+                    let list = Arc::new(dedupe_apps(l));
                     *APPS.lock().unwrap() = Some((Instant::now(), list.clone()));
                     list
                 }
@@ -228,12 +297,31 @@ fn bookmark_files() -> Vec<PathBuf> {
     f
 }
 
-fn find_bookmark_files() -> Vec<PathBuf> {
-    let Some(local) = dirs::data_local_dir() else { return Vec::new() };
+/// The folders Chrome and Edge keep their profiles in, under the platform's per-user data
+/// folder. Windows puts a `User Data` folder inside each browser's folder; macOS' Chrome and
+/// Edge are that folder themselves (`~/Library/Application Support/Google/Chrome` and
+/// `~/Library/Application Support/Microsoft Edge`).
+fn bookmark_roots_in(data_dir: &Path) -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        ["Google\\Chrome", "Microsoft\\Edge"].iter().map(|b| data_dir.join(b).join("User Data")).collect()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        ["Google/Chrome", "Microsoft Edge"].iter().map(|b| data_dir.join(b)).collect()
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        // (the app ships on Windows and macOS; elsewhere these names find nothing)
+        ["Google/Chrome", "Microsoft Edge"].iter().map(|b| data_dir.join(b)).collect()
+    }
+}
+
+/// The `Bookmarks` file of every profile of `root` (a browser's profile folder): the profiles
+/// the browser knows (`Local State` → `profile.info_cache`), else `Default`.
+fn bookmark_files_in(data_dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    for browser in ["Google\\Chrome", "Microsoft\\Edge"] {
-        let root = local.join(browser).join("User Data");
-        // the profiles the browser knows (Local State → profile.info_cache), else Default
+    for root in bookmark_roots_in(data_dir) {
         let profiles: Vec<String> = std::fs::read(root.join("Local State"))
             .ok()
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
@@ -247,6 +335,10 @@ fn find_bookmark_files() -> Vec<PathBuf> {
         }
     }
     out
+}
+
+fn find_bookmark_files() -> Vec<PathBuf> {
+    dirs::data_local_dir().map(|d| bookmark_files_in(&d)).unwrap_or_default()
 }
 
 fn collect_urls(node: &serde_json::Value, out: &mut Vec<Bookmark>) {
@@ -772,7 +864,9 @@ pub(crate) fn search_local(query: &str, engine: WebSearch, with_bookmarks: bool)
         })
         .collect();
     // a run command, as Windows' search and the Run box have it: the query IS the name of a program (`dxdiag`, `regedit`,
-    // `services.msc`). Not offered when an app in the list is that very program (the app's own row stands for it).
+    // `services.msc`). Not offered when an app in the list is that very program (the app's own row stands for it). macOS has no
+    // Run box and its PATH holds command-line tools, not apps: there an app's name is the name to type.
+    #[cfg(windows)]
     if let Some(exe) = crate::run_names::resolve(query.trim()) {
         let wanted = crate::run_names::stem_of(query.trim());
         let an_app_is_it = listed.iter().any(|app| crate::run_names::app_file_stem(&app.id).is_some_and(|s| s == wanted));
@@ -842,7 +936,9 @@ pub(crate) fn search_files(query: &str, index_on: bool) -> FilesFound {
             return;
         }
         let s = if glob { Some(500) } else { score(&file_name(&p), &q) };
-        if let Some(s) = s {
+        if let Some(s) = s
+            && p.exists()
+        {
             // a shallower path is likelier what is meant
             let depth = p.components().count() as i32;
             hits.push((s - depth * 4, p));
@@ -1106,7 +1202,7 @@ impl QuickSearch {
         }));
     }
 
-    /// Enter (`how` = Open), Ctrl+Enter (ShowInFolder), Shift+Enter (Preview).
+    /// Enter (`how` = Open), Cmd+Enter on macOS / Ctrl+Enter on Windows (ShowInFolder), Shift+Enter (Preview).
     fn activate(&mut self, how: How, cx: &mut Context<Self>) {
         if self.items_generation != self.generation {
             self.pending = Some(how);
@@ -1262,13 +1358,13 @@ impl Render for QuickSearch {
                 Target::Web { query } => format!("\u{201c}{query}\u{201d} {}", t!("için webde ara")).into(),
                 _ => item.title.clone().into(),
             };
-            let hint = if sel {
+            let hint: SharedString = if sel {
                 match &item.target {
-                    Target::Path { .. } => t!("Ctrl+Enter: klasörde göster"),
-                    _ => "Enter",
+                    Target::Path { .. } => crate::shortcuts::hint(t!("Ctrl+Enter: klasörde göster")).into(),
+                    _ => "Enter".into(),
                 }
             } else {
-                ""
+                SharedString::default()
             };
             let icon = self.icon(item, &p, cx);
             list = list.child(
@@ -1294,7 +1390,8 @@ impl Render for QuickSearch {
                     .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                         this.selected = ix;
                         let m = ev.modifiers();
-                        this.activate(if m.control { How::ShowInFolder } else if m.shift { How::Preview } else { How::Open }, cx);
+                        let show_in_folder = m.secondary(cx) || m.control;
+                        this.activate(if show_in_folder { How::ShowInFolder } else if m.shift { How::Preview } else { How::Open }, cx);
                     })),
             );
         }
@@ -1330,7 +1427,8 @@ impl Render for QuickSearch {
                     }
                     "enter" => {
                         cx.stop_propagation();
-                        this.activate(if m.control { How::ShowInFolder } else if m.shift { How::Preview } else { How::Open }, cx);
+                        let show_in_folder = m.secondary(cx) || m.control;
+                        this.activate(if show_in_folder { How::ShowInFolder } else if m.shift { How::Preview } else { How::Open }, cx);
                     }
                     "escape" => {
                         cx.stop_propagation();
@@ -1372,7 +1470,7 @@ impl Render for QuickSearch {
                                     .text_xs()
                                     .text_color(p.text_tertiary)
                                     .child(t!("Enter: aç"))
-                                    .child(t!("Ctrl+Enter: klasörde göster"))
+                                    .child(crate::shortcuts::hint(t!("Ctrl+Enter: klasörde göster")))
                                     .child(t!("Shift+Enter: önizle"))
                                     .child(t!("Esc: kapat")),
                             )
@@ -1399,7 +1497,11 @@ impl Render for QuickSearch {
 #[cfg(test)]
 mod tests {
     // (not `super::*`: gpui's own `test` attribute would come with it)
-    use super::{Bookmark, WebSearch, fold, parse_bookmarks, score, score_with, web_url};
+    use super::{Bookmark, WebSearch, bookmark_files_in, bookmark_roots_in, dedupe_apps, fold, parse_bookmarks, score, score_with, web_url};
+
+    fn app(name: &str) -> rf_win::apps::App {
+        rf_win::apps::App { name: name.into(), id: format!("/Applications/{name}.app") }
+    }
 
     #[test]
     fn folding_and_scores() {
@@ -1431,6 +1533,54 @@ mod tests {
     fn web_search_urls() {
         assert_eq!(web_url(WebSearch::Google, "rust gpui"), "https://www.google.com/search?q=rust+gpui");
         assert_eq!(web_url(WebSearch::DuckDuckGo, "ç&="), "https://duckduckgo.com/?q=%C3%A7%26%3D");
+    }
+
+    #[test]
+    fn chrome_and_edges_profiles_are_looked_for_where_this_system_keeps_them() {
+        let base = std::env::temp_dir().join(format!("rf-qs-bookmarks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let roots = bookmark_roots_in(&base);
+        assert_eq!(roots.len(), 2, "{roots:?}");
+        assert_ne!(roots[0], roots[1]);
+        std::fs::create_dir_all(&roots[0]).unwrap();
+        std::fs::create_dir_all(&roots[1]).unwrap();
+        // the first browser names its profiles in Local State (a folder it does not name is not read)
+        std::fs::write(roots[0].join("Local State"), br#"{"profile":{"info_cache":{"Default":{},"Profile 1":{}}}}"#).unwrap();
+        for p in ["Default", "Profile 1", "Profile 2"] {
+            std::fs::create_dir_all(roots[0].join(p)).unwrap();
+            std::fs::write(roots[0].join(p).join("Bookmarks"), b"{}").unwrap();
+        }
+        // the second has no Local State: Default is the profile
+        std::fs::create_dir_all(roots[1].join("Default")).unwrap();
+        std::fs::write(roots[1].join("Default").join("Bookmarks"), b"{}").unwrap();
+        let mut got = bookmark_files_in(&base);
+        let mut want = vec![roots[0].join("Default").join("Bookmarks"), roots[0].join("Profile 1").join("Bookmarks"), roots[1].join("Default").join("Bookmarks")];
+        got.sort();
+        want.sort();
+        assert_eq!(got, want, "the profile Local State does not name is left out");
+        assert!(!got.iter().any(|p| p.to_string_lossy().contains("Profile 2")));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn an_app_name_shows_once_and_names_are_sorted() {
+        let apps = vec![app("Safari"), app("Calculator"), app("safari"), app(""), app("  ")];
+        let got = dedupe_apps(apps);
+        assert_eq!(got.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["Calculator", "Safari"]);
+        assert_eq!(got[1].id, "/Applications/Safari.app", "the first copy keeps its place");
+        assert!(dedupe_apps(Vec::new()).is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_apps_are_looked_for_in_the_three_application_folders() {
+        use std::path::{Path, PathBuf};
+        use super::app_folders_in;
+        assert_eq!(
+            app_folders_in(Some(Path::new("/Users/ozgur"))),
+            [PathBuf::from("/Applications"), PathBuf::from("/System/Applications"), PathBuf::from("/Users/ozgur/Applications")]
+        );
+        assert_eq!(app_folders_in(None), [PathBuf::from("/Applications"), PathBuf::from("/System/Applications")]);
     }
 }
 

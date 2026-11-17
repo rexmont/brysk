@@ -124,7 +124,11 @@ fn ask_program_path(ix: usize, window: &mut Window, cx: &mut App) {
 fn delete_dialog(ix: usize, window: &mut Window, cx: &mut App) {
     crate::prompt::show(
         t!("Liste silinsin mi?"),
-        Some(t!("Bu türdeki dosyalar yeniden Windows'un varsayılan programıyla açılır.").to_string()),
+        Some(if cfg!(target_os = "macos") {
+            t!("Bu türdeki dosyalar yeniden sistemin varsayılan programıyla açılır.").to_string()
+        } else {
+            t!("Bu türdeki dosyalar yeniden Windows'un varsayılan programıyla açılır.").to_string()
+        }),
         None,
         vec![
             crate::prompt::Button::new(t!("Sil"), crate::prompt::Kind::Danger, move |_, _, cx| {
@@ -155,7 +159,12 @@ pub(crate) fn rule_line(r: &OpenRule) -> String {
     match (r.programs.first(), r.double_click) {
         (None, _) => t!("Henüz program yok: bir program ekleyin.").to_string(),
         (Some(first), true) => format!("{}: {}", t!("Çift tıklama"), openrules::program_label(first)),
-        (Some(_), false) => t!("Çift tıklama Windows'un varsayılanıyla açar; programlar yalnızca \"Birlikte aç\" menüsünde durur.").to_string(),
+        (Some(_), false) => if cfg!(target_os = "macos") {
+            t!("Çift tıklama sistemin varsayılanıyla açar; programlar yalnızca \"Birlikte aç\" menüsünde durur.")
+        } else {
+            t!("Çift tıklama Windows'un varsayılanıyla açar; programlar yalnızca \"Birlikte aç\" menüsünde durur.")
+        }
+        .to_string(),
     }
 }
 
@@ -265,7 +274,11 @@ pub fn page(p: &Palette, s: &Settings) -> Vec<AnyElement> {
                 p,
                 L::AppWindow,
                 t!("Dosya türlerine göre programlar").into(),
-                Some(t!("Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, Windows'un varsayılan programları değişmez.").into()),
+                Some(if cfg!(target_os = "macos") {
+                    t!("Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; sistemin tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, sistemin varsayılan programları değişmez.").into()
+                } else {
+                    t!("Bir dosya türü için kendi program listenizi yapın: listedeki ilk program o türü çift tıklamada açar, hepsi sağ tık menüsündeki \"Birlikte aç\"ın başında durur. Programlar yollarıyla verilir; Windows'un tanımadığı bir program da olabilir. Bu listelere yalnızca Brysk uyar, Windows'un varsayılan programları değişmez.").into()
+                }),
                 Some(button("or-new", p, t!("Yeni tür"), |window, cx| ask_exts(None, window, cx))),
             ))
             .into_any_element(),
@@ -319,7 +332,10 @@ mod tests {
     fn a_lists_line_says_what_a_double_click_does() {
         crate::dock_page::while_turkish(|| {
             assert_eq!(rule_line(&rule(&["dll"], &[r"C:\t\dnSpy.exe", r"C:\t\ghidraRun.bat"], true)), "Çift tıklama: dnSpy");
+            #[cfg(windows)]
             assert!(rule_line(&rule(&["exe"], &[r"C:\t\ghidraRun.bat"], false)).starts_with("Çift tıklama Windows'un varsayılanıyla açar"));
+            #[cfg(target_os = "macos")]
+            assert!(rule_line(&rule(&["exe"], &[r"C:\t\ghidraRun.bat"], false)).starts_with("Çift tıklama sistemin varsayılanıyla açar"));
             assert!(rule_line(&rule(&["dll"], &[], true)).starts_with("Henüz program yok"));
         });
     }

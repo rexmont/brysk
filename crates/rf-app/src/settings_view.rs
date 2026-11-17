@@ -9,14 +9,17 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+#[cfg(windows)]
 use gpui_windows::hybrid;
 
 use crate::fluent_menu::{self, Item, Menu, MenuIcon};
 use crate::select_box::{Choice, select_box};
 use crate::i18n::Lang;
 use crate::settings::{
-    self, AnimPref, BackdropPref, ClickPref, DatePref, DefaultView, DeletePref, IdePref, RendererPref, Settings, StartupPref, ThemePref,
+    self, AnimPref, BackdropPref, ClickPref, DatePref, DefaultView, DeletePref, IdePref, Settings, StartupPref, ThemePref,
 };
+#[cfg(windows)]
+use crate::settings::RendererPref;
 use crate::t;
 use crate::look::config::LookSettings;
 use crate::theme::{self, Palette};
@@ -67,6 +70,13 @@ fn experimental(page: Page) -> bool {
 /// The heading of a page: its name, and "(deneysel)" after it for an experimental page.
 fn page_title(page: Page, name: &str) -> String {
     if experimental(page) { format!("{name} ({})", t!("deneysel")) } else { name.to_string() }
+}
+
+/// Whether this build has the page at all. The dock, the desktop it draws, the speed test and the folder organizer are parts of the
+/// Windows build (`rf-mac` keeps only the names so the code compiles): on macOS they are left out of the page list and the search
+/// rather than offered as a page that says it does nothing.
+fn page_available(page: Page) -> bool {
+    cfg!(windows) || !matches!(page, Page::Dock | Page::Desktop | Page::Speed | Page::Organizer)
 }
 
 /// The quiet pill next to an experimental page's name in the page list (the same for every such page).
@@ -155,14 +165,18 @@ fn matching(all: Vec<Found>, query: &str) -> Vec<Found> {
 fn collect(p: &Palette, s: &Settings, cx: &mut App) -> Vec<Found> {
     COLLECT.with(|c| *c.borrow_mut() = Some(Vec::new()));
     for (page, _, _) in PAGES {
+        if !page_available(page) {
+            continue;
+        }
         COLLECT_AT.with(|a| a.set((page, None)));
         let _ = build_page(page, p, s, cx);
     }
     COLLECT.with(|c| c.borrow_mut().take()).unwrap_or_default()
 }
 
-/// A page that is Windows-only (the dock and the desktop it draws): said in one line rather
-/// than showing switches that do nothing.
+/// A page that only the Windows build has (the dock, the desktop it draws, the speed test and the folder organizer): said in one
+/// line rather than showing switches that do nothing. The page list leaves these pages out on other platforms; this is what a
+/// direct link (for example a launch argument) shows.
 #[cfg(not(windows))]
 fn not_on_mac(p: &Palette) -> Vec<AnyElement> {
     vec![
@@ -290,6 +304,21 @@ pub(crate) fn button(id: impl Into<ElementId>, p: &Palette, label: impl Into<Sha
 }
 
 // ---------------------------------------------------------------- layout pieces
+
+/// The shortcut hints a few rows show. On macOS the native Command/Control conventions are the ones the app binds; the
+/// Explorer-style Ctrl keys still work, but a Windows hint would be the wrong thing to teach there.
+#[cfg(target_os = "macos")]
+const HINT_TOOLBAR: &str = "Cmd+Shift+B";
+#[cfg(not(target_os = "macos"))]
+const HINT_TOOLBAR: &str = "Ctrl+Shift+B";
+#[cfg(target_os = "macos")]
+const HINT_PREVIEW: &str = "Cmd+Option+P";
+#[cfg(not(target_os = "macos"))]
+const HINT_PREVIEW: &str = "Alt+P";
+#[cfg(target_os = "macos")]
+const HINT_HIDDEN: &str = "Cmd+Shift+.";
+#[cfg(not(target_os = "macos"))]
+const HINT_HIDDEN: &str = "Ctrl+H";
 
 /// The narrowest a setting's words (its title and the line under it) are drawn, logical px.
 ///
@@ -444,7 +473,7 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
     // In a narrow pane the list of pages is a strip of icons (each with its name as a tip), so that the settings keep a readable
     // width; the title and the search box are the full list's.
     let strip = nav_is_strip(ui(cx).pane_w);
-    // (scrolls: the 13 entries need more than the 420 px the window may be as low as)
+    // (scrolls: the pages need more than the 420 px the window may be as low as)
     let mut nav = v_flex().id("settings-nav").w(px(if strip { NAV_STRIP_W } else { NAV_W })).flex_shrink_0().h_full().overflow_y_scroll().px_3().pt_5().gap_0p5();
     if !strip {
         nav = nav.child(div().px_2().pb_3().text_xl().font_weight(FontWeight::SEMIBOLD).child(t!("Ayarlar"))).child(
@@ -466,7 +495,7 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
     // reports the row's place on every paint instead. The page is only built for the active tab; the workspace names the one pane that
     // owns the lens and takes the lens out when no pane does.
     let lens = lens_owner && crate::glass::shown(crate::look::window::hwnd_of(window));
-    for (i, (pg, icon, label)) in PAGES.iter().copied().enumerate() {
+    for (i, (pg, icon, label)) in PAGES.iter().copied().filter(|(pg, _, _)| page_available(*pg)).enumerate() {
         let on = pg == page;
         nav = nav.child(
             h_flex()
@@ -627,19 +656,14 @@ fn quick_search_cards(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement
             window.refresh();
         })
         .into_any_element();
+    let qs_desc = if s.run_in_background {
+        t!("Her yerden kısayolla: uygulamalar, dosyalar, klasörler, yer imleri ve web")
+    } else {
+        t!("Her yerden kısayolla: uygulamalar, dosyalar, klasörler, yer imleri ve web. Pencere kapalıyken de çalışması için Gelişmiş'te arka planda çalışmayı açın")
+    };
     vec![
         section(p, "HyperSearch"),
-        card(
-            p,
-            L::Search,
-            "HyperSearch",
-            Some(if s.run_in_background {
-                t!("Her yerden kısayolla: uygulamalar, dosyalar, klasörler, yer imleri ve web")
-            } else {
-                t!("Her yerden kısayolla: uygulamalar, dosyalar, klasörler, yer imleri ve web. Pencere kapalıyken de çalışması için Gelişmiş'te arka planda çalışmayı açın")
-            }),
-            sw("quick-search", p, s.quick_search, |s, v| s.quick_search = v),
-        ),
+        card(p, L::Search, "HyperSearch", Some(qs_desc), sw("quick-search", p, s.quick_search, |s, v| s.quick_search = v)),
         card(p, L::Keyboard, t!("Kısayol"), Some(keys_desc), pill),
         card(
             p,
@@ -825,7 +849,10 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         sw("shell-sub", p, s.menu.shell_submenu, |s, v| s.menu.shell_submenu = v),
     ));
 
+    // (smooth wheel scrolling is read by the Windows GPUI fork; the macOS shim's flag is never read, so the switch would do nothing)
+    #[cfg(windows)]
     v.push(section(p, t!("Kaydırma")));
+    #[cfg(windows)]
     v.push(card(p, L::ChevronsUpDown, t!("Akıcı kaydırma"), None, sw("smooth", p, s.smooth_scroll, |s, v| s.smooth_scroll = v)));
     v.extend(quick_search_cards(p, s, cx));
     #[cfg(windows)]
@@ -855,6 +882,7 @@ const TINTS: [(&str, u32); 15] = [
 /// The background material card. While Glass is in use (chosen, or forced for this run) a note under it says what the material
 /// costs; if the engine gave up on a window, another note says why that window is on Mica.
 /// The letter of a drive's root ("V:" or "V:\"), in capitals; `None` for any other path.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn drive_letter(path: &std::path::Path) -> Option<char> {
     let s = path.to_string_lossy();
     let rest = s.strip_suffix(['\\', '/']).unwrap_or(&s);
@@ -866,6 +894,7 @@ pub(crate) fn drive_letter(path: &std::path::Path) -> Option<char> {
 }
 
 /// Hides a drive from the lists of places, or shows it again: the setting's letters, each once, in order.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn set_drive_hidden(s: &mut Settings, letter: char, hide: bool) {
     let mut mask = rf_win::drives::mask_of_letters(&s.hidden_drives);
     if let Some(bit) = rf_win::drives::letter_bit(letter) {
@@ -875,7 +904,9 @@ pub(crate) fn set_drive_hidden(s: &mut Settings, letter: char, hide: bool) {
 }
 
 /// Which drives are listed: a button per drive letter that is there now (and per letter the setting names, there or not), pressed
-/// in while the drive is hidden.
+/// in while the drive is hidden. Windows only: macOS volumes have no letters, and `rf-mac` has neither a hidden mask nor a policy to
+/// follow, so the card would be an empty row of switches that change nothing.
+#[cfg(windows)]
 fn hidden_drives_card(p: &Palette, s: &Settings) -> AnyElement {
     let hidden = rf_win::drives::mask_of_letters(&s.hidden_drives);
     let by_explorer = rf_win::drives::policy_hidden();
@@ -1392,12 +1423,18 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             dropdown(
                 "animations",
                 p,
-                s.animations,
-                vec![
-                    (AnimPref::System, if cfg!(target_os = "macos") { t!("Sistem ayarını kullan") } else { t!("Windows ayarına uy") }.into()),
-                    (AnimPref::On, t!("Açık").into()),
-                    (AnimPref::Off, t!("Kapalı").into()),
-                ],
+                if cfg!(target_os = "macos") && s.animations == AnimPref::System { AnimPref::On } else { s.animations },
+                // (macOS has no "reduce motion" the app reads: `rf-mac`'s system query is always "animations on", so "System"
+                // would be a choice that does nothing; On and Off are the switches that work)
+                if cfg!(target_os = "macos") {
+                    vec![(AnimPref::On, t!("Açık").into()), (AnimPref::Off, t!("Kapalı").into())]
+                } else {
+                    vec![
+                        (AnimPref::System, t!("Windows ayarına uy").into()),
+                        (AnimPref::On, t!("Açık").into()),
+                        (AnimPref::Off, t!("Kapalı").into()),
+                    ]
+                },
                 |s, v| s.animations = v,
             ),
         ),
@@ -1413,8 +1450,9 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     if cfg!(windows) {
         v.insert(1, backdrop_card(p, s));
     }
-    // HyperGlass look, right under the backdrop card (index 1) while Glass is the material
-    if s.backdrop_in_use() == BackdropPref::Glass || crate::glass::forced() {
+    // HyperGlass is the Windows capture engine (`rf-win::glass`); the macOS layer has no lens to tune, so the card
+    // would be five sliders that change nothing.
+    if cfg!(windows) && (s.backdrop_in_use() == BackdropPref::Glass || crate::glass::forced()) {
         v.insert(2, hyperglass_card(p, s, cx));
     }
     // tint swatches
@@ -1521,9 +1559,9 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                 .collect()
         }),
     ));
-    v.push(card(p, L::PanelTop, t!("Araç çubuğunu göster"), Some("Ctrl+Shift+B"), sw("toolbar", p, s.show_toolbar, |s, v| s.show_toolbar = v)));
+    v.push(card(p, L::PanelTop, t!("Araç çubuğunu göster"), Some(HINT_TOOLBAR), sw("toolbar", p, s.show_toolbar, |s, v| s.show_toolbar = v)));
     v.push(card(p, L::PanelBottom, t!("Durum çubuğunu göster"), None, sw("statusbar", p, s.show_statusbar, |s, v| s.show_statusbar = v)));
-    v.push(card(p, L::PanelRight, t!("Önizleme paneli"), Some("Alt+P"), sw("preview", p, s.preview_open, |s, v| s.preview_open = v)));
+    v.push(card(p, L::PanelRight, t!("Önizleme paneli"), Some(HINT_PREVIEW), sw("preview", p, s.preview_open, |s, v| s.preview_open = v)));
     v.push(card(
         p,
         L::PanelBottom,
@@ -1538,6 +1576,7 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         ),
     ));
     let hidden = s.sidebar_hidden.clone();
+    #[cfg(windows)]
     let libs = s.show_libraries;
     let (tree_on, tree_follow) = (s.sidebar_tree, s.sidebar_tree_follow);
     let pp = *p;
@@ -1551,17 +1590,22 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         move || {
             let shown = |k: &str| !hidden.iter().any(|h| h == k);
             vec![
-                sub(&pp, t!("Sürücüler"), None, switch("sb-drives", &pp, shown("drives"), {
+                // macOS shows mounted volumes, not drives: the same section, named as the Finder does
+                sub(&pp, if cfg!(target_os = "macos") { t!("Birimler") } else { t!("Sürücüler") }, None, switch("sb-drives", &pp, shown("drives"), {
                     let on = shown("drives");
                     move |_, cx| settings::update(cx, |s| show_section(s, "drives", !on))
                 })),
-                sub(&pp, t!("Bulut ve Linux"), None, switch("sb-cloud", &pp, shown("cloud"), {
+                sub(&pp, if cfg!(target_os = "macos") { t!("Bulut") } else { t!("Bulut ve Linux") }, None, switch("sb-cloud", &pp, shown("cloud"), {
                     let on = shown("cloud");
                     move |_, cx| settings::update(cx, |s| show_section(s, "cloud", !on))
                 })),
+                // (Windows Libraries; `rf-mac` lists none, so the switch would never show anything)
+                #[cfg(windows)]
                 sub(&pp, t!("Kütüphaneler"), Some(t!("Sabitlenenlerle aynı klasörleri gösterir")), switch("sb-libs", &pp, libs, move |_, cx| {
                     settings::update(cx, |s| s.show_libraries = !libs)
                 })),
+                // (network locations come from the Windows shell; macOS mounts shares under /Volumes)
+                #[cfg(windows)]
                 sub(&pp, t!("Ağ"), None, switch("sb-net", &pp, shown("network"), {
                     let on = shown("network");
                     move |_, cx| settings::update(cx, |s| show_section(s, "network", !on))
@@ -1571,7 +1615,11 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                     move |_, cx| settings::update(cx, |s| show_section(s, "tags", !on))
                 })),
                 // the folder tree (crate::sidebar_tree)
-                sub(&pp, t!("Klasör ağacı"), Some(t!("Kenar çubuğunun altına, sürücüleri ve kullanıcı klasörünü açılıp kapanan bir ağaç olarak gösteren Klasörler bölümü ekler")), switch("sb-tree", &pp, tree_on, move |_, cx| {
+                sub(&pp, t!("Klasör ağacı"), Some(if cfg!(target_os = "macos") {
+                    t!("Kenar çubuğunun altına, birimleri ve kullanıcı klasörünü açılıp kapanan bir ağaç olarak gösteren Klasörler bölümü ekler")
+                } else {
+                    t!("Kenar çubuğunun altına, sürücüleri ve kullanıcı klasörünü açılıp kapanan bir ağaç olarak gösteren Klasörler bölümü ekler")
+                }), switch("sb-tree", &pp, tree_on, move |_, cx| {
                     settings::update(cx, |s| s.sidebar_tree = !tree_on)
                 })),
                 sub(&pp, t!("Açık klasörü izle"), Some(t!("Gezindikçe ağaç, açık klasöre giden dalı açar, klasörü seçili gösterir ve görünür yere kaydırır")), switch("sb-tree-follow", &pp, tree_follow, move |_, cx| {
@@ -1642,7 +1690,17 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         None,
         None,
         move || {
-            const SECTIONS: [(&str, &str, &str); 6] = [
+            // the same sections the Home page draws: devices and network locations come from the Windows shell, and macOS has
+            // neither, so those switches are left out there
+            #[cfg(target_os = "macos")]
+            let sections: &[(&str, &str, &str)] = &[
+                ("quick", "hm-quick", "Hızlı Erişim"),
+                ("drives", "hm-drives", "Birimler"),
+                ("tags", "hm-tags", "Etiketler"),
+                ("recent", "hm-recent", "Son kullanılanlar"),
+            ];
+            #[cfg(not(target_os = "macos"))]
+            let sections: &[(&str, &str, &str)] = &[
                 ("quick", "hm-quick", "Hızlı Erişim"),
                 ("drives", "hm-drives", "Sürücüler"),
                 ("devices", "hm-devices", "Cihazlar"),
@@ -1650,7 +1708,7 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                 ("tags", "hm-tags", "Etiketler"),
                 ("recent", "hm-recent", "Son kullanılanlar"),
             ];
-            SECTIONS
+            sections
                 .iter()
                 .map(|&(key, id, label)| {
                     let on = !home_hidden.iter().any(|h| h == key);
@@ -1669,10 +1727,12 @@ fn hsla_alpha(c: u32, a: f32) -> Hsla {
     h
 }
 
-/// Installed UI-friendly fonts (curated, only those present).
+/// Installed UI-friendly fonts (curated, only those present). The Windows list is the Fluent set; the macOS one is the system
+/// faces and the same widespread app fonts, so the menu is not a row of Windows-only names that are never installed.
 fn font_choices(cx: &App) -> Vec<String> {
     let all: HashSet<String> = cx.text_system().all_font_names().into_iter().collect();
-    [
+    #[cfg(not(target_os = "macos"))]
+    const CURATED: [&str; 14] = [
         "Segoe UI Variable Text",
         "Segoe UI",
         "Inter",
@@ -1687,11 +1747,25 @@ fn font_choices(cx: &App) -> Vec<String> {
         "Source Sans 3",
         "Cascadia Code",
         "Consolas",
-    ]
-    .iter()
-    .filter(|f| all.contains(**f))
-    .map(|f| f.to_string())
-    .collect()
+    ];
+    #[cfg(target_os = "macos")]
+    const CURATED: [&str; 14] = [
+        "Helvetica Neue",
+        "Helvetica",
+        "SF Pro Text",
+        "SF Pro Display",
+        "Inter",
+        "Aptos",
+        "Arial",
+        "Roboto",
+        "Open Sans",
+        "Noto Sans",
+        "Source Sans 3",
+        "SF Mono",
+        "Menlo",
+        "Monaco",
+    ];
+    CURATED.iter().filter(|f| all.contains(**f)).map(|f| f.to_string()).collect()
 }
 
 fn layout(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
@@ -1821,11 +1895,15 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         None,
         move || {
             vec![
-                sub(&pp, t!("Gizli öğeleri göster"), Some("Ctrl+H"), switch("h1", &pp, h, move |_, cx| settings::update(cx, |s| s.show_hidden = !h))),
+                sub(&pp, t!("Gizli öğeleri göster"), Some(HINT_HIDDEN), switch("h1", &pp, h, move |_, cx| settings::update(cx, |s| s.show_hidden = !h))),
                 sub(
                     &pp,
                     t!("Korunan işletim sistemi dosyalarını göster"),
-                    Some(t!("desktop.ini, thumbs.db gibi sistem dosyaları")),
+                    Some(if cfg!(target_os = "macos") {
+                        t!(".DS_Store, ._AppleDouble gibi gizli sistem dosyaları")
+                    } else {
+                        t!("desktop.ini, thumbs.db gibi sistem dosyaları")
+                    }),
                     switch("h2", &pp, sys, move |_, cx| settings::update(cx, |s| s.show_system_files = !sys)),
                 ),
                 sub(
@@ -1882,7 +1960,11 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         p,
         L::SquareTerminal,
         t!("Adres çubuğundan komut çalıştır"),
-        Some(t!("Adres çubuğuna yazılan metin var olan bir yer değilse program olarak aranır (cmd, powershell, wt…) ve açık klasörde başlatılır; Enter ile onaylanır")),
+        Some(if cfg!(target_os = "macos") {
+            t!("Adres çubuğuna yazılan metin var olan bir yer değilse program olarak aranır (open, code, subl…) ve açık klasörde başlatılır; Enter ile onaylanır")
+        } else {
+            t!("Adres çubuğuna yazılan metin var olan bir yer değilse program olarak aranır (cmd, powershell, wt…) ve açık klasörde başlatılır; Enter ile onaylanır")
+        }),
         sw("addr-cmd", p, s.address_commands, |s, v| s.address_commands = v),
     ));
     v.push(card(
@@ -1966,7 +2048,11 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     ));
 
     // Files' folder aliases: "@name" in the address box
+    // (drive letters and Explorer's own drive policy are Windows' (`rf-mac` has neither): the hidden-drives card is left out on macOS,
+    // where a volume is hidden by unmounting it)
+    #[cfg(windows)]
     v.push(section(p, t!("Sürücüler")));
+    #[cfg(windows)]
     v.push(hidden_drives_card(p, s));
     v.push(section(p, t!("Klasör takma adları")));
     let aliases: Vec<(String, std::path::PathBuf)> = s.folder_aliases.iter().map(|(n, p)| (n.clone(), p.clone())).collect();
@@ -2006,15 +2092,89 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     v
 }
 
+/// Whether this build runs the command: mapping and disconnecting network drives is the Windows shell, and the folder organizer is
+/// part of the Windows build (`organizer_mac` only keeps the names). Listing them under keyboard shortcuts on macOS would offer
+/// commands that do nothing.
+fn action_available(action: &str) -> bool {
+    cfg!(windows) || !matches!(action, "MapNetworkDrive" | "DisconnectNetworkDrive" | "OrganizeFolder")
+}
+
+/// The command's name on this platform (macOS calls its bin the Trash, not the Recycle Bin).
+fn action_label(label: &'static str) -> SharedString {
+    if cfg!(target_os = "macos") {
+        match label {
+            "Geri dönüşüm kutusu" => t!("Çöp Sepeti").into(),
+            "Geri dönüşüm kutusuna taşı" => t!("Çöp Sepetine taşı").into(),
+            _ => crate::i18n::t(label).into(),
+        }
+    } else {
+        crate::i18n::t(label).into()
+    }
+}
+
+/// The keys a command shows. The app binds the Finder-style Command keys on macOS alongside the Explorer ones, so the built-in
+/// "Ctrl+…" list would teach shortcuts that are not the native ones there. A command with no macOS binding keeps what it has.
+fn action_keys(action: &str, keys: &'static str) -> String {
+    if cfg!(target_os = "macos") {
+        let mac = match action {
+            "NewTab" => "Cmd+T",
+            "NewWindow" => "Cmd+N",
+            "CloseTab" => "Cmd+W",
+            "DuplicateTab" => "Cmd+Shift+K",
+            "ReopenClosedTab" => "Cmd+Shift+T",
+            "NewFolder" => "Cmd+Shift+N",
+            "Refresh" => "Cmd+R",
+            "RestartApp" => "Cmd+Option+Shift+R",
+            "GoBack" => "Cmd+[",
+            "GoForward" => "Cmd+]",
+            "GoUp" => "Cmd+↑",
+            "GoHome" => "Cmd+Shift+G",
+            "GoSettings" => "Cmd+,",
+            "FocusAddress" => "Cmd+L",
+            "FocusSearch" => "Cmd+F",
+            "ToggleHidden" => "Cmd+Shift+.",
+            "ViewDetails" => "Cmd+1",
+            "ViewGrid" => "Cmd+2",
+            "ViewColumns" => "Cmd+3",
+            "ViewCards" => "Cmd+4",
+            "ViewList" => "Cmd+5",
+            "ZoomIn" => "Cmd+=",
+            "ZoomOut" => "Cmd+-",
+            "AddToShelf" => "Cmd+Shift+S",
+            "ToggleDualPane" => "Cmd+Shift+D",
+            "CloseActivePane" => "Cmd+Shift+W",
+            "TogglePreview" => "Cmd+Option+P",
+            "ToggleSidebar" => "Cmd+Option+B",
+            "OpenTerminal" => "Cmd+Shift+`",
+            "ToggleTheme" => "Cmd+Option+T",
+            "OpenInNewWindow" => "Cmd+Enter",
+            "SelectAll" => "Cmd+A",
+            "ToggleSelection" => "Ctrl+Space",
+            "CopyItems" => "Cmd+C",
+            "CutItems" => "Cmd+X",
+            "PasteItems" => "Cmd+V",
+            "PasteIntoSelected" => "Cmd+Shift+V",
+            "DeleteItems" => "Cmd+⌫",
+            "CopyPath" => "Cmd+Shift+C",
+            "Properties" => "Cmd+I",
+            _ => keys,
+        };
+        mac.to_string()
+    } else {
+        keys.to_string()
+    }
+}
+
 fn actions(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
     let mut grid = div().px_4().py_3().flex().flex_wrap().gap_x_6().gap_y_0p5();
     let capturing = crate::keymap_editor::capturing(cx);
-    let entries = crate::command_palette::shortcut_entries();
+    // (commands this build does not run are left out of the list and of the clash check)
+    let entries: Vec<_> = crate::command_palette::shortcut_entries().into_iter().filter(|(_, _, a)| action_available(a)).collect();
     let conflicts = crate::keymap_editor::conflicts(&entries, &|a| crate::keymap_editor::custom_keys(a, cx));
     for (i, (label, keys, action)) in entries.into_iter().enumerate() {
         let custom = crate::keymap_editor::custom_keys(&action, cx);
         // another command has the same keys: both are marked, hovering says which
-        let clash = conflicts.get(&action).map(|other| format!("{} {}", t!("Aynı kısayol:"), crate::i18n::t(other)));
+        let clash = conflicts.get(&action).map(|other| format!("{} {}", t!("Aynı kısayol:"), action_label(other)));
         let waiting = capturing.as_deref() == Some(action.as_str());
         let shown: SharedString = if waiting {
             t!("Tuşlara basın…").into()
@@ -2023,7 +2183,7 @@ fn actions(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
         } else if keys.is_empty() {
             "—".into()
         } else {
-            keys.into()
+            action_keys(&action, keys).into()
         };
         let act = action.clone();
         let reset_act = action.clone();
@@ -2044,7 +2204,7 @@ fn actions(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
                     crate::keymap_editor::start(act.clone(), cx);
                     window.refresh();
                 })
-                .child(crate::i18n::t(label))
+                .child(action_label(label))
                 .child(
                     h_flex()
                         .id(("kb-keys", i))
@@ -2217,9 +2377,12 @@ fn tag_name_dialog(existing: Option<(u32, String)>, window: &mut Window, cx: &mu
 fn dev(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     // The editors that are installed (`rf_win::editors`): each is a button that chooses it, and "automatic" is the first of them.
     // The look for them asks the disk and the registry, so it runs on another thread and the page is drawn again when the list
-    // is another one; while the page is open it is repeated now and then (an editor installed meanwhile shows up).
+    // is another one; while the page is open it is repeated now and then (an editor installed meanwhile shows up). macOS has no
+    // such registry list (`rf-mac` finds none), so there is nothing to look for there: the automatic choice is the `code` launcher.
+    #[cfg(windows)]
     static LOOKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let (editors, fresh) = rf_win::editors::peek();
+    #[cfg(windows)]
     if !fresh && !LOOKING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         cx.spawn(async move |cx| {
             let changed = cx.background_executor().spawn(async { rf_win::editors::refresh() }).await;
@@ -2230,9 +2393,14 @@ fn dev(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         })
         .detach();
     }
+    #[cfg(not(windows))]
+    let _ = fresh;
+    #[cfg(not(windows))]
+    let _ = cx;
     let ide_label = if s.ide_path.is_empty() {
         match editors.first() {
             Some(editor) => format!("{}: {}", t!("Otomatik"), editor.name),
+            None if cfg!(target_os = "macos") => t!("Otomatik (code komutu)").to_string(),
             None => t!("VS Code (otomatik)").to_string(),
         }
     } else {
@@ -2306,7 +2474,9 @@ fn ldropdown<T: Copy + PartialEq + 'static>(id: &'static str, p: &Palette, curre
 
 /// DirectLook (Hızlı Bakış, ayrı program) ayarları.
 fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
-    use crate::settings::{LookBackdrop, LookImageTheme};
+    use crate::settings::LookImageTheme;
+    #[cfg(windows)]
+    use crate::settings::LookBackdrop;
     // DirectLook da yazabilir: sayfa her açılışta dosyadan okunur
     let l = LookSettings::load();
     let enabled = s.directlook_enabled;
@@ -2387,11 +2557,21 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         card(
             p,
             L::AppWindow,
-            t!("Bildirim alanında DirectLook simgesi"),
+            if cfg!(target_os = "macos") { t!("Menü çubuğunda DirectLook simgesi") } else { t!("Bildirim alanında DirectLook simgesi") },
             Some(t!("Brysk arka planda çalışırken gösterilmez: tek simge Brysk'ınkidir")),
             lsw("look-tray", p, l.look_tray_icon, |s, v| s.look_tray_icon = v),
         ),
-        card(p, L::MousePointerClick, t!("Açılınca pencereyi odakla"), Some(t!("Kapalıyken klavye Explorer'da kalır: oklarla dosyalar arasında gezinilir")), lsw("look-focus", p, l.look_focus_on_open, |s, v| s.look_focus_on_open = v)),
+        card(
+            p,
+            L::MousePointerClick,
+            t!("Açılınca pencereyi odakla"),
+            Some(if cfg!(target_os = "macos") {
+                t!("Kapalıyken klavye Finder'da kalır: oklarla dosyalar arasında gezinilir")
+            } else {
+                t!("Kapalıyken klavye Explorer'da kalır: oklarla dosyalar arasında gezinilir")
+            }),
+            lsw("look-focus", p, l.look_focus_on_open, |s, v| s.look_focus_on_open = v),
+        ),
         card(p, L::CircleX, t!("Başka pencereye geçince kapat"), Some(t!("Sabitlenmiş pencereler açık kalır")), lsw("look-lostfocus", p, l.look_close_on_lost_focus, |s, v| s.look_close_on_lost_focus = v)),
         card(p, L::Zap, t!("Geçiş animasyonu"), None, lsw("look-transition", p, l.look_transition, |s, v| s.look_transition = v)),
         card(p, L::RefreshCw, t!("Yeniden yükle düğmesi"), None, lsw("look-reload", p, l.look_show_reload, |s, v| s.look_show_reload = v)),
@@ -2411,8 +2591,8 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             ),
         ),
         card(p, L::RotateCw, t!("Videoları döngüde oynat"), None, lsw("look-loop", p, l.look_loop, |s, v| s.look_loop = v)),
-        card(p, L::List, t!("Metinde satır numaraları"), Some(t!("Önizlemede Alt+L")), lsw("look-lines", p, l.look_text_line_numbers, |s, v| s.look_text_line_numbers = v)),
-        card(p, L::TextAlignJustify, t!("Metinde sözcük kaydırma"), Some(t!("Önizlemede Alt+Z")), lsw("look-wrap", p, l.look_text_wrap, |s, v| s.look_text_wrap = v)),
+        card(p, L::List, t!("Metinde satır numaraları"), Some(if cfg!(target_os = "macos") { t!("Önizlemede Option+L") } else { t!("Önizlemede Alt+L") }), lsw("look-lines", p, l.look_text_line_numbers, |s, v| s.look_text_line_numbers = v)),
+        card(p, L::TextAlignJustify, t!("Metinde sözcük kaydırma"), Some(if cfg!(target_os = "macos") { t!("Önizlemede Option+Z") } else { t!("Önizlemede Alt+Z") }), lsw("look-wrap", p, l.look_text_wrap, |s, v| s.look_text_wrap = v)),
     ]);
     // text font and size
     let font_label = if l.look_text_font.is_empty() { t!("Varsayılan").to_string() } else { l.look_text_font.clone() };
@@ -2517,22 +2697,27 @@ mod ext_tests {
 }
 
 fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
+    #[cfg(windows)]
     let start_on = rf_win::dialogs::starts_with_windows();
-    let load = hybrid::load_snapshot();
-    let pct = |v: Option<f32>| v.map(crate::i18n::pct).unwrap_or_else(|| "—".into());
-    let live = format!(
-        "{} {} · {} {} · {} {} · {} {:.1} ms · {} {}",
-        t!("Şu an:"),
-        hybrid::current_backend_label(),
-        t!("GPU yükü"),
-        pct(load.gpu_percent),
-        t!("CPU yükü"),
-        pct(load.cpu_percent),
-        t!("son kare"),
-        load.last_frame_ms,
-        hybrid::switch_count(),
-        t!("geçiş")
-    );
+    // (the hybrid renderer and its counters are the Windows fork of GPUI; macOS always draws on Metal)
+    #[cfg(windows)]
+    let live = {
+        let load = hybrid::load_snapshot();
+        let pct = |v: Option<f32>| v.map(crate::i18n::pct).unwrap_or_else(|| "—".into());
+        format!(
+            "{} {} · {} {} · {} {} · {} {:.1} ms · {} {}",
+            t!("Şu an:"),
+            hybrid::current_backend_label(),
+            t!("GPU yükü"),
+            pct(load.gpu_percent),
+            t!("CPU yükü"),
+            pct(load.cpu_percent),
+            t!("son kare"),
+            load.last_frame_ms,
+            hybrid::switch_count(),
+            t!("geçiş")
+        )
+    };
     #[cfg(windows)]
     let dfm_on = crate::DEFAULT_FM.load(std::sync::atomic::Ordering::Relaxed);
     #[cfg(windows)]
@@ -2563,7 +2748,13 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
         link_row(p, "edit-file", L::FilePen, t!("Ayar dosyasını düzenle"), Some(t!("settings.toml metin düzenleyicide açılır")), |_, _| {
             if let Some(path) = settings::path() {
                 std::thread::spawn(move || {
-                    let _ = std::process::Command::new("notepad.exe").arg(path).spawn();
+                    // TextEdit (or the default app) on macOS; Notepad on Windows, as it always was
+                    #[cfg(windows)]
+                    let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+                    #[cfg(not(windows))]
+                    if let Err(e) = rf_win::shell::open(&path) {
+                        log::warn!("open settings.toml: {e:#}");
+                    }
                 });
             }
         }),
@@ -2593,6 +2784,9 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             }),
             sw("background", p, s.run_in_background, |s, v| s.run_in_background = v),
         ),
+        // (notification delivery is `rf_win::tray::notify`: a no-op on macOS until UNUserNotificationCenter is wired, so the switch would
+        // promise a notification that never comes)
+        #[cfg(windows)]
         card(
             p,
             L::Bell,
@@ -2656,6 +2850,9 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
                 |s, v| s.copy_speed_limit = v,
             ),
         ),
+        // (the status bar's performance row includes the GPU/CPU badge, whose click cycles the Windows hybrid renderer; on macOS the
+        // badge would be a dead control, so the setting is left out until the badge is platform-aware)
+        #[cfg(windows)]
         card(
             p,
             L::Activity,
@@ -2663,6 +2860,8 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             Some(t!("Klasörün listelenme süresi ve çizim yöntemi (GPU / CPU)")),
             sw("perf-info", p, s.show_perf_info, |s, v| s.show_perf_info = v),
         ),
+        // (the hybrid GPU/CPU renderer is the Windows fork of GPUI; macOS always draws on Metal, so a renderer choice would do nothing)
+        #[cfg(windows)]
         shell(p)
             .child(card_body(
                 p,
@@ -2738,7 +2937,11 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             p,
             L::FolderTree,
             t!("Düzleştirme seçeneğini göster"),
-            Some(t!("Klasördeki tüm alt klasörlerin dosyalarını tek seviyeye taşır. Ctrl+Z ile geri alınır.")),
+            Some(if cfg!(target_os = "macos") {
+                t!("Klasördeki tüm alt klasörlerin dosyalarını tek seviyeye taşır. Cmd+Z ile geri alınır.")
+            } else {
+                t!("Klasördeki tüm alt klasörlerin dosyalarını tek seviyeye taşır. Ctrl+Z ile geri alınır.")
+            }),
             sw("flatten", p, s.show_flatten, |s, v| s.show_flatten = v),
         ),
         card(
@@ -2765,7 +2968,24 @@ fn open_url(url: &'static str) {
     });
 }
 
+/// Update status and the button that fits it (Settings → About). macOS builds are a notarised `.app` updated by downloading a new
+/// DMG (`installer_mac` knows only "not installed"); there is no background check to report, so the row says how updating works and
+/// points at the releases page. The automatic-download and beta switches are left out of that page for the same reason.
+#[cfg(target_os = "macos")]
+fn update_card(p: &Palette, _s: &Settings) -> AnyElement {
+    shell(p)
+        .child(card_body(
+            p,
+            L::RefreshCw,
+            t!("Güncellemeler").into(),
+            Some(t!("Güncellemeler GitHub'dan indirilir: yeni sürümü DMG ile kurun.").into()),
+            Some(button("upd-web", p, t!("Sürümler sayfası"), |_, _| open_url(RELEASES_URL))),
+        ))
+        .into_any_element()
+}
+
 /// Update status and the button that fits it (Settings → About).
+#[cfg(not(target_os = "macos"))]
 fn update_card(p: &Palette, s: &Settings) -> AnyElement {
     use crate::installer::State;
     let state = crate::installer::state();
@@ -2842,6 +3062,7 @@ fn update_card(p: &Palette, s: &Settings) -> AnyElement {
 }
 
 /// A soft band of light: transparent at both edges, `alpha` in the middle.
+#[cfg(not(target_os = "macos"))]
 fn glow(c: Hsla, alpha: f32) -> Div {
     let half = |from: f32, to: f32| {
         div().flex_1().h_full().bg(linear_gradient(90., linear_color_stop(c.opacity(from), 0.), linear_color_stop(c.opacity(to), 1.)))
@@ -2850,6 +3071,7 @@ fn glow(c: Hsla, alpha: f32) -> Div {
 }
 
 /// "Check for updates": runs off the UI thread and redraws while it checks and downloads.
+#[cfg(not(target_os = "macos"))]
 pub(crate) fn check_updates_now(cx: &mut App) {
     // (the beta switch as it is now: the check itself runs off this thread)
     crate::installer::set_beta_updates(cx.global::<Settings>().beta_updates);
@@ -2862,11 +3084,20 @@ pub(crate) fn check_updates_now(cx: &mut App) {
     .detach();
 }
 
+#[cfg(not(target_os = "macos"))]
 const REPO_URL: &str = "https://github.com/gelenmedya/rustyfiles";
+#[cfg(target_os = "macos")]
+const REPO_URL: &str = "https://github.com/rexmont/brysk";
 const SITE_URL: &str = "https://github.com/rexmont/brysk";
 const DISCORD_URL: &str = "https://discord.gg/K2banZ36zJ";
+#[cfg(not(target_os = "macos"))]
 const ISSUES_URL: &str = "https://github.com/gelenmedya/rustyfiles/issues/new";
+#[cfg(target_os = "macos")]
+const ISSUES_URL: &str = "https://github.com/rexmont/brysk/issues/new";
+#[cfg(not(target_os = "macos"))]
 const RELEASES_URL: &str = "https://github.com/gelenmedya/rustyfiles/releases";
+#[cfg(target_os = "macos")]
+const RELEASES_URL: &str = "https://github.com/rexmont/brysk/releases";
 
 fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
     let ver = crate::installer::version_full();
@@ -2882,6 +3113,8 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             button("copy-ver", p, t!("Kopyala"), move |_, cx| cx.write_to_clipboard(ClipboardItem::new_string(format!("Brysk {ver}")))),
         ),
         update_card(p, &s),
+        // (Velopack's updater is Windows-only; macOS copies are updated by installing the new DMG, so both switches would do nothing)
+        #[cfg(windows)]
         card(
             p,
             L::Download,
@@ -2889,6 +3122,7 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             Some(t!("Arka planda denetlenir ve indirilir; bir sonraki açılışta uygulanır.")),
             sw("auto-upd", p, s.auto_update, |s, v| s.auto_update = v),
         ),
+        #[cfg(windows)]
         card(
             p,
             L::Sparkles,
@@ -2933,7 +3167,19 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             None,
             None,
             move || {
-                [
+                #[cfg(target_os = "macos")]
+                let libs: &[(&str, &str)] = &[
+                    ("GPUI", "Apache-2.0"),
+                    ("gpui-kit", "Apache-2.0"),
+                    ("objc2, block2, dispatch2", "MIT"),
+                    ("core-foundation", "MIT / Apache-2.0"),
+                    ("Lucide icons", "ISC"),
+                    ("zip, sevenz-rust2, tar, flate2, zstd", "MIT / Apache-2.0"),
+                    ("notify", "CC0 / Artistic-2.0"),
+                    ("chrono, serde, toml", "MIT / Apache-2.0"),
+                ];
+                #[cfg(not(target_os = "macos"))]
+                let libs: &[(&str, &str)] = &[
                     ("GPUI", "Apache-2.0"),
                     ("gpui-kit", "Apache-2.0"),
                     ("Velopack", "MIT"),
@@ -2942,10 +3188,10 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
                     ("zip, sevenz-rust2, tar, flate2, zstd", "MIT / Apache-2.0"),
                     ("notify", "CC0 / Artistic-2.0"),
                     ("chrono, serde, toml", "MIT / Apache-2.0"),
-                ]
-                .iter()
-                .map(|(n, l)| sub(&pp, n, Some(l), div().into_any_element()))
-                .collect()
+                ];
+                libs.iter()
+                    .map(|(n, l)| sub(&pp, n, Some(l), div().into_any_element()))
+                    .collect()
             },
             cx,
         ),
@@ -2975,7 +3221,8 @@ enum PickTarget {
     Import,
 }
 
-/// Runs a Windows file dialog on the shell thread and applies the result.
+/// Runs the platform's file dialog on the shell thread (the AppKit panel is dispatched to the main thread there) and applies the
+/// result.
 fn pick_into(_window: &mut Window, cx: &mut App, title: &str, target: PickTarget) {
     let title = title.to_string();
     let (tx, rx) = futures::channel::oneshot::channel::<Option<std::path::PathBuf>>();
@@ -3040,11 +3287,19 @@ fn pick_into(_window: &mut Window, cx: &mut App, title: &str, target: PickTarget
 
 /// "Local drives' file names are kept in an index … · C:\ 2.1 million entries, 84 MB · E:\ indexing…"
 fn name_index_status() -> String {
-    let mut s = t!("Yerel sürücülerdeki dosya adları bir dizinde tutulur: alt klasörlerde arama milisaniyeler sürer. Dizin arka planda hazırlanır ve güncel tutulur.").to_string();
+    let intro = if cfg!(target_os = "macos") {
+        t!("Yerel birimlerdeki dosya adları bir dizinde tutulur: alt klasörlerde arama milisaniyeler sürer. Dizin arka planda hazırlanır ve güncel tutulur.")
+    } else {
+        t!("Yerel sürücülerdeki dosya adları bir dizinde tutulur: alt klasörlerde arama milisaniyeler sürer. Dizin arka planda hazırlanır ve güncel tutulur.")
+    };
+    let mut s = intro.to_string();
     let parts: Vec<String> = rf_win::indexer::status()
         .into_iter()
         .map(|(root, state, live, mem)| {
-            let r = root.to_string_lossy().trim_end_matches('\\').to_string();
+            // (a root is "C:\" on Windows and "/" or "/Volumes/X" here: trim a separator, but never the root's only one)
+            let full = root.to_string_lossy();
+            let trimmed = full.trim_end_matches(['\\', '/']);
+            let r = if trimmed.is_empty() { full.to_string() } else { trimmed.to_string() };
             match state {
                 rf_win::indexer::State::Building => format!("{r} {}", t!("hazırlanıyor…")),
                 rf_win::indexer::State::Failed => format!("{r} {}", t!("dizinlenemedi")),
@@ -3105,16 +3360,17 @@ fn index_exclusions(p: &Palette, s: &Settings) -> AnyElement {
                         .min_w_0()
                         .child(div().text_sm().child(t!("Dizine alınmayan klasörler")))
                         .child(div().text_xs().text_color(p.text_secondary).child(format!(
-                            "{} {defaults}, Windows. {}",
+                            "{} {defaults}, {}. {}",
                             t!("Her zaman:"),
+                            if cfg!(target_os = "macos") { "macOS" } else { "Windows" },
                             t!("Bu klasörlerin içinde arama diskte yapılır. Bir klasörü sağ tıklayıp \"Aramada dizine alma\" ile de ekleyebilirsiniz.")
                         ))),
                 )
-                .child(button("idx-excl-add", p, t!("Klasör ekle…"), |window, cx| {
+                .child(button("idx-excl-add", p, t!("Klasör ekle…"), |_window, cx| {
                     #[cfg(windows)]
                     let owner = {
                         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-                        match HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
+                        match HasWindowHandle::window_handle(_window).map(|h| h.as_raw()) {
                             Ok(RawWindowHandle::Win32(h)) => windows::Win32::Foundation::HWND(h.hwnd.get() as *mut _),
                             _ => windows::Win32::Foundation::HWND::default(),
                         }
@@ -3122,7 +3378,9 @@ fn index_exclusions(p: &Palette, s: &Settings) -> AnyElement {
                     #[cfg(not(windows))]
                     let owner = 0isize;
                     if let Some(dir) = rf_win::dialogs::pick(owner, t!("Dizine alınmayacak klasör"), rf_win::dialogs::Pick::Folder) {
-                        let d = dir.to_string_lossy().trim_end_matches('\\').to_string();
+                        let full = dir.to_string_lossy();
+                        let trimmed = full.trim_end_matches(['\\', '/']);
+                        let d = if trimmed.is_empty() { full.to_string() } else { trimmed.to_string() };
                         settings::update(cx, |s| {
                             if !s.index_excluded.iter().any(|e| e.eq_ignore_ascii_case(&d)) {
                                 s.index_excluded.push(d);

@@ -1,15 +1,16 @@
 //! PDF pages, the macOS half of `rf-win::look::pdf`.
 //!
-//! PDFKit draws a page into an image at the width asked for; the pixels come back through the
-//! same `image` crate the rest of the preview uses. Renders run through the main queue because
-//! PDFKit's drawing is AppKit work; the decode of the resulting image happens off it.
+//! PDFKit draws a page into an image at the width asked for; the pixels come back through a
+//! Core Graphics bitmap context (the same `image` crate the rest of the preview uses is used
+//! for fallbacks). Everything here runs on the caller's worker thread: nothing hops to the main
+//! queue and nothing blocks the UI, whose only job is to draw the finished picture.
 
 use std::path::Path;
 
 use anyhow::anyhow;
 use objc2::AnyThread;
 use objc2::rc::Retained;
-use objc2_foundation::{MainThreadMarker, NSString, NSURL};
+use objc2_foundation::{NSString, NSURL};
 use objc2_pdf_kit::{PDFDisplayBox, PDFDocument};
 
 use crate::thumbs::Bgra;
@@ -71,28 +72,25 @@ impl Pdf {
         let height = ((width as f32) * (h / w.max(1.0))).round().max(1.0) as u32;
         let page = unsafe { self.doc.pageAtIndex(index as usize) }.ok_or_else(|| anyhow!(PdfError::Unreadable))?;
 
-        let (tx, rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
-        objc2::rc::autoreleasepool(|_| {
-            let img = unsafe { page.thumbnailOfSize_forBox(objc2_foundation::NSSize::new(width as f64, height as f64), PDFDisplayBox::MediaBox) };
-            let ptr = Retained::into_raw(img) as usize;
-            dispatch2::DispatchQueue::main().exec_async(move || {
-                if MainThreadMarker::new().is_none() {
-                    let _ = tx.send(None);
-                    return;
-                }
-                let img = unsafe { Retained::from_raw(ptr as *mut objc2_app_kit::NSImage) };
-                let data = img.and_then(|i| i.TIFFRepresentation()).map(|d| d.to_vec());
-                let _ = tx.send(data);
-            });
+        // (PDFKit's thumbnail is made here, on the caller's worker: PDFKit reads can run off the
+        // main thread. The pixels are taken from the image's CGImage in a bitmap context, also
+        // here — the old main-queue TIFF encode could hold the UI for seconds on a big page.)
+        let img = objc2::rc::autoreleasepool(|_| unsafe {
+            page.thumbnailOfSize_forBox(
+                objc2_foundation::NSSize::new(f64::from(width), f64::from(height)),
+                PDFDisplayBox::MediaBox,
+            )
         });
-        let data = rx.recv_timeout(std::time::Duration::from_secs(20)).ok().flatten().ok_or_else(|| anyhow!(PdfError::Unreadable))?;
-        let img = image::load_from_memory(&data)?;
-        let img = if img.width() != width || img.height() != height { img.resize_exact(width, height, image::imageops::FilterType::Triangle) } else { img };
-        let mut rgba = img.to_rgba8();
-        for px in rgba.chunks_exact_mut(4) {
-            px.swap(0, 2);
-        }
-        Ok(Bgra { width, height, data: rgba.into_raw() })
+        let mut rect = objc2_foundation::NSRect::new(
+            objc2_foundation::NSPoint::new(0., 0.),
+            objc2_foundation::NSSize::new(f64::from(width), f64::from(height)),
+        );
+        let cg = unsafe { img.CGImageForProposedRect_context_hints(&mut rect, None, None) }
+            .ok_or_else(|| anyhow!(PdfError::Unreadable))?;
+        // (the page's picture is exactly the box the layout reserved: draw into that size, as the
+        // old `resize_exact` did)
+        crate::thumbs::cg_image_to_bgra_exact(Retained::as_ptr(&cg) as *mut std::ffi::c_void, width, height)
+            .ok_or_else(|| anyhow!(PdfError::Unreadable))
     }
 }
 
@@ -101,15 +99,33 @@ impl Pdf {
 mod tests {
     use super::*;
 
+    fn sample_pdf() -> Option<&'static Path> {
+        let path = Path::new("/System/Library/Assistant/UIPlugins/MailUI.siriUIBundle/Contents/Resources/MessageListAttachmentTemplate.pdf");
+        path.exists().then_some(path)
+    }
+
     #[test]
     fn opens_and_measures_a_pdf() {
-        let path = Path::new("/System/Library/Assistant/UIPlugins/MailUI.siriUIBundle/Contents/Resources/MessageListAttachmentTemplate.pdf");
-        if !path.exists() {
-            return;
-        }
+        let Some(path) = sample_pdf() else { return };
         let pdf = Pdf::open(path, None).unwrap();
         assert!(pdf.page_count() > 0);
         let (w, h) = pdf.page_size(0).unwrap();
         assert!(w > 0.0 && h > 0.0);
+    }
+
+    /// A page is rendered on the calling (test) thread, without a main-queue round trip, at the
+    /// exact box the layout asks for.
+    #[test]
+    fn renders_a_page_off_the_main_thread() {
+        let Some(path) = sample_pdf() else { return };
+        let pdf = Pdf::open(path, None).unwrap();
+        if pdf.page_count() == 0 {
+            return;
+        }
+        let img = pdf.render(0, 128).unwrap();
+        assert_eq!(img.width, 128);
+        assert!(img.height > 0);
+        assert_eq!(img.data.len(), (img.width * img.height * 4) as usize);
+        assert!(img.data.iter().any(|&b| b != 0), "the page has pixels");
     }
 }

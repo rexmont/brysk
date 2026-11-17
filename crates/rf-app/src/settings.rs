@@ -1,4 +1,5 @@
-//! Persistent user settings (%APPDATA%\Brysk\settings.toml) as a GPUI global.
+//! Persistent user settings (`~/Library/Application Support/Brysk/settings.toml` on macOS,
+//! `%APPDATA%\Brysk\settings.toml` on Windows) as a GPUI global.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -120,7 +121,7 @@ pub enum StartupPref {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AnimPref {
-    /// Follow Windows (Settings → Accessibility → Visual effects → Animation effects).
+    /// Follow the system's animation setting (Windows' "Animation effects"; macOS always reports animations on).
     #[default]
     System,
     On,
@@ -379,7 +380,7 @@ fn is_default_preview_height(h: &f32) -> bool {
 #[serde(default)]
 pub struct Settings {
     pub theme: ThemePref,
-    /// UI language (`system` follows the Windows UI language).
+    /// UI language (`system` follows the system's display language).
     pub language: Lang,
     pub default_view: DefaultView,
     pub show_hidden: bool,
@@ -428,19 +429,21 @@ pub struct Settings {
     /// Folder aliases: `@name` in the address box (Files' folder aliases).
     pub folder_aliases: std::collections::BTreeMap<String, PathBuf>,
     /// The drives that are not listed (the sidebar, the Home page, the address bar's list of drives), as letters ("V"). A drive
-    /// Explorer hides by its own policy is hidden too, without being named here (`rf_win::drives::visible_drives`).
+    /// Explorer hides by its own policy is hidden too, without being named here (`rf_win::drives::visible_drives`). Windows only:
+    /// macOS volumes are mount points, and the hidden-drives card is not shown there.
     pub hidden_drives: Vec<String>,
-    /// The accent colour of Brysk as "#RRGGBB"; empty: Windows' own accent (Settings > Appearance).
+    /// The accent colour of Brysk as "#RRGGBB"; empty: the system's own accent (Windows' Settings > Appearance, macOS' System
+    /// Settings > Appearance).
     pub accent_color: String,
     /// The user's own programs for kinds of files (Settings > File types; `rf_core::openrules`): the first program of a list opens
     /// such a file on a double click, all of them stand first under "Open with". Only Brysk follows them.
     pub open_rules: Vec<rf_core::openrules::OpenRule>,
-    /// Closing the last window keeps Brysk in the notification area (Files' "leave app
-    /// running in the background"): the next window opens instantly.
+    /// Closing the last window keeps Brysk in the notification area (the menu bar on macOS): the next window opens instantly.
     pub run_in_background: bool,
     /// Status bar: listing time and the GPU/CPU renderer badge (developer info).
     pub show_perf_info: bool,
-    /// A notification when a long operation finishes while Brysk is not in front.
+    /// A notification when a long operation finishes while Brysk is not in front (Windows only: `rf-mac`'s notification call is
+    /// still a stub).
     pub notify_long_ops: bool,
     /// Updates (GitHub Releases) are looked for and downloaded in the background.
     pub auto_update: bool,
@@ -559,7 +562,7 @@ pub struct Settings {
     pub browse_archives: bool,
     /// After extracting an archive into a new folder, that folder opens in a tab.
     pub open_after_extract: bool,
-    /// Search through the Windows Search index (contents, AQS) where the folder is indexed.
+    /// Search through the Windows Search index (contents, AQS) where the folder is indexed. Windows only; false on macOS.
     pub search_index: bool,
     /// Our own name index of the local drives: searching in subfolders takes milliseconds.
     pub name_index: bool,
@@ -736,7 +739,7 @@ impl Default for Settings {
             open_rules: Vec::new(),
             run_in_background: false,
             show_perf_info: false,
-            notify_long_ops: true,
+            notify_long_ops: cfg!(windows),
             auto_update: true,
             beta_updates: false,
             first_start_ms: 0,
@@ -804,7 +807,7 @@ impl Default for Settings {
             address_commands: true,
             browse_archives: true,
             open_after_extract: false,
-            search_index: true,
+            search_index: cfg!(windows),
             name_index: true,
             index_excluded: Vec::new(),
             ide_button: IdePref::GitRepos,
@@ -876,8 +879,8 @@ static SOLID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new
 
 static ANIM: AtomicU8 = AtomicU8::new(0);
 
-/// Whether UI animations play (Settings → Appearance → Animations; "System" follows Windows'
-/// Animation effects, read each time: it's one cheap call and may change while we run).
+/// Whether UI animations play (Settings → Appearance → Animations; "System" follows the system's Animation effects setting,
+/// read each time: it's one cheap call and may change while we run). On macOS the platform query is always "on".
 pub fn animations() -> bool {
     match ANIM.load(Ordering::Relaxed) {
         x if x == AnimPref::On as u8 => true,
@@ -1306,8 +1309,8 @@ show_hidden = true").unwrap();
     }
 }
 
-/// Where data that can be rebuilt lives (remembered folder sizes): `%LOCALAPPDATA%\Brysk`,
-/// or `RUSTYFILES_CONFIG_DIR` when set, so test copies keep their data apart.
+/// Where data that can be rebuilt lives (remembered folder sizes): `~/Library/Application Support/Brysk` on macOS,
+/// `%LOCALAPPDATA%\Brysk` on Windows, or `RUSTYFILES_CONFIG_DIR` when set, so test copies keep their data apart.
 pub fn local_data_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("RUSTYFILES_CONFIG_DIR").filter(|d| !d.is_empty()) {
         return Some(std::path::PathBuf::from(d));
@@ -1329,7 +1332,8 @@ fn product_dir(base: std::path::PathBuf, name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// `%APPDATA%\Brysk`, or `RUSTYFILES_CONFIG_DIR` when set (portable use, tests).
+/// `~/Library/Application Support/Brysk` on macOS, `%APPDATA%\Brysk` on Windows, or `RUSTYFILES_CONFIG_DIR` when set (portable use,
+/// tests).
 pub fn app_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("RUSTYFILES_CONFIG_DIR").filter(|d| !d.is_empty()) {
         return Some(std::path::PathBuf::from(d));

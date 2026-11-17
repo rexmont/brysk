@@ -171,8 +171,16 @@ fn radio(p: &Palette, on: bool) -> Div {
 impl Render for BinSettingsDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::for_window(window);
+        let managed = cfg!(target_os = "macos");
         let mut body = v_flex().gap_3();
-        if let (Some(now), Some(edit)) = (&self.now, &self.edit) {
+        if managed {
+            // macOS keeps no per-volume Trash size policy and reads no delete-confirmation preference from a registry (`rf-mac`'s
+            // store has no volumes): there is nothing here to edit, and Save would fail. Say who owns the setting instead.
+            body = body.child(div().text_sm().text_color(p.text_secondary).child(t!("macOS çöp sepetini Finder yönetir: burada bir boyut sınırı ya da silme onayı ayarı yoktur.")));
+            if let Some(e) = &self.error {
+                body = body.child(div().text_sm().text_color(p.danger).child(e.clone()));
+            }
+        } else if let (Some(now), Some(edit)) = (&self.now, &self.edit) {
             if now.volumes.is_empty() {
                 body = body.child(div().text_sm().text_color(p.text_secondary).child(t!("Geri Dönüşüm Kutusu olan sürücü bulunamadı")));
             }
@@ -295,6 +303,14 @@ impl Render for BinSettingsDialog {
                 .when(!enabled, |d| d.opacity(0.5))
                 .child(label)
         };
+        let footer = h_flex().px_6().py_4().gap_2().justify_end().bg(p.hover).border_t_1().border_color(p.divider);
+        let footer = if managed {
+            footer.child(button("bin-cancel", t!("Kapat"), false, true).on_click(cx.listener(|this, _, _, cx| this.close(None, cx))))
+        } else {
+            footer
+                .child(button("bin-save", t!("Kaydet"), true, ready).on_click(cx.listener(|this, _, _, cx| this.save(cx))))
+                .child(button("bin-cancel", t!("İptal"), false, true).on_click(cx.listener(|this, _, _, cx| this.close(None, cx))))
+        };
         div()
             .id("bin-settings-layer")
             .absolute()
@@ -326,22 +342,11 @@ impl Render for BinSettingsDialog {
                         v_flex()
                             .p_6()
                             .gap_3()
-                            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(t!("Geri Dönüşüm Kutusu ayarları")))
+                            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(if managed { t!("Çöp Sepeti ayarları") } else { t!("Geri Dönüşüm Kutusu ayarları") }))
                             .child(body)
-                            .children(self.error.clone().filter(|_| self.edit.is_some()).map(|e| div().text_xs().text_color(p.danger).child(e))),
+                            .children(self.error.clone().filter(|_| !managed && self.edit.is_some()).map(|e| div().text_xs().text_color(p.danger).child(e))),
                     )
-                    .child(
-                        h_flex()
-                            .px_6()
-                            .py_4()
-                            .gap_2()
-                            .justify_end()
-                            .bg(p.hover)
-                            .border_t_1()
-                            .border_color(p.divider)
-                            .child(button("bin-save", t!("Kaydet"), true, ready).on_click(cx.listener(|this, _, _, cx| this.save(cx))))
-                            .child(button("bin-cancel", t!("İptal"), false, true).on_click(cx.listener(|this, _, _, cx| this.close(None, cx)))),
-                    ),
+                    .child(footer),
             )
     }
 }

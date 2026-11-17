@@ -1,4 +1,5 @@
-//! Tags as a GPUI global, persisted to %APPDATA%\Brysk\tags.json.
+//! Tags as a GPUI global, persisted to the app's settings folder (`tags.json`); on macOS a
+//! tag is also written to the Finder's `_kMDItemUserTags` attribute.
 
 use std::path::PathBuf;
 
@@ -17,8 +18,15 @@ pub fn load() -> Tags {
 }
 
 pub fn update(cx: &mut App, f: impl FnOnce(&mut TagStore)) {
+    // The paths tagged before: an item whose last tag goes away leaves `items`, and its
+    // Finder attribute must go too (it would otherwise keep showing the old tag).
+    #[cfg(target_os = "macos")]
+    let before = cx.global::<Tags>().0.clone();
     cx.update_global::<Tags, _>(|t, _| f(&mut t.0));
     let snapshot = cx.global::<Tags>().0.clone();
+    #[cfg(target_os = "macos")]
+    write_finder(&before, &snapshot);
+    #[cfg(not(target_os = "macos"))]
     write_finder(&snapshot);
     save_snapshot(snapshot);
     cx.refresh_windows();
@@ -67,9 +75,11 @@ fn finder_color(index: u8) -> u32 {
     FINDER_COLORS.iter().find(|(i, _)| *i == index).map(|(_, c)| *c).unwrap_or(0xC7C7CC)
 }
 
-/// Writes every tagged item's tags to the Finder's `_kMDItemUserTags` attribute.
+/// Writes every tagged item's tags to the Finder's `_kMDItemUserTags` attribute, and clears the
+/// attribute of items that had tags before and have none now (a removed last tag, a deleted tag).
 #[cfg(target_os = "macos")]
-fn write_finder(store: &TagStore) {
+fn write_finder(before: &TagStore, store: &TagStore) {
+    let before = before.clone();
     let store = store.clone();
     std::thread::spawn(move || {
         for item in store.items.values() {
@@ -80,6 +90,16 @@ fn write_finder(store: &TagStore) {
                 .collect();
             if let Err(e) = rf_win::tags::write(&item.path, &tags) {
                 log::debug!("finder tags: {}: {e}", item.path.display());
+            }
+        }
+        // (folded, as the store's own keys are: a case-only rename is the same file on APFS)
+        let live: std::collections::HashSet<String> = store.items.values().map(|i| i.path.to_string_lossy().to_lowercase()).collect();
+        for item in before.items.values() {
+            if live.contains(&item.path.to_string_lossy().to_lowercase()) {
+                continue;
+            }
+            if let Err(e) = rf_win::tags::write(&item.path, &[]) {
+                log::debug!("finder tags (clear): {}: {e}", item.path.display());
             }
         }
     });

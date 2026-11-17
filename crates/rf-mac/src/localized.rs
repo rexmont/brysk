@@ -5,9 +5,26 @@
 //! can carry a `.localized` directory with `*.lproj` name files. That file is read when present.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::known::KnownFolder;
+
+/// Translates a Turkish source key into the interface language. `rf-app::i18n::set` installs it
+/// once at startup; without it (this crate's own tests) the key itself is returned.
+static TRANSLATOR: OnceLock<fn(&str) -> String> = OnceLock::new();
+
+/// Installs the UI-language translator for the known folders' titles. Called by
+/// `rf-app::i18n::set`, after the language has been resolved.
+pub fn set_label_translator(f: fn(&str) -> String) {
+    let _ = TRANSLATOR.set(f);
+}
+
+fn label(key: &'static str) -> Arc<str> {
+    match TRANSLATOR.get() {
+        Some(t) => Arc::from(t(key)),
+        None => Arc::from(key),
+    }
+}
 
 fn localized_name_file(dir: &Path) -> Option<PathBuf> {
     // A folder with `.localized` and `en.lproj/.localizedName` (or any lproj) shows that name.
@@ -44,14 +61,19 @@ pub fn folder_label(dir: &Path, _attrs: Option<u32>) -> Option<Arc<str>> {
     None
 }
 
+/// The name the interface shows for a standard folder. The folder itself is known by its path,
+/// so this works for a pin, a tab title, a breadcrumb and the Home page alike; the title is
+/// translated through the interface's hook (see [`set_label_translator`]).
 pub fn label_if_known(dir: &Path) -> Option<Arc<str>> {
-    dir.file_name().and_then(|n| {
-        KnownFolder::PINNED_DEFAULTS.iter().find(|k| k.path().as_deref().and_then(|p| p.file_name()) == Some(n)).map(|k| Arc::from(k.title()))
-    })
+    // Path comparison only, no `is_dir` per known folder: this runs for every breadcrumb frame.
+    KnownFolder::PINNED_DEFAULTS
+        .iter()
+        .find(|k| k.path_unchecked().as_deref() == Some(dir))
+        .map(|k| label(k.title()))
 }
 
 pub fn is_known(dir: &Path) -> bool {
-    KnownFolder::PINNED_DEFAULTS.iter().any(|k| k.path().as_deref() == Some(dir))
+    KnownFolder::PINNED_DEFAULTS.iter().any(|k| k.path_unchecked().as_deref() == Some(dir))
 }
 
 /// Nothing to warm: the labels are read from the folder itself.

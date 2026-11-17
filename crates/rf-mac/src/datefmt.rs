@@ -1,15 +1,16 @@
 //! Dates and times written the way the user's Mac writes them, the macOS half of
 //! `rf-win::datefmt`. The columns show the short date and the short time of the regional
-//! format, exactly as the Finder does.
+//! format, exactly as the Finder does. The REGION (`AppleLocale`) decides this; the preferred
+//! language list does not (see `encoding::preferred_language_tag`).
 
 use chrono::{DateTime, Datelike, Local, Timelike};
 
 /// "17.11.2026 09:30" (or the regional order); `None` when the format cannot be built.
 pub fn short_date_time(dt: &DateTime<Local>) -> Option<String> {
-    // macOS' short date is day-first in most of Europe, month-first in the US. `defaults`
-    // knows the user's choice; reading it once per call would spawn a process, so use the
-    // locale's own separators from the environment and fall back to ISO-like.
-    let locale = std::env::var("LC_TIME").or_else(|_| std::env::var("LANG")).unwrap_or_default().to_ascii_lowercase();
+    // macOS' short date is day-first in most of Europe, month-first in the US. The region
+    // knows the user's choice; `encoding::regional_locale` reads it once and falls back to
+    // the locale in the environment.
+    let locale = crate::encoding::regional_locale().to_ascii_lowercase();
     let (y, mo, d, h, mi) = (dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute());
     if locale.starts_with("en_us") || locale.starts_with("en-us") {
         Some(format!("{mo}/{d}/{y} {}:{mi:02} {}", if h % 12 == 0 { 12 } else { h % 12 }, if h < 12 { "AM" } else { "PM" }))

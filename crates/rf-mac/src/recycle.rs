@@ -5,7 +5,9 @@
 //! puts an item back where it came from when that place is known (macOS keeps no "original
 //! location" record for items deleted by other apps, so it is the home folder).
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// One item in the Trash.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,38 +38,64 @@ fn journal_path() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join("Brysk").join("trash.json"))
 }
 
-fn load_journal() -> std::collections::HashMap<String, String> {
+/// One read-modify-write of the journal at a time: two deletions (or a deletion and an empty)
+/// running together must not drop each other's entries.
+static JOURNAL_LOCK: Mutex<()> = Mutex::new(());
+
+fn load_journal_unlocked() -> HashMap<String, String> {
     journal_path()
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default()
 }
 
-fn save_journal(map: &std::collections::HashMap<String, String>) {
+/// Atomic replace: a reader never sees half a JSON file (an empty read would lose every
+/// remembered original folder until the next write).
+fn save_journal_unlocked(map: &HashMap<String, String>) {
     let Some(p) = journal_path() else { return };
     if let Some(dir) = p.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Ok(text) = serde_json::to_string(map) {
-        let _ = std::fs::write(p, text);
+    let Ok(text) = serde_json::to_string(map) else { return };
+    let tmp = p.with_extension("json.tmp");
+    if std::fs::write(&tmp, text).is_ok() {
+        let _ = std::fs::rename(&tmp, &p);
     }
 }
 
+fn with_journal(f: impl FnOnce(&mut HashMap<String, String>)) {
+    let _guard = JOURNAL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut map = load_journal_unlocked();
+    f(&mut map);
+    save_journal_unlocked(&map);
+}
+
+fn load_journal() -> HashMap<String, String> {
+    let _guard = JOURNAL_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    load_journal_unlocked()
+}
+
 fn record_original(original: &Path, trashed: &Path) {
-    let mut map = load_journal();
     // The item's full original path: the Trash may have given it another name (Finder and
     // NSFileManager add a timestamp when the name is taken), and restore must put it back as
     // it was called.
-    map.insert(trashed.to_string_lossy().into_owned(), original.to_string_lossy().into_owned());
-    save_journal(&map);
+    let trashed = trashed.to_string_lossy().into_owned();
+    let original = original.to_string_lossy().into_owned();
+    with_journal(|map| {
+        map.insert(trashed, original);
+    });
 }
 
 fn original_of(trashed: &str) -> Option<PathBuf> {
     load_journal().get(trashed).map(PathBuf::from)
 }
 
-/// A free name for `name` in `dir`, keeping its stem and extension.
-fn available(dir: &Path, name: &str) -> PathBuf {
+/// A free name for `name` in `dir`, the Finder's way: "report 2.txt" (the extension stays at
+/// the end) and "Photos.2024 2" for a folder, whose dots are part of its name.
+fn available(dir: &Path, name: &str, is_dir: bool) -> PathBuf {
+    if is_dir {
+        return crate::fileops::unique_name(dir, name, "");
+    }
     let p = Path::new(name);
     let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| name.to_string());
     let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
@@ -75,10 +103,40 @@ fn available(dir: &Path, name: &str) -> PathBuf {
 }
 
 fn forget(trashed: &Path) {
-    let mut map = load_journal();
-    if map.remove(&trashed.to_string_lossy().to_string()).is_some() {
-        save_journal(&map);
+    let trashed = trashed.to_string_lossy().to_string();
+    with_journal(|map| {
+        map.remove(&trashed);
+    });
+}
+
+/// Removes a file, a symlink or a folder for good. A symlink to a folder is removed as a link,
+/// never by walking into what it points at.
+fn remove_path(path: &Path) -> std::io::Result<()> {
+    let md = std::fs::symlink_metadata(path)?;
+    if md.file_type().is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
     }
+}
+
+/// [`remove_path`] where an item already gone counts as done: its journal entry can go too.
+/// A missing item whose Trash folder is missing too may be on an unmounted volume, and its
+/// entry stays so the item shows again when the volume returns.
+fn remove_for_good(path: &Path) -> std::io::Result<()> {
+    match remove_path(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && path.parent().is_some_and(Path::exists) => Ok(()),
+        other => other,
+    }
+}
+
+/// Moves a path back out of the Trash: a rename on one volume, a copy and a delete when the
+/// fallback put an item of another volume into the home Trash.
+fn move_path(from: &Path, to: &Path) -> anyhow::Result<()> {
+    std::fs::rename(from, to).or_else(|_| {
+        crate::fileops::copy_recursive(from, to)?;
+        crate::fileops::remove_recursive(from)
+    })
 }
 
 /// Moves `path` to the Trash with `NSFileManager`, so it lands in the right volume's Trash,
@@ -106,7 +164,8 @@ pub fn trash(path: &Path) -> anyhow::Result<PathBuf> {
     let dir = trash_dir().ok_or_else(|| anyhow::anyhow!("Çöp Kutusu bulunamadı"))?;
     std::fs::create_dir_all(&dir)?;
     let name = path.file_name().ok_or_else(|| anyhow::anyhow!("ad yok"))?.to_string_lossy().into_owned();
-    let dest = crate::fileops::unique_name(&dir, &name, "");
+    let is_dir = std::fs::symlink_metadata(path).map(|m| m.file_type().is_dir()).unwrap_or(false);
+    let dest = available(&dir, &name, is_dir);
     std::fs::rename(path, &dest).or_else(|_| {
         crate::fileops::copy_recursive(path, &dest)?;
         crate::fileops::remove_recursive(path)
@@ -115,8 +174,14 @@ pub fn trash(path: &Path) -> anyhow::Result<PathBuf> {
     Ok(dest)
 }
 
-fn ms(t: std::time::SystemTime) -> i64 {
-    t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+/// When the item landed in the Trash: moving it there is a rename, so the inode's change time
+/// is that moment (the Finder's "Date Added"). The modification time is the file's own and can
+/// be years older.
+fn deleted_ms(md: &std::fs::Metadata) -> i64 {
+    use std::os::unix::fs::MetadataExt;
+    // (a filesystem without a change time: its modification time is the best there is)
+    let (secs, nsec) = if md.ctime() > 0 { (md.ctime(), md.ctime_nsec()) } else { (md.mtime(), md.mtime_nsec()) };
+    secs.saturating_mul(1000).saturating_add(nsec / 1_000_000)
 }
 
 /// Everything in the Trash.
@@ -138,7 +203,7 @@ pub fn list() -> anyhow::Result<Vec<RecycleItem>> {
         out.push(RecycleItem {
             name,
             original_location: journal.get(&key).and_then(|p| Path::new(p).parent().map(|d| d.to_string_lossy().into_owned())).unwrap_or_default(),
-            deleted_ms: ms(md.modified().unwrap_or(std::time::UNIX_EPOCH)),
+            deleted_ms: deleted_ms(&md),
             size: if md.is_dir() { 0 } else { md.len() },
             parsing_path: key,
             is_dir: md.is_dir(),
@@ -163,14 +228,23 @@ pub fn list() -> anyhow::Result<Vec<RecycleItem>> {
 /// Finder's Trash is not allowed without Full Disk Access, moving a known path is).
 pub fn restore_pairs(pairs: &[(PathBuf, PathBuf)]) -> anyhow::Result<()> {
     for (original, trashed) in pairs {
-        if trashed.as_os_str().is_empty() || !trashed.exists() {
+        if trashed.as_os_str().is_empty() {
             continue;
         }
+        // (symlink_metadata: a link trashed with its target gone is still restorable)
+        let Ok(md) = std::fs::symlink_metadata(trashed) else {
+            // (its Trash folder gone too: maybe the volume is unmounted — keep the record)
+            if trashed.parent().is_some_and(Path::exists) {
+                forget(trashed);
+            }
+            continue;
+        };
+        let is_dir = md.file_type().is_dir();
         let dir = original.parent().unwrap_or_else(|| Path::new("/"));
         std::fs::create_dir_all(dir)?;
         let name = original.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "item".into());
-        let dest = available(dir, &name);
-        std::fs::rename(trashed, &dest)?;
+        let dest = available(dir, &name, is_dir);
+        move_path(trashed, &dest)?;
         forget(trashed);
     }
     Ok(())
@@ -182,6 +256,14 @@ pub fn restore(items: &[RecycleItem]) -> anyhow::Result<()> {
     let home = dirs::home_dir();
     for it in items {
         let from = PathBuf::from(&it.parsing_path);
+        // The listing may be a moment old: an item deleted for good meanwhile is left alone.
+        let Ok(md) = std::fs::symlink_metadata(&from) else {
+            if from.parent().is_some_and(Path::exists) {
+                forget(&from);
+            }
+            continue;
+        };
+        let is_dir = md.file_type().is_dir();
         let original = original_of(&it.parsing_path);
         let dir = original
             .as_deref()
@@ -192,14 +274,14 @@ pub fn restore(items: &[RecycleItem]) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("ev klasörü yok"))?;
         let name = original.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| it.name.clone());
         std::fs::create_dir_all(&dir)?;
-        let dest = available(&dir, &name);
-        std::fs::rename(&from, &dest)?;
+        let dest = available(&dir, &name, is_dir);
+        move_path(&from, &dest)?;
         forget(&from);
     }
     Ok(())
 }
 
-/// The Trash as the shell shows it (the namespace this app browses on Windows).
+/// The Trash behind the bin page (`rf_core::recycle_bin::BinBackend`).
 pub struct ShellBin;
 
 impl ShellBin {
@@ -214,31 +296,57 @@ impl rf_core::recycle_bin::BinBackend for ShellBin {
     }
 
     fn delete_keys(&self, keys: &[String]) -> anyhow::Result<()> {
-        for k in keys {
-            let p = PathBuf::from(k);
-            let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+        // The shared bin code folds keys to lower case (Windows' paths are case-insensitive);
+        // APFS can be case-sensitive, so look the real path up before removing it.
+        let known: Vec<PathBuf> = list()?.into_iter().map(|i| PathBuf::from(i.parsing_path)).collect();
+        let mut first_error: Option<anyhow::Error> = None;
+        for key in keys {
+            // A case-sensitive volume can hold two items whose names differ only in case; then
+            // the folded key is ambiguous and nothing is deleted rather than the wrong one.
+            let mut matches = known.iter().filter(|p| p.to_string_lossy().to_lowercase() == key.as_str());
+            let (Some(path), None) = (matches.next(), matches.next()) else { continue };
+            match remove_for_good(path) {
+                Ok(()) => forget(path),
+                Err(e) => {
+                    if first_error.is_none() {
+                        first_error = Some(e.into());
+                    }
+                }
+            }
         }
-        Ok(())
+        match first_error {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
     }
 }
 
 /// Empties the Trash. `confirm` is kept for the signature: the caller asks first.
 pub fn empty(_confirm: bool) -> anyhow::Result<()> {
     let Some(dir) = trash_dir() else { return Ok(()) };
+    let mut removed: HashSet<String> = HashSet::new();
+    // The home Trash: everything in it goes, as Finder's Empty Trash does. Without Full Disk
+    // Access it cannot be listed; the journal's paths are still removable one by one.
     if let Ok(rd) = std::fs::read_dir(&dir) {
         for e in rd.flatten() {
             let p = e.path();
-            let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
-        }
-    } else {
-        // Without Full Disk Access the Trash cannot be listed; the items this app trashed are
-        // known by path, and removing a known path is allowed.
-        for p in load_journal().keys() {
-            let p = PathBuf::from(p);
-            let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+            if remove_for_good(&p).is_ok() {
+                removed.insert(p.to_string_lossy().into_owned());
+            }
         }
     }
-    save_journal(&Default::default());
+    // Other volumes' Trash and the items the listing above could not reach: our journal knows
+    // them by path, and removing a known path is allowed.
+    for key in load_journal().keys() {
+        if removed.contains(key) {
+            continue;
+        }
+        if remove_for_good(&PathBuf::from(key)).is_ok() {
+            removed.insert(key.clone());
+        }
+    }
+    // Keep what stayed (a permission failure, another user's file): the bin still lists it.
+    with_journal(|map| map.retain(|k, _| !removed.contains(k)));
     Ok(())
 }
 
@@ -271,6 +379,35 @@ mod tests {
         restore(&[item]).expect("restore");
         assert_eq!(std::fs::read(&original).unwrap(), b"hello");
         assert!(!trashed.exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_restore_number_keeps_a_files_extension_last_and_a_folders_dots() {
+        let base = std::env::temp_dir().join(format!("rf-mac-available-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(base.join("rapor.txt"), b"").unwrap();
+        std::fs::write(base.join("rapor 2.txt"), b"").unwrap();
+        assert_eq!(available(&base, "rapor.txt", false).file_name().unwrap().to_string_lossy(), "rapor 3.txt");
+        // "Photos.2024" is a folder name, not a stem and an extension
+        std::fs::create_dir_all(base.join("Photos.2024")).unwrap();
+        std::fs::create_dir_all(base.join("Photos.2024 2")).unwrap();
+        assert_eq!(available(&base, "Photos.2024", true).file_name().unwrap().to_string_lossy(), "Photos.2024 3");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn removing_a_link_to_a_folder_leaves_the_folder_alone() {
+        let base = std::env::temp_dir().join(format!("rf-mac-remove-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("target")).unwrap();
+        std::fs::write(base.join("target/keep.txt"), b"x").unwrap();
+        std::os::unix::fs::symlink(base.join("target"), base.join("link")).unwrap();
+
+        remove_path(&base.join("link")).unwrap();
+        assert!(std::fs::symlink_metadata(base.join("link")).is_err());
+        assert_eq!(std::fs::read(base.join("target/keep.txt")).unwrap(), b"x");
         let _ = std::fs::remove_dir_all(&base);
     }
 }

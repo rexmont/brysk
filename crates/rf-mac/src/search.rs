@@ -37,33 +37,69 @@ struct Matcher {
     needle: String,
 }
 
+/// Case folding for matching, with the Turkish letters as the plain ones a keyboard without
+/// them types: "sarki" finds "Şarkı listesi.txt".
+fn fold(s: &str) -> String {
+    rf_core::entry::fold_case(s)
+        .chars()
+        .map(|c| match c {
+            'ş' => 's',
+            'ğ' => 'g',
+            'ü' | 'û' => 'u',
+            'ö' => 'o',
+            'ç' => 'c',
+            'î' => 'i',
+            'â' | 'á' | 'à' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            c => c,
+        })
+        .collect()
+}
+
 impl Matcher {
     fn new(p: &str) -> Matcher {
+        let p = fold(p.trim());
         if p.contains('*') || p.contains('?') {
-            Matcher { glob: Some(p.to_lowercase().chars().collect()), needle: String::new() }
+            Matcher { glob: Some(p.chars().collect()), needle: String::new() }
         } else {
-            Matcher { glob: None, needle: p.to_lowercase() }
+            Matcher { glob: None, needle: p }
         }
     }
 
     fn hit(&self, name: &str) -> bool {
-        let lower = name.to_lowercase();
+        let folded = fold(name);
         match &self.glob {
-            Some(g) => glob(g, &lower.chars().collect::<Vec<_>>()),
-            None => lower.contains(&self.needle),
+            Some(g) => glob(g, &folded.chars().collect::<Vec<_>>()),
+            None => folded.contains(&self.needle),
         }
     }
 }
 
+/// `*` = any run (including empty), `?` = exactly one. Iterative with backtracking: a long name
+/// against a pattern of many stars cannot recurse the stack away.
 fn glob(spec: &[char], name: &[char]) -> bool {
-    if spec.is_empty() {
-        return name.is_empty();
+    let (mut pi, mut ni) = (0, 0);
+    let (mut star, mut mark) = (usize::MAX, 0);
+    while ni < name.len() {
+        if pi < spec.len() && spec[pi] == '*' {
+            star = pi;
+            mark = ni;
+            pi += 1;
+        } else if pi < spec.len() && (spec[pi] == '?' || spec[pi] == name[ni]) {
+            pi += 1;
+            ni += 1;
+        } else if star != usize::MAX {
+            pi = star + 1;
+            mark += 1;
+            ni = mark;
+        } else {
+            return false;
+        }
     }
-    match spec[0] {
-        '*' => (0..=name.len()).any(|i| glob(&spec[1..], &name[i..])),
-        '?' => !name.is_empty() && glob(&spec[1..], &name[1..]),
-        c => name.first() == Some(&c) && glob(&spec[1..], &name[1..]),
+    while pi < spec.len() && spec[pi] == '*' {
+        pi += 1;
     }
+    pi == spec.len()
 }
 
 fn ms(t: Option<std::time::SystemTime>) -> i64 {
@@ -137,4 +173,33 @@ pub fn search(q: &SearchQuery, cancelled: &dyn Fn() -> bool, on_batch: &mut dyn 
     }
     stats.hits = hits;
     Ok(stats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Matcher;
+
+    #[test]
+    fn names_match_what_was_typed_in_any_case_and_without_turkish_letters() {
+        assert!(Matcher::new("rapor").hit("RAPOR 2026.docx"));
+        assert!(Matcher::new("şarkı").hit("Şarkı listesi.txt"));
+        assert!(Matcher::new("sarki").hit("Şarkı listesi.txt"));
+        assert!(Matcher::new("ŞARKI").hit("şarkı listesi.txt"));
+        assert!(Matcher::new("işlem").hit("İşlem raporu.txt"));
+        assert!(!Matcher::new("xyz").hit("Rapor.txt"));
+        assert!(Matcher::new("  rapor  ").hit("rapor.txt"), "the spaces around a query do not count");
+    }
+
+    #[test]
+    fn a_glob_matches_the_whole_name_and_the_stars_do_not_cost_the_stack() {
+        assert!(Matcher::new("*.psd").hit("Kapak.PSD"));
+        assert!(Matcher::new("a?c").hit("abc"));
+        assert!(!Matcher::new("a?c").hit("ac"));
+        assert!(Matcher::new("*a*b*").hit("xxaxxbxx"));
+        assert!(!Matcher::new("*a*b*").hit("xxbxxaxx"));
+        // (a name that is nothing but stars' complement)
+        assert!(Matcher::new("*").hit(""));
+        let long = format!("{}b", "a".repeat(400));
+        assert!(Matcher::new("*a*a*a*a*a*b").hit(&long));
+    }
 }

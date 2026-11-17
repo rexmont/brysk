@@ -66,8 +66,10 @@ impl FolderView {
     pub fn show_context_menu(&mut self, background: bool, window: &mut Window, cx: &mut Context<Self>) {
         #[cfg(target_os = "macos")]
         crate::tags::import_finder(cx, &self.selection_paths());
+        // Shell folders and the classic Explorer menu are Windows' shell: on macOS the menu
+        // below is the whole menu (there is no `Show more options` to fall back to).
+        #[cfg(windows)]
         if matches!(self.location(), rf_core::history::Location::Shell { .. }) {
-            #[cfg(windows)]
             if shift_down() {
                 self.show_shell_folder_menu(background, cx);
             } else {
@@ -75,8 +77,8 @@ impl FolderView {
             }
             return;
         }
-        let shift = shift_down();
-        if shift {
+        #[cfg(windows)]
+        if shift_down() {
             // power users: the full classic Explorer menu (extended verbs)
             self.show_native_menu(background, cx);
             return;
@@ -265,7 +267,8 @@ impl FolderView {
                         }
                     });
                 }));
-            } else if rf_win::fileactions::is_runnable(&p) {
+            } else if cfg!(windows) && rf_win::fileactions::is_runnable(&p) {
+                // (Windows' `runas` verb; macOS has no administrator mode to hand a file to)
                 v.push(Item::action(t!("Yönetici olarak çalıştır"), icon(L::ShieldCheck), move |_, _| {
                     let p = p.clone();
                     rf_win::sta::run(move |owner| {
@@ -329,7 +332,9 @@ impl FolderView {
             let named = if items.len() > 1 {
                 t!("Her birini kendi klasörüne çıkar").to_string()
             } else {
-                format!("{} {}\\", t!("Klasöre çıkar:"), crate::ops::archive_stem(&items[0]))
+                // Explorer writes the folder a "\" after; macOS' folder sign is "/".
+                let slash = if cfg!(windows) { "\\" } else { "/" };
+                format!("{} {}{slash}", t!("Klasöre çıkar:"), crate::ops::archive_stem(&items[0]))
             };
             let pick = list.clone();
             v.push(Item::sub(
@@ -364,8 +369,12 @@ impl FolderView {
             let d = target_dir.clone();
             v.push(Item::action(t!("Terminalde aç"), icon(L::SquareTerminal), move |_, _| open_terminal(d.clone())).hint("Ctrl+Shift+`"));
         }
-        v.push(Item::Separator);
-        v.push(Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: icon(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } });
+        // Windows' shell extensions ("Show more options"): macOS has no shell menu to show.
+        #[cfg(windows)]
+        {
+            v.push(Item::Separator);
+            v.push(Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: icon(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } });
+        }
         Menu { quick: self.quick_clipboard(me, true), items: v }
     }
 
@@ -423,8 +432,12 @@ impl FolderView {
             git_items.push(Item::action(t!("Depoyu klonla…"), icon(L::GitFork), move |w, cx| crate::git_ui::clone_dialog(m.clone(), d.clone(), w, cx)));
             v.push(Item::sub("Git", icon(L::GitBranch), git_items));
         }
-        v.push(Item::Separator);
-        v.push(Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: icon(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } });
+        // Windows' shell extensions ("Show more options"): macOS has no shell menu to show.
+        #[cfg(windows)]
+        {
+            v.push(Item::Separator);
+            v.push(Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: icon(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } });
+        }
         Menu { quick: self.quick_clipboard(me, false), items: v }
     }
 
@@ -437,20 +450,20 @@ impl FolderView {
         }
     }
 
-    /// Windows' share sheet for the selection, over this window (`rf_win::share`: the context menu's verb failed, issue 48).
+    /// The share sheet for the selection (`rf_win::share`: the context menu's verb failed, issue 48). Windows anchors it to the
+    /// window's HWND; macOS uses the key window, and `hwnd_of` has no handle to give there, so a placeholder lets the sheet open.
     pub(crate) fn share(&self, window: &Window, cx: &mut App) {
-        crate::share::open(crate::look::window::hwnd_of(window), self.selection_paths(), cx);
+        let hwnd = crate::look::window::hwnd_of(window);
+        // (macOS' sheet ignores the handle, but `share::open` refuses a zero one)
+        #[cfg(target_os = "macos")]
+        let hwnd = if hwnd == 0 { 1 } else { hwnd };
+        crate::share::open(hwnd, self.selection_paths(), cx);
     }
 
     /// Properties of the current folder (background menu).
     pub(crate) fn folder_properties(&self, cx: &mut App) {
         let Some(dir) = self.current_dir() else { return };
-        #[cfg(windows)]
         crate::properties_view::open(vec![dir], self.images.clone(), cx);
-        #[cfg(not(windows))]
-        {
-            let _ = (dir, cx);
-        }
     }
 }
 
@@ -853,19 +866,15 @@ fn open_terminal(d: PathBuf) {
     });
 }
 
-/// "<name> - Kısayol.lnk" next to each item (unique name), like Explorer's "Create shortcut".
+/// A shortcut next to each item (unique name), like Explorer's "Create shortcut": a `.lnk` on
+/// Windows, a symlink named "<name> bağlantısı" on macOS.
 fn create_shortcuts(items: Vec<PathBuf>) {
     std::thread::spawn(move || {
         rf_win::shell::ensure_com();
         for target in items {
             let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else { continue };
-            let base = format!("{} - {}", name.to_string_lossy(), t!("Kısayol"));
-            let mut link = parent.join(format!("{base}.lnk"));
-            let mut n = 2;
-            while link.exists() {
-                link = parent.join(format!("{base} ({n}).lnk"));
-                n += 1;
-            }
+            let (base, ext) = crate::ops::shortcut_name(&name.to_string_lossy(), true);
+            let link = rf_win::fileops::unique_name(parent, &base, ext);
             if let Err(e) = rf_win::shortcut::create(&link, &target) {
                 log::warn!("shortcut: {e:#}");
             }
@@ -1046,10 +1055,12 @@ fn invoke_shell(me: &Me, session: u64, id: u32, cx: &mut App) {
     .detach();
 }
 
+#[cfg(windows)]
 fn shift_down() -> bool {
     rf_win::input::shift_down()
 }
 
+#[cfg(windows)]
 impl FolderView {
     /// Right-click in a shell folder (a phone, Libraries…): our menu, filled with the shell's
     /// own commands for the selection or the folder (found by parsing names, as they have no

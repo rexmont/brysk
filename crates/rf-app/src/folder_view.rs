@@ -441,6 +441,10 @@ pub struct FolderView {
     sortx: sort_ext::SortxState,
     cursor: Option<usize>,
     anchor: Option<usize>,
+    /// The localized name of the current folder, read from the disk by a worker (`warm_labels`).
+    /// Painting looks here only: on macOS the lookup itself stats the known folders, which can
+    /// wait on a cloud or network home, and it must never run per frame.
+    title_cache: Option<(PathBuf, Option<Arc<str>>)>,
     pub loading: bool,
     pub error: Option<String>,
     pub load_ms: Option<u128>,
@@ -629,6 +633,7 @@ impl FolderView {
             sortx: Default::default(),
             cursor: None,
             anchor: None,
+            title_cache: None,
             loading: false,
             error: None,
             load_ms: None,
@@ -691,6 +696,11 @@ impl FolderView {
     }
 
     pub fn title(&self, cx: &App) -> String {
+        // macOS calls it the Trash; the shared Location title is the Windows name.
+        #[cfg(target_os = "macos")]
+        if matches!(self.location(), Location::RecycleBin) {
+            return crate::t!("Çöp Sepeti").to_string();
+        }
         if let Location::Tag(id) = self.location() {
             if let Some(d) = cx.global::<crate::tags::Tags>().0.def(*id) {
                 return format!("{} {}", crate::t!("Etiket:"), crate::i18n::td(&d.name));
@@ -706,7 +716,9 @@ impl FolderView {
         if let Location::Path(p) = self.location() {
             // (the cache only: reading the folder's attributes here would hold the window on a place that has to wake up first;
             // `warm_labels` fills the cache from a worker)
-            if let Some(l) = rf_win::localized::label_if_known(p) {
+            if let Some((cached, Some(l))) = &self.title_cache
+                && cached == p
+            {
                 return l.to_string();
             }
         }
@@ -1060,6 +1072,7 @@ impl FolderView {
     fn load(&mut self, cx: &mut Context<Self>) {
         // (another listing: a click made before it is not the first click of a double click in it)
         self.load_serial += 1;
+        self.title_cache = None;
         self.apply_folder_layout(cx);
         self.images.update(cx, |c, _| c.cancel_pending());
         self.git = None;
@@ -1076,17 +1089,32 @@ impl FolderView {
     /// The localized names of the folders in the path (the breadcrumb and the tab title show them) are read from the disk on a
     /// worker, and the view is drawn again when one of them is found. The drawing itself only looks in the cache, so a place that is
     /// slow to answer cannot hold the window: until the answer comes the folders show under their real names.
+    ///
+    /// The "is it already known?" test itself is a disk read on macOS (the known folders are resolved with a stat each), so it runs
+    /// on the worker too. Nothing here touches the file system on the UI thread.
     fn warm_labels(&self, cx: &mut Context<Self>) {
         let (Location::Path(path) | Location::Search { root: path, .. }) = self.location() else { return };
         let paths = crate::nav_touch::label_paths(path);
-        if paths.iter().all(|p| rf_win::localized::is_known(p)) {
-            return;
-        }
+        let title_path = path.clone();
+        let for_worker = title_path.clone();
         cx.spawn(async move |this, cx| {
-            let found = cx.background_spawn(async move { rf_win::localized::warm(paths) }).await;
-            if found > 0 {
-                let _ = this.update(cx, |_, cx| cx.notify());
-            }
+            let label = cx
+                .background_spawn(async move {
+                    // (this also fills the Windows label cache the breadcrumb asks about)
+                    let _found = rf_win::localized::warm(paths);
+                    rf_win::localized::label_if_known(&for_worker)
+                })
+                .await;
+            let _ = this.update(cx, move |v, cx| {
+                if v.location().path() != Some(title_path.as_path()) {
+                    return;
+                }
+                let changed = !matches!(&v.title_cache, Some((p, l)) if p == &title_path && *l == label);
+                v.title_cache = Some((title_path, label));
+                if changed {
+                    cx.notify();
+                }
+            });
         })
         .detach();
     }
@@ -2070,24 +2098,57 @@ enum KnownKind {
 }
 
 /// Pictures and Videos (and folders inside them), or Downloads itself.
+///
+/// On macOS the answer comes from the path alone. Asking `KnownFolder::path()` would run a
+/// `stat` on every known folder (Desktop, Documents, Pictures, Music, Movies…) on the UI
+/// thread, on the click that opens a folder. Those folders can live on a cloud provider or a
+/// network home, where a single stat can wait seconds; the folder names under `$HOME` are the
+/// same ones `KnownFolder` resolves there.
 fn known_kind(p: &std::path::Path) -> Option<KnownKind> {
-    use rf_win::known::KnownFolder;
-    static PATHS: std::sync::OnceLock<Vec<(std::path::PathBuf, KnownKind)>> = std::sync::OnceLock::new();
-    let paths = PATHS.get_or_init(|| {
-        [(KnownFolder::Pictures, KnownKind::Pictures), (KnownFolder::Videos, KnownKind::Pictures), (KnownFolder::Downloads, KnownKind::Downloads)]
-            .into_iter()
-            .filter_map(|(k, kind)| k.path().map(|p| (p, kind)))
-            .collect()
-    });
-    let lower = |q: &std::path::Path| q.to_string_lossy().to_lowercase();
-    let here = lower(p);
-    paths.iter().find_map(|(root, kind)| {
-        let r = lower(root);
-        match kind {
-            KnownKind::Downloads => (here == r).then_some(*kind),
-            KnownKind::Pictures => (here == r || here.starts_with(&format!("{r}\\"))).then_some(*kind),
+    #[cfg(target_os = "macos")]
+    {
+        known_kind_in(&dirs::home_dir()?, p)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        use rf_win::known::KnownFolder;
+        static PATHS: std::sync::OnceLock<Vec<(std::path::PathBuf, KnownKind)>> = std::sync::OnceLock::new();
+        let paths = PATHS.get_or_init(|| {
+            [(KnownFolder::Pictures, KnownKind::Pictures), (KnownFolder::Videos, KnownKind::Pictures), (KnownFolder::Downloads, KnownKind::Downloads)]
+                .into_iter()
+                .filter_map(|(k, kind)| k.path().map(|p| (p, kind)))
+                .collect()
+        });
+        let lower = |q: &std::path::Path| q.to_string_lossy().to_lowercase();
+        let here = lower(p);
+        paths.iter().find_map(|(root, kind)| {
+            let r = lower(root);
+            match kind {
+                KnownKind::Downloads => (here == r).then_some(*kind),
+                KnownKind::Pictures => (here == r || here.starts_with(&format!("{r}\\"))).then_some(*kind),
+            }
+        })
+    }
+}
+
+/// The macOS rule of [`known_kind`] with no disk access at all: `~/Downloads`, or anything below
+/// `~/Pictures` / `~/Movies`. Pure: the home folder is given, not looked up.
+#[cfg(any(target_os = "macos", test))]
+fn known_kind_in(home: &std::path::Path, here: &std::path::Path) -> Option<KnownKind> {
+    let norm = |q: &std::path::Path| q.to_string_lossy().trim_end_matches(['/', '\\']).to_lowercase();
+    let home = norm(home);
+    let here = norm(here);
+    let at = |name: &str| format!("{home}/{}", name.to_lowercase());
+    if here == at("Downloads") {
+        return Some(KnownKind::Downloads);
+    }
+    for name in ["Pictures", "Movies"] {
+        let root = at(name);
+        if here == root || here.strip_prefix(&root).is_some_and(|rest| rest.starts_with('/')) {
+            return Some(KnownKind::Pictures);
         }
-    })
+    }
+    None
 }
 
 impl FolderView {
@@ -4234,7 +4295,7 @@ impl FolderView {
                     .p_6()
                     .gap_4()
                     .when(shown("quick"), |d| d.child(section(t!("Hızlı Erişim"))).child(pinned_grid).child(div().h_2()))
-                    .when(shown("drives"), |d| d.child(section(t!("Sürücüler"))).child(drive_grid))
+                    .when(shown("drives"), |d| d.child(section(if cfg!(target_os = "macos") { t!("Birimler") } else { t!("Sürücüler") })).child(drive_grid))
                     .when(has_devices, |d| d.child(div().h_2()).child(section(t!("Cihazlar"))).child(device_grid))
                     .when(has_network, |d| d.child(div().h_2()).child(section(t!("Ağ konumları"))).child(network_grid))
                     .when(has_tags, |d| d.child(div().h_2()).child(section(t!("Etiketler"))).child(tag_grid))
@@ -4988,3 +5049,23 @@ pub(crate) fn drop_effect_over(dir: PathBuf) -> impl Fn(&DragMoveEvent<ExternalP
 
 /// The wheel's travel (in pixels; one notch counts as this much) that makes one size step with Ctrl held.
 const ZOOM_STEP: f32 = 40.0;
+
+#[cfg(test)]
+mod adaptive_tests {
+    use super::{KnownKind, known_kind_in};
+    use std::path::Path;
+
+    /// The adaptive layout of Downloads / Pictures / Movies comes from the path alone: no
+    /// `is_dir` on the way (see `known_kind`).
+    #[test]
+    fn the_adaptive_kind_is_read_from_the_path() {
+        let home = Path::new("/Users/demo");
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo/Downloads")), Some(KnownKind::Downloads));
+        assert_eq!(known_kind_in(home, Path::new("/users/DEMO/downloads")), Some(KnownKind::Downloads), "any letter case");
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo/Pictures/2026")), Some(KnownKind::Pictures));
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo/Movies")), Some(KnownKind::Pictures));
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo/Downloads2")), None, "a name that only begins the same");
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo/Pictures2")), None);
+        assert_eq!(known_kind_in(home, Path::new("/Users/demo")), None);
+    }
+}

@@ -23,9 +23,17 @@ pub fn drive_name(d: &Drive) -> String {
 
 #[derive(Clone)]
 pub struct Pinned {
+    /// The name in the UI language (a known folder's title is translated when the list is built).
     pub title: String,
     pub path: PathBuf,
     pub icon: L,
+}
+
+/// A known folder's name in the UI language. The platform layer returns the Turkish source key
+/// of the string table (`KnownFolder::title`), because it cannot see the language setting, so
+/// every label made from it goes through the translator here.
+fn known_title(k: KnownFolder) -> String {
+    crate::i18n::t(k.title()).to_string()
 }
 
 #[derive(Clone)]
@@ -142,12 +150,18 @@ impl Places {
         let mut hidden = rf_win::drives::hidden();
         // and the pins, when they change anywhere (a pinned folder deleted or renamed: `pins_follow`)
         let mut pins = cx.global::<crate::settings::Settings>().pinned.clone();
+        // the known folders' titles are translated when this list is built, so a language change
+        // builds it again (the alternative is a sidebar in the old language until a restart)
+        let mut language = cx.global::<crate::settings::Settings>().language;
         cx.observe_global::<crate::settings::Settings>(move |p, cx| {
-            let now = rf_win::drives::hidden();
-            let now_pins = cx.global::<crate::settings::Settings>().pinned.clone();
-            if now != hidden || now_pins != pins {
+            let (now, now_pins, now_language) = {
+                let s = cx.global::<crate::settings::Settings>();
+                (rf_win::drives::hidden(), s.pinned.clone(), s.language)
+            };
+            if now != hidden || now_pins != pins || now_language != language {
                 hidden = now;
                 pins = now_pins;
+                language = now_language;
                 p.refresh(cx);
             }
         })
@@ -210,12 +224,12 @@ impl Places {
             let pinned = match user_pins {
                 None => known
                     .into_iter()
-                    .map(|(k, path)| Pinned { title: k.title().to_string(), path, icon: known_icon(k) })
+                    .map(|(k, path)| Pinned { title: known_title(k), path, icon: known_icon(k) })
                     .collect::<Vec<_>>(),
                 Some(paths) => paths
                     .into_iter()
                     .map(|path| match known.iter().find(|(_, p)| *p == path) {
-                        Some((k, _)) => Pinned { title: k.title().to_string(), path, icon: known_icon(*k) },
+                        Some((k, _)) => Pinned { title: known_title(*k), path, icon: known_icon(*k) },
                         None => Pinned {
                             title: rf_core::history::display_name(&path),
                             path,

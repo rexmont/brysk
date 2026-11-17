@@ -36,9 +36,11 @@ fn commands() -> Vec<Cmd> {
         cmd!("Yeni klasör", "Ctrl+Shift+N", L::FolderPlus, NewFolder),
         cmd!("Yeni metin belgesi", "", L::FilePlus, NewTextFile),
         cmd!("Yenile", "F5", L::RotateCw, Refresh),
+        #[cfg(windows)]
         cmd!("Ağ sürücüsüne bağlan…", "", L::Network, MapNetworkDrive),
         cmd!("Brysk'ı yeniden başlat", "Ctrl+Alt+Shift+R", L::RotateCw, RestartApp),
         cmd!("Oturumu kaydet…", "", L::Save, SaveSession),
+        #[cfg(windows)]
         cmd!("Ağ sürücüsü bağlantısını kes…", "", L::Network, DisconnectNetworkDrive),
         cmd!("Geri", "Alt+←", L::ArrowLeft, GoBack),
         cmd!("İleri", "Alt+→", L::ArrowRight, GoForward),
@@ -61,7 +63,9 @@ fn commands() -> Vec<Cmd> {
         cmd!("Her zaman üstte", "", L::Pin, ToggleAlwaysOnTop),
         cmd!("Kompakt görünüm", "", L::PictureInPicture2, ToggleCompactOverlay),
         cmd!("Klasör takma adına git", "@", L::AtSign, GoToFolderAlias),
+        #[cfg(windows)]
         cmd!("Sağa döndür", "", L::RotateCw, RotateRight),
+        #[cfg(windows)]
         cmd!("Sola döndür", "", L::RotateCcw, RotateLeft),
         cmd!("Simgeleri küçült", "Ctrl+-", L::ZoomOut, ZoomOut),
         cmd!("Çift panel aç/kapat", "Ctrl+Shift+D", L::Columns2, ToggleDualPane),
@@ -72,8 +76,10 @@ fn commands() -> Vec<Cmd> {
         cmd!("Önizleme paneli", "Alt+P", L::PanelRight, TogglePreview),
         cmd!("Kenar çubuğu", "Ctrl+B", L::PanelLeft, ToggleSidebar),
         cmd!("Terminalde aç", "Ctrl+Shift+`", L::SquareTerminal, OpenTerminal),
+        #[cfg(windows)]
         cmd!("Terminalde yönetici olarak aç", "", L::ShieldCheck, OpenTerminalAdmin),
         cmd!("Düzenleyicide aç", "", L::Code, OpenInIde),
+        #[cfg(windows)]
         cmd!("Klasörü düzenle", "", L::WandSparkles, OrganizeFolder),
         cmd!("Açık / koyu tema", "Ctrl+Alt+T", L::SunMoon, ToggleTheme),
         cmd!("Yeni pencerede aç", "Ctrl+Alt+Enter", L::AppWindow, OpenInNewWindow),

@@ -13,7 +13,9 @@ use rf_core::Entry;
 use rf_win::thumbs::{Bgra, Kind, Request, Response, ThumbPool, folder_has_own_icon, has_unique_icon};
 
 enum Slot {
-    Pending,
+    /// Asked for; the number is the pool generation the request was made in. An answer from an
+    /// older generation (the user navigated away) must not take this slot away from a newer ask.
+    Pending(u64),
     Ready(Arc<RenderImage>),
     Failed,
 }
@@ -51,6 +53,33 @@ pub const ICON_PX: u32 = 32;
 fn forget_pending(thumb_use: &mut HashMap<u64, (u64, usize)>, thumb_cost: &mut usize, key: u64) {
     if let Some((_, bytes)) = thumb_use.remove(&key) {
         *thumb_cost -= cost(bytes).min(*thumb_cost);
+    }
+}
+
+/// Queues a picture and returns the stamp its answer will carry. macOS stampes every request
+/// with the pool's generation; the Windows pool keeps no generations (0 is its only stamp).
+fn request_picture(pool: &ThumbPool, make: impl FnOnce() -> Request) -> u64 {
+    #[cfg(target_os = "macos")]
+    {
+        pool.request(make())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        pool.request(make());
+        0
+    }
+}
+
+/// The stamp an answer carries, when the platform has generations (see [`request_picture`]).
+fn answer_stamp(r: &Response) -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(r.token)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = r;
+        None
     }
 }
 
@@ -112,15 +141,24 @@ impl ImageCache {
                     .update(cx, |c, cx| {
                         for r in batch {
                             crate::preview_trace::pool_answer(r.urgent, r.dropped, r.image.is_some(), r.waited, r.took);
+                            let waiting = match answer_stamp(&r) {
+                                Some(stamp) => matches!(c.map.get(&r.key), Some(Slot::Pending(t)) if *t == stamp),
+                                // (no generations on this platform: the slot is the one for this key)
+                                None => matches!(c.map.get(&r.key), Some(Slot::Pending(_))),
+                            };
                             if r.dropped {
-                                c.map.remove(&r.key);
-                                // (and what was charged for it: a dropped pane picture is not asked for again once the
-                                // user has moved on, so nothing else would ever take its entry away)
-                                forget_pending(&mut c.thumb_use, &mut c.thumb_cost, r.key);
+                                // (only what is still waiting for THIS ask: a newer ask for the
+                                // same key must keep its slot and its pending charge)
+                                if waiting {
+                                    c.map.remove(&r.key);
+                                    // (and what was charged for it: a dropped pane picture is not asked for again once the
+                                    // user has moved on, so nothing else would ever take its entry away)
+                                    forget_pending(&mut c.thumb_use, &mut c.thumb_cost, r.key);
+                                }
                                 continue;
                             }
-                            // evicted while it was being made: nobody wants it any more
-                            if !matches!(c.map.get(&r.key), Some(Slot::Pending)) {
+                            // evicted while it was being made, or replaced by a newer ask: nobody wants it any more
+                            if !waiting {
                                 continue;
                             }
                             let slot = match r.image.as_deref().and_then(to_render_image) {
@@ -189,7 +227,7 @@ impl ImageCache {
         let mut dropped_keys = Vec::new();
         let evicted = &mut self.evicted;
         self.map.retain(|k, slot| match slot {
-            Slot::Pending => true,
+            Slot::Pending(_) => true,
             Slot::Ready(img) => {
                 images += 1;
                 evicted.push(img.clone());
@@ -231,10 +269,10 @@ impl ImageCache {
         }
         match self.map.get(&key) {
             Some(Slot::Ready(img)) => Some(img.clone()),
-            Some(Slot::Pending) | Some(Slot::Failed) => None,
+            Some(Slot::Pending(_)) | Some(Slot::Failed) => None,
             None => {
-                self.map.insert(key, Slot::Pending);
-                self.pool.request(make());
+                let token = request_picture(&self.pool, make);
+                self.map.insert(key, Slot::Pending(token));
                 None
             }
         }
@@ -363,9 +401,11 @@ impl ImageCache {
     }
 
     pub fn cancel_pending(&mut self) {
+        // (the pool's generation changes too: a request already on a worker answers with a token
+        // nobody is waiting for, and is thrown away instead of landing on a newer request)
         self.pool.clear();
         let map = &mut self.map;
-        map.retain(|_, s| !matches!(s, Slot::Pending));
+        map.retain(|_, s| !matches!(s, Slot::Pending(_)));
         let mut freed = 0;
         self.thumb_use.retain(|k, (_, b)| {
             let keep = map.contains_key(k);

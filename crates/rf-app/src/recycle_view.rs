@@ -169,10 +169,39 @@ impl RecycleView {
         }
     }
 
-    fn empty_bin(&mut self, cx: &mut Context<Self>) {
+    fn empty_bin(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.status = None;
-        // confirm = true → Windows asks the user first
-        self.run(cx, || rf_win::recycle::empty(true));
+        // Windows' shell asks before emptying; the macOS Trash backend leaves the question to
+        // us, so this page asks it there (the same dialog as "delete for good").
+        #[cfg(windows)]
+        {
+            let _ = window;
+            self.run(cx, || rf_win::recycle::empty(true));
+        }
+        #[cfg(not(windows))]
+        {
+            let count = crate::i18n::items(self.items.len());
+            let me = cx.entity().downgrade();
+            let message = format!(
+                "{count} {}\n{}",
+                if cfg!(target_os = "macos") { t!("Çöp Sepetinden kalıcı olarak silinecek.") } else { t!("Geri Dönüşüm Kutusu'ndan kalıcı olarak silinecek.") },
+                t!("Bu işlem geri alınamaz.")
+            );
+            crate::prompt::show(
+                if cfg!(target_os = "macos") { t!("Çöp Sepetini boşalt") } else { t!("Geri Dönüşüm Kutusu'nu boşalt") },
+                Some(message),
+                None,
+                vec![
+                    crate::prompt::Button::new(t!("Kutuyu boşalt"), crate::prompt::Kind::Danger, move |_, _, cx| {
+                        let _ = me.update(cx, |v, cx| v.run(cx, || rf_win::recycle::empty(true)));
+                        Ok(())
+                    }),
+                    crate::prompt::Button::cancel(),
+                ],
+                window,
+                cx,
+            );
+        }
     }
 
     /// Delete, Shift+Delete and Ctrl+D reach the page also while the search box has the keyboard (the box does not take the
@@ -245,7 +274,10 @@ impl RecycleView {
             let BinDialogEvent::Closed(saved) = ev;
             this.settings = None;
             this.status = match saved {
-                Some(rf_core::recycle_bin::SaveOutcome::Saved { .. }) => Some((t!("Geri Dönüşüm Kutusu ayarları kaydedildi").to_string(), false)),
+                Some(rf_core::recycle_bin::SaveOutcome::Saved { .. }) => Some((
+                    if cfg!(target_os = "macos") { t!("Çöp Sepeti ayarları kaydedildi") } else { t!("Geri Dönüşüm Kutusu ayarları kaydedildi") }.to_string(),
+                    false,
+                )),
                 Some(rf_core::recycle_bin::SaveOutcome::Unchanged) => Some((t!("Ayarlarda değişiklik yok").to_string(), false)),
                 None => this.status.take(),
             };
@@ -291,7 +323,10 @@ impl RecycleView {
             );
         }
         items.push(Item::Separator);
-        items.push(Item::action(t!("Geri Dönüşüm Kutusu ayarları…"), MenuIcon::Lucide(L::Settings), move |window, cx| {
+        items.push(Item::action(
+            if cfg!(target_os = "macos") { t!("Çöp Sepeti ayarları…") } else { t!("Geri Dönüşüm Kutusu ayarları…") },
+            MenuIcon::Lucide(L::Settings),
+            move |window, cx| {
             let _ = me.update(cx, |v, cx| v.open_settings(window, cx));
         }));
         fluent_menu::show(Menu { quick: Vec::new(), items }, window.mouse_position(), window, cx);
@@ -398,7 +433,7 @@ impl Render for RecycleView {
             .child(
                 v_flex()
                     .flex_1()
-                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(t!("Geri Dönüşüm Kutusu")))
+                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(if cfg!(target_os = "macos") { t!("Çöp Sepeti") } else { t!("Geri Dönüşüm Kutusu") }))
                     .child(div().text_xs().text_color(p.text_secondary).child(if filtered {
                         format!("{} / {} · {}", self.order.len(), crate::i18n::items(self.items.len()), format::size(total))
                     } else {
@@ -430,7 +465,7 @@ impl Render for RecycleView {
             )
             .child(
                 button("rb-empty", L::Trash, t!("Kutuyu boşalt"), !self.items.is_empty() && !self.busy, &p)
-                    .on_click(cx.listener(|this, _, _, cx| this.empty_bin(cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.empty_bin(window, cx))),
             )
             .child(
                 button("rb-settings", L::Settings, t!("Ayarlar"), true, &p).on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
@@ -445,7 +480,7 @@ impl Render for RecycleView {
                 .justify_center()
                 .gap_2()
                 .child(Icon::new(L::Trash).size(px(40.)).text_color(p.text_tertiary))
-                .child(div().text_color(p.text_secondary).child(t!("Geri dönüşüm kutusu boş")))
+                .child(div().text_color(p.text_secondary).child(if cfg!(target_os = "macos") { t!("Çöp sepeti boş") } else { t!("Geri dönüşüm kutusu boş") }))
                 .into_any_element()
         } else if self.order.is_empty() {
             div().p_6().text_sm().text_color(p.text_secondary).child(t!("Eşleşen öğe yok")).into_any_element()

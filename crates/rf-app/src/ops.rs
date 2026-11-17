@@ -159,6 +159,28 @@ fn bg(name: &'static str, f: impl FnOnce() -> anyhow::Result<bool> + Send + 'sta
         .ok();
 }
 
+/// The name (and extension) a shortcut to `name` gets in its own folder. Explorer's "Create
+/// shortcut" adds " - Kısayol" and "Paste shortcut" keeps the name (both `.lnk`); on macOS both
+/// are symlinks called "<name> bağlantısı" with no extension, the Finder's way of naming a link.
+/// The word comes from the existing "Bağlantı" string (Turkish takes the possessive suffix).
+pub(crate) fn shortcut_name(name: &str, created: bool) -> (String, &'static str) {
+    #[cfg(windows)]
+    {
+        if created {
+            (format!("{} - {}", name, t!("Kısayol")), ".lnk")
+        } else {
+            (name.to_string(), ".lnk")
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = created;
+        let word = t!("Bağlantı");
+        let word = if word == "Bağlantı" { "bağlantısı".to_string() } else { word.to_lowercase() };
+        (format!("{name} {word}"), "")
+    }
+}
+
 impl FolderView {
     pub fn current_dir(&self) -> Option<PathBuf> {
         if let rf_core::Location::Library { file, .. } = self.location() {
@@ -219,10 +241,12 @@ impl FolderView {
     pub fn copy_path_with(&mut self, quoted: bool, cx: &mut Context<Self>) {
         let paths = self.selection_paths();
         let q = |s: String| if quoted { format!("\"{s}\"") } else { s };
+        // CRLF is what Windows apps expect; macOS text (Terminal, editors) uses LF.
+        let sep = if cfg!(windows) { "\r\n" } else { "\n" };
         let text = if paths.is_empty() {
             self.current_dir().map(|d| q(d.to_string_lossy().into_owned())).unwrap_or_default()
         } else {
-            paths.iter().map(|p| q(p.display().to_string())).collect::<Vec<_>>().join("\r\n")
+            paths.iter().map(|p| q(p.display().to_string())).collect::<Vec<_>>().join(sep)
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
@@ -288,7 +312,8 @@ impl FolderView {
         }
     }
 
-    /// Creates shortcuts (.lnk) to the clipboard items in the current folder.
+    /// Creates shortcuts to the clipboard items in the current folder: Windows' `.lnk` files,
+    /// symlinks named "<name> bağlantısı" on macOS.
     pub fn paste_shortcuts(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.shell_read_only(cx) {
             return;
@@ -305,14 +330,10 @@ impl FolderView {
             let Ok(Some((paths, _))) = rx.await else { return };
             let work = cx.background_spawn(async move {
                 for p in paths {
-                    let stem = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Kısayol".into());
-                    // never overwrite: "x.lnk", "x (2).lnk", …
-                    let mut link = dir.join(format!("{stem}.lnk"));
-                    let mut n = 2;
-                    while link.exists() {
-                        link = dir.join(format!("{stem} ({n}).lnk"));
-                        n += 1;
-                    }
+                    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Kısayol".into());
+                    let (base, ext) = shortcut_name(&name, false);
+                    // never overwrite: the platform's unique name ("x (2).lnk" / "x bağlantısı 2")
+                    let link = rf_win::fileops::unique_name(&dir, &base, ext);
                     if let Err(e) = rf_win::shortcut::create(&link, &p) {
                         log::warn!("shortcut {link:?}: {e:#}");
                     }
@@ -923,10 +944,7 @@ impl FolderView {
         if paths.is_empty() {
             paths.extend(self.current_dir());
         }
-        #[cfg(windows)]
         crate::properties_view::open(paths, self.images.clone(), cx);
-        #[cfg(not(windows))]
-        let _ = (paths, &self.images, cx);
     }
 
     /// Opens the selected files with one of the user's own programs for their type (a row of "Open with"; Settings > File types).

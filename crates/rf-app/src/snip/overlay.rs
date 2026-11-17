@@ -1,7 +1,7 @@
 //! The overlay window of one monitor: the frozen picture of that monitor, dimmed, with the clear rectangle of the drag (or of the
 //! window or the monitor under the pointer) cut out of the dim, an outline in the system accent and its size in pixels beside it.
 //!
-//! The view only feeds events into the shared model and draws what the model says; every decision is `rf_platform::snip::model`'s. The
+//! The view only feeds events into the shared model and draws what the model says; every decision is `rf_win::snip::model`'s. The
 //! picture is drawn once, full size, and the dim is laid over it as strips around the clear rectangle (`plan::dim_strips`), so nothing
 //! is drawn twice and nothing is clipped with tricks.
 
@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use gpui_kit::*;
 use rf_core::desktop::geom::Rect;
-use rf_platform::snip::geom::{self, Pt};
-use rf_platform::snip::model::{self, Outcome};
+use rf_win::snip::geom::{self, Pt};
+use rf_win::snip::model::{self, Outcome};
 
 use super::{State, plan};
 
@@ -90,7 +90,7 @@ impl OverlayView {
 
 /// The accent as a toolkit colour.
 fn accent() -> Hsla {
-    rgb(rf_platform::accent::color()).into()
+    rgb(rf_win::accent::color()).into()
 }
 
 impl Render for OverlayView {

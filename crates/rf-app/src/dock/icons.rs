@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use gpui_kit::RenderImage;
-use rf_platform::dock::IconSource;
+use rf_win::dock::IconSource;
 
 /// How many times in all an icon is asked for before the placeholder stays for good.
 pub const MAX_TRIES: u8 = 4;
@@ -135,10 +135,10 @@ impl IconCache {
 }
 
 /// Asks for the icon at `px` device px square, from the best source of `srcs` (a package's own logo files, a program's icon frame, the
-/// shell, a window's icon last: `rf_platform::dock::iconload`), resampled by us. Blocks (the disk, COM, the shell, other programs'
+/// shell, a window's icon last: `rf_win::dock::iconload`), resampled by us. Blocks (the disk, COM, the shell, other programs'
 /// windows): worker thread only.
-pub fn load_bgra(srcs: &[IconSource], px: u32) -> Option<rf_platform::thumbs::Bgra> {
-    match rf_platform::dock::iconload::load_one(srcs, px) {
+pub fn load_bgra(srcs: &[IconSource], px: u32) -> Option<rf_win::thumbs::Bgra> {
+    match rf_win::dock::iconload::load_one(srcs, px) {
         Ok(bgra) => Some(bgra),
         Err(e) => {
             log::debug!("dock icon {:?}: {e:#}", srcs.first());
@@ -147,10 +147,10 @@ pub fn load_bgra(srcs: &[IconSource], px: u32) -> Option<rf_platform::thumbs::Bg
     }
 }
 
-/// The same icon at every one of `sizes` (ascending; see `rf_platform::dock::iconpick::level_sizes`), each made from the one best picture.
+/// The same icon at every one of `sizes` (ascending; see `rf_win::dock::iconpick::level_sizes`), each made from the one best picture.
 /// Worker thread only.
-pub fn load_levels(srcs: &[IconSource], sizes: &[u32]) -> Option<Vec<rf_platform::thumbs::Bgra>> {
-    match rf_platform::dock::iconload::load_levels(srcs, sizes) {
+pub fn load_levels(srcs: &[IconSource], sizes: &[u32]) -> Option<Vec<rf_win::thumbs::Bgra>> {
+    match rf_win::dock::iconload::load_levels(srcs, sizes) {
         Ok(got) => Some(got.levels),
         Err(e) => {
             log::debug!("dock icon {:?}: {e:#}", srcs.first());
@@ -160,7 +160,7 @@ pub fn load_levels(srcs: &[IconSource], sizes: &[u32]) -> Option<Vec<rf_platform
 }
 
 /// What a load made for one icon at one list of sizes, held by every dock that asked for exactly that while any of them still holds it.
-pub type SharedLoad = OnceLock<Option<Vec<rf_platform::thumbs::Bgra>>>;
+pub type SharedLoad = OnceLock<Option<Vec<rf_win::thumbs::Bgra>>>;
 
 /// How long the dock that made a load keeps it for the others after it has its own pictures: the island of another monitor reacts to
 /// the same window event a few milliseconds later, and its shell call would otherwise be made again.
@@ -174,7 +174,7 @@ static LOADS: Mutex<Vec<((String, Vec<u32>), Weak<SharedLoad>)>> = Mutex::new(Ve
 /// again. The second return value is the load, to be held for [`SHARE_LINGER`] after the caller is done so that a dock that asks a
 /// moment later finds it; dropped, the pictures are freed. With `shared` false (one dock) this is [`load_levels`] and nothing is kept.
 /// Worker thread only.
-pub fn load_levels_shared(key: &str, srcs: &[IconSource], sizes: &[u32], shared: bool) -> (Option<Vec<rf_platform::thumbs::Bgra>>, Option<Arc<SharedLoad>>) {
+pub fn load_levels_shared(key: &str, srcs: &[IconSource], sizes: &[u32], shared: bool) -> (Option<Vec<rf_win::thumbs::Bgra>>, Option<Arc<SharedLoad>>) {
     if !shared {
         return (load_levels(srcs, sizes), None);
     }
@@ -196,7 +196,7 @@ pub fn load_levels_shared(key: &str, srcs: &[IconSource], sizes: &[u32], shared:
 }
 
 /// The set of pictures a [`load_levels`] gave, ready to draw. UI thread.
-pub fn to_levels(bgra: Vec<rf_platform::thumbs::Bgra>) -> Option<super::icon_levels::Levels> {
+pub fn to_levels(bgra: Vec<rf_win::thumbs::Bgra>) -> Option<super::icon_levels::Levels> {
     let sizes: Vec<u32> = bgra.iter().map(|b| b.width).collect();
     let images: Vec<Arc<RenderImage>> = bgra.into_iter().filter_map(to_image).collect();
     super::icon_levels::Levels::new(sizes, images)
@@ -204,7 +204,7 @@ pub fn to_levels(bgra: Vec<rf_platform::thumbs::Bgra>) -> Option<super::icon_lev
 
 /// The picture GPUI draws. GPUI's `RenderImage` holds BGRA bytes inside an image buffer (the `image` crate's type is only the
 /// container, as in the earlier taskbar preview); the alpha is straight, as for any decoded picture. UI thread.
-pub fn to_image(bgra: rf_platform::thumbs::Bgra) -> Option<Arc<RenderImage>> {
+pub fn to_image(bgra: rf_win::thumbs::Bgra) -> Option<Arc<RenderImage>> {
     let buf = image::RgbaImage::from_raw(bgra.width, bgra.height, bgra.data)?;
     Some(Arc::new(RenderImage::new(vec![image::Frame::new(buf)])))
 }

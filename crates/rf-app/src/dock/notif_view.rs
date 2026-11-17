@@ -1,22 +1,22 @@
 //! The bell's panel: what opens above the right island when its bell is clicked (`panel.rs` opens, places and closes it; this is what
 //! is inside). About 380 logical px wide, on HyperGlass, in the look of the control centre's.
 //!
-//! WHAT IT SHOWS. The notifications other programs have posted, as Windows lists them (`rf_platform::toasts`, read through the WinRT
+//! WHAT IT SHOWS. The notifications other programs have posted, as Windows lists them (`rf_win::toasts`, read through the WinRT
 //! `UserNotificationListener`, which works for a program with no package identity): grouped by program, the program with the newest
 //! notification first, newest first inside a program. A program's heading has its icon (the dock's icon code, on the shell thread)
 //! and its name; each notification its title, up to three lines of text and its age ("şimdi", "5 dk", "2 sa", "dün", or the date). A
 //! click on a notification starts its program (by its AppUserModelID, as the Start panel does). A small x removes that one from
-//! Windows' list and "Tümünü temizle" clears it, while `rf_platform::toasts::RemoveWatch` has not caught Windows ignoring them (see there).
+//! Windows' list and "Tümünü temizle" clears it, while `rf_win::toasts::RemoveWatch` has not caught Windows ignoring them (see there).
 //! With no notification: "Bildirim yok". Without the user's permission for notification access: one line and a button to Windows'
 //! privacy page; the panel never asks for the permission itself.
 //!
-//! WHAT RUNS, AND WHEN. Opening the panel starts one reader thread (`rf_platform::toasts::listener::watch`) that reads the list at once and
+//! WHAT RUNS, AND WHEN. Opening the panel starts one reader thread (`rf_win::toasts::listener::watch`) that reads the list at once and
 //! every 2 s (Windows' push event needs package identity: it is not available), and closing it ends the thread. The panel keeps the
 //! notifications' TEXTS only while it is open: hiding the window drops them, the pictures of the lists, and the keyboard cursor; what
 //! stays is the COUNT (`notif_state.rs`, for the bell's dot). Nothing here is logged or written to a file.
 //!
-//! NO FLICKER. A poll that finds the same list (`rf_platform::toasts::diff` is empty) redraws nothing; one that finds a different list
-//! keeps the keyboard cursor on its notification (`rf_platform::toasts::keep_cursor`) and the scroll where it was.
+//! NO FLICKER. A poll that finds the same list (`rf_win::toasts::diff` is empty) redraws nothing; one that finds a different list
+//! keeps the keyboard cursor on its notification (`rf_win::toasts::keep_cursor`) and the scroll where it was.
 //!
 //! THE KEYBOARD. Up and Down walk the notifications, Enter starts the program of the one under the cursor, Delete removes it (when
 //! removing is offered), Escape closes, Tab visits the buttons.
@@ -31,13 +31,13 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::apps::App as AppEntry;
-use rf_platform::dock::IconSource;
-use rf_platform::dock::clock;
-use rf_platform::dock::panel::{self as geo, CloseCause};
-use rf_platform::dock::startapps;
-use rf_platform::toasts::listener::{self, Watch};
-use rf_platform::toasts::{self, Access, Group, Snapshot, Toast};
+use rf_win::apps::App as AppEntry;
+use rf_win::dock::IconSource;
+use rf_win::dock::clock;
+use rf_win::dock::panel::{self as geo, CloseCause};
+use rf_win::dock::startapps;
+use rf_win::toasts::listener::{self, Watch};
+use rf_win::toasts::{self, Access, Group, Snapshot, Toast};
 
 use super::backdrop::IslandGlass;
 use super::cc_model::Words;

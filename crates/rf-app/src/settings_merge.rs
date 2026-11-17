@@ -254,7 +254,7 @@ impl FileLock {
         for b in key.bytes() {
             h = (h ^ u32::from(b)).wrapping_mul(0x0100_0193);
         }
-        let name = rf_platform::wide::wide(format!("Local\\rustyfiles-settings-{h:08x}"));
+        let name = rf_win::wide::wide(format!("Local\\rustyfiles-settings-{h:08x}"));
         let handle = unsafe { CreateMutexW(None, false, PCWSTR(name.as_ptr())) }.ok()?;
         let got = unsafe { WaitForSingleObject(handle, 3_000) };
         if got == WAIT_OBJECT_0 || got == WAIT_ABANDONED {

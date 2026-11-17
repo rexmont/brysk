@@ -15,19 +15,13 @@ zip.workspace = true
 roxmltree = "0.20"
 encoding_rs = "0.8"
 rf-core.workspace = true
-# the pure rules and the real taskbar-window code of hiding Explorer's taskbar (taskbar_hide.rs); the watchdog crate is tiny (std + windows)
-rf-shellguard = { path = "../rf-shellguard" }
 anyhow.workspace = true
 thiserror.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 smallvec.workspace = true
 crossbeam-channel.workspace = true
-windows.workspace = true
-windows-core.workspace = true
-windows-collections.workspace = true
 notify.workspace = true
-windows-registry = "0.6"
 rayon.workspace = true
 chrono.workspace = true
 serde.workspace = true
@@ -38,6 +32,19 @@ sha2.workspace = true
 crc32fast.workspace = true
 # the compound files of the jump lists (jumplists/), read from bytes held in memory; the crate's writer is used by tests only
 cfb = "0.14"
+
+[target.'cfg(windows)'.dependencies]
+# the pure rules and the real taskbar-window code of hiding Explorer's taskbar (taskbar_hide.rs); the watchdog crate is tiny (std + windows)
+rf-shellguard = { path = "../rf-shellguard" }
+windows.workspace = true
+windows-core.workspace = true
+windows-collections.workspace = true
+windows-registry = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# On macOS this crate is the façade over the macOS platform layer: `lib.rs` re-exports it,
+# so the interface keeps saying `rf_win::<module>` on both platforms.
+rf-mac = { path = "../rf-mac" }
 
 [dev-dependencies]
 # the glass_shot example reads and writes pictures

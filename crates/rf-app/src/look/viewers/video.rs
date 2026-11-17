@@ -73,7 +73,7 @@ fn open_media(path: &std::path::Path) -> Opened {
             // FilmCraft decodes on the CPU: 4K, or anything past 1080p60, doesn't keep up (4K60
             // HEVC 10-bit: 42 frames/s on a 9800X3D with nothing else running). Windows'
             // decoder uses the graphics card's video engine instead.
-            Some(v) if too_heavy(v.width, v.height, v.frame_rate.as_f64()) && rf_platform::preview_host::is_playable(path) && rf_platform::preview_host::mf_decodes(&v.codec) => {
+            Some(v) if too_heavy(v.width, v.height, v.frame_rate.as_f64()) && rf_win::preview_host::is_playable(path) && rf_win::preview_host::mf_decodes(&v.codec) => {
                 log::info!("look: {}x{} {} at {:.2} fps is past software decoding, Media Foundation (hardware)", v.width, v.height, v.codec, v.frame_rate.as_f64());
                 // the window as for any video: the picture's own size, up to 80 % of the screen
                 // (a fixed 960 × 540 was a quarter of a 4K laptop's screen)
@@ -93,7 +93,7 @@ fn open_media(path: &std::path::Path) -> Opened {
                 (Kind::Audio(media), p)
             }
         },
-        Err(e) if rf_platform::preview_host::is_playable(path) => {
+        Err(e) if rf_win::preview_host::is_playable(path) => {
             log::info!("look: rf-player cannot open {}, Media Foundation: {e:#}", path.display());
             (Kind::Mf, Prepared::new((960.0, 540.0), name))
         }
@@ -129,7 +129,7 @@ impl Viewer for VideoViewer {
         if f.ext == "ts" && !is_transport_stream(&f.head) {
             return false;
         }
-        f.is_file() && (rf_player::can_open(&f.path) || rf_platform::preview_host::is_playable(&f.path))
+        f.is_file() && (rf_player::can_open(&f.path) || rf_win::preview_host::is_playable(&f.path))
     }
     fn loader(&self) -> Option<fn(&Probe) -> crate::look::viewer::Loaded> {
         Some(|f| Box::new(open_media(&f.path)))
@@ -242,7 +242,7 @@ pub struct MediaView {
     mf_owner: isize,
     /// Görüntü boyutu (piksel en-boyu uygulanmış).
     dims: (f32, f32),
-    mf_state: Option<rf_platform::preview_host::MediaState>,
+    mf_state: Option<rf_win::preview_host::MediaState>,
     /// rustdecoder route chosen (its window may still be opening).
     rd_mode: bool,
     rd: Option<rd_video::RdVideo>,
@@ -314,7 +314,7 @@ impl MediaView {
             scrub_resume: false,
             seek_hold: None,
             // a network drive needs longer than a local disk to hand over the file's header
-            mf_wait: if rf_platform::drives::slow_to_read(&path) { Duration::from_secs(20) } else { Duration::from_secs(2) },
+            mf_wait: if rf_win::drives::slow_to_read(&path) { Duration::from_secs(20) } else { Duration::from_secs(2) },
             _hide: None,
             _tasks: Vec::new(),
         };
@@ -327,7 +327,7 @@ impl MediaView {
             v.player = None;
             v.rd = None;
             if v.mf {
-                rf_platform::sta::run(|_| rf_platform::preview_host::hide());
+                rf_win::sta::run(|_| rf_win::preview_host::hide());
             }
             for img in [v.image.take(), v.previous.take(), v.cover.take()].into_iter().flatten() {
                 cx.drop_image(img, None);
@@ -470,7 +470,7 @@ impl MediaView {
             let Some(err) = probe.await else { return };
             let _ = this.update(cx, |v, cx| {
                 v.player = None;
-                if rf_platform::preview_host::is_playable(&v.path) {
+                if rf_win::preview_host::is_playable(&v.path) {
                     log::info!("look: rf-player cannot decode {}, Media Foundation: {err}", v.path.display());
                     v.opened_at = Instant::now();
                     v.start_mf(cx);
@@ -485,7 +485,7 @@ impl MediaView {
     fn load_audio_info(&mut self, cx: &mut Context<Self>) {
         let p = self.path.clone();
         let work = cx.background_spawn(async move {
-            let meta = rf_platform::props::media_props(&p);
+            let meta = rf_win::props::media_props(&p);
             let lyrics = crate::look::lyrics::sidecar(&p).unwrap_or_default();
             (meta, lyrics)
         });
@@ -565,12 +565,12 @@ impl MediaView {
         self.mf = true;
         self.controls = true;
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        rf_platform::preview_host::set_media_events(move |e| {
+        rf_win::preview_host::set_media_events(move |e| {
             let _ = tx.unbounded_send(e);
         });
         self._tasks.push(cx.spawn(async move |this, cx| {
             use futures::StreamExt;
-            use rf_platform::preview_host::MediaEvent;
+            use rf_win::preview_host::MediaEvent;
             while let Some(e) = rx.next().await {
                 let alive = this.update(cx, |v, cx| {
                     match e {
@@ -596,8 +596,8 @@ impl MediaView {
         self._tasks.push(cx.spawn(async move |this, cx| loop {
             cx.background_executor().timer(Duration::from_millis(250)).await;
             let (tx, rx) = futures::channel::oneshot::channel();
-            rf_platform::sta::run(move |_| {
-                let _ = tx.send(rf_platform::preview_host::media_state());
+            rf_win::sta::run(move |_| {
+                let _ = tx.send(rf_win::preview_host::media_state());
             });
             let st = rx.await.ok().flatten();
             let gone = this.update(cx, |v, cx| {
@@ -607,7 +607,7 @@ impl MediaView {
                     v.failed = Some(t!("Bu biçim desteklenmiyor (ne FilmCraft ne de Windows çözebildi)").to_string());
                     v.mf = false;
                     v.video = false;
-                    rf_platform::sta::run(|_| rf_platform::preview_host::hide());
+                    rf_win::sta::run(|_| rf_win::preview_host::hide());
                 }
                 cx.notify();
                 v.failed.is_some()
@@ -650,8 +650,8 @@ impl MediaView {
             // decided by the player's own thread from its real state (our copy is polled, up to
             // 250 ms old: a second press decided from it repeated the first command); the button
             // follows its event (see `start_mf`)
-            rf_platform::sta::run(|_| {
-                rf_platform::preview_host::media_toggle();
+            rf_win::sta::run(|_| {
+                rf_win::preview_host::media_toggle();
             });
             return;
         }
@@ -711,7 +711,7 @@ impl MediaView {
                 rd.seek_fraction(f);
             }
         } else if self.mf {
-            rf_platform::sta::run(move |_| rf_platform::preview_host::media_seek(f));
+            rf_win::sta::run(move |_| rf_win::preview_host::media_seek(f));
         } else if let Some(p) = &mut self.player {
             let d = p.state().duration;
             p.seek(f * d);
@@ -975,12 +975,12 @@ impl Render for MediaView {
                 let owner = crate::look::window::hwnd_of(window);
                 self.mf_owner = owner;
                 let path = self.path.clone();
-                let r = rf_platform::RECT { left: rect[0], top: rect[1], right: rect[2], bottom: rect[3] };
-                rf_platform::sta::run(move |_| {
+                let r = rf_win::RECT { left: rect[0], top: rect[1], right: rect[2], bottom: rect[3] };
+                rf_win::sta::run(move |_| {
                     if first {
-                        rf_platform::preview_host::media_play(owner, &path, Some(r));
+                        rf_win::preview_host::media_play(owner, &path, Some(r));
                     } else {
-                        rf_platform::preview_host::media_reposition(r);
+                        rf_win::preview_host::media_reposition(r);
                     }
                 });
             }

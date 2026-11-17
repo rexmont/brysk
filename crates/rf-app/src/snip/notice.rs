@@ -62,7 +62,7 @@ impl NoticeView {
             outcome: made.outcome,
             png: made.png,
             hwnd: crate::look::window::hwnd_of(window),
-            dark: rf_platform::accent::system_is_dark(),
+            dark: rf_win::accent::system_is_dark(),
             popup: None,
             _watch: None,
             started: Instant::now(),
@@ -216,7 +216,7 @@ impl Render for NoticeView {
 mod tests {
     use std::path::PathBuf;
 
-    use rf_platform::snip::clip::Written;
+    use rf_win::snip::clip::Written;
 
     // (explicit names: `use super::*` would bring in the toolkit's own `test` attribute through its glob and break `#[test]`)
     use super::{Headline, Outcome, headline_text, subtitle};

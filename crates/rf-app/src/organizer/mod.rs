@@ -1,7 +1,7 @@
 //! Folder organizer (Settings -> Düzenleyici): rules that sort the files of a folder.
 //!
 //! The pure engine is `rf_core::organize` (rules, plans, safety), the hands are
-//! `rf_platform::organize` (scan, run, undo). This module is the glue and the screens:
+//! `rf_win::organize` (scan, run, undo). This module is the glue and the screens:
 //!
 //! * `mod.rs`: the rules as a global, saving, running a plan as a Status Center job, undo;
 //! * `auto.rs`: the folder watchers of the rules that run by themselves (nothing exists
@@ -26,7 +26,7 @@ mod editor;
 pub mod page;
 mod preview;
 
-pub use rf_platform::organize::Record;
+pub use rf_win::organize::Record;
 
 /// What went wrong with the rules file at start-up (shown on the page until the user has seen it).
 #[derive(Debug, Clone)]
@@ -255,9 +255,9 @@ pub fn make_plan(rules: &[Rule], source: &Source, skip: &std::collections::HashS
         }
     }
     let mut facts: Vec<FileFact> = match source {
-        Source::Scan { root, subfolders } if refusal(protected, root, *subfolders).is_none() => rf_platform::organize::scan(root, *subfolders, classify, protected, cancelled),
+        Source::Scan { root, subfolders } if refusal(protected, root, *subfolders).is_none() => rf_win::organize::scan(root, *subfolders, classify, protected, cancelled),
         Source::Scan { .. } => Vec::new(),
-        Source::Paths(paths) => rf_platform::organize::facts_for_paths(paths, classify),
+        Source::Paths(paths) => rf_win::organize::facts_for_paths(paths, classify),
     };
     if !skip.is_empty() {
         facts.retain(|f| !skip.contains(&norm(&f.path)));
@@ -268,7 +268,7 @@ pub fn make_plan(rules: &[Rule], source: &Source, skip: &std::collections::HashS
 }
 
 pub fn plan_facts(rules: &[Rule], facts: &[FileFact], protected: &ProtectedPaths) -> Plan {
-    let exists = |p: &Path| rf_platform::organize::exists(p);
+    let exists = |p: &Path| rf_win::organize::exists(p);
     let mut ctx = PlanContext::new(now_ms(), classify, &exists, protected);
     ctx.kind_labels = kind_labels();
     rf_core::organize::plan(rules, facts, &ctx)
@@ -426,7 +426,7 @@ pub fn not_a_folder(window: &mut Window, cx: &mut App) {
 // ---------------------------------------------------------------- running
 
 /// What is done on the UI thread when a run is over.
-pub type Finished = Box<dyn FnOnce(&rf_platform::organize::Report, &mut App)>;
+pub type Finished = Box<dyn FnOnce(&rf_win::organize::Report, &mut App)>;
 
 pub struct RunSpec {
     pub steps: Vec<Step>,
@@ -445,7 +445,7 @@ pub fn start_run(spec: RunSpec, cx: &mut App) {
     if steps.is_empty() {
         return;
     }
-    let result: Arc<Mutex<Option<rf_platform::organize::Report>>> = Arc::default();
+    let result: Arc<Mutex<Option<rf_win::organize::Report>>> = Arc::default();
     let shared = result.clone();
     let id_cell = Rc::new(Cell::new(0u64));
     let id_for_done = id_cell.clone();
@@ -454,10 +454,10 @@ pub fn start_run(spec: RunSpec, cx: &mut App) {
         cx,
         title,
         move |t| {
-            let recycler = rf_platform::organize::ShellRecycler { tracker: t.clone() };
-            let opts = if automatic { rf_platform::organize::RunOptions::automatic(now_ms()) } else { rf_platform::organize::RunOptions::manual(now_ms()) };
+            let recycler = rf_win::organize::ShellRecycler { tracker: t.clone() };
+            let opts = if automatic { rf_win::organize::RunOptions::automatic(now_ms()) } else { rf_win::organize::RunOptions::manual(now_ms()) };
             let progress = |done: usize, total: usize, name: &str| (t.on_progress)(total as u32, done as u32, (!name.is_empty()).then(|| name.to_string()));
-            let rep = rf_platform::organize::run(&steps, &opts, &recycler, &progress, &t.cancel);
+            let rep = rf_win::organize::run(&steps, &opts, &recycler, &progress, &t.cancel);
             // Only a run the user started goes on the Ctrl+Z stack. One that ran by itself in the
             // background would be undone by the next Ctrl+Z instead of what the user just did, and would
             // wipe the Ctrl+Y history; it has its "Geri al" on its Status Center row.
@@ -488,7 +488,7 @@ pub fn start_run(spec: RunSpec, cx: &mut App) {
 }
 
 /// "12 dosya düzenlendi · 3 dosya atlandı · 40 dosya sonraki çalıştırmada"
-fn result_title(rep: &rf_platform::organize::Report) -> String {
+fn result_title(rep: &rf_win::organize::Report) -> String {
     let n = rep.record.count();
     let mut parts = vec![plural(n, t!("1 dosya düzenlendi"), t!("{n} dosya düzenlendi"))];
     let skipped = rep.skipped.iter().filter(|s| !s.why.retry_later()).count();
@@ -508,7 +508,7 @@ pub fn plural(n: usize, one: impl AsRef<str>, many: impl AsRef<str>) -> String {
     if n == 1 { one.as_ref().to_string() } else { many.as_ref().replace("{n}", &n.to_string()) }
 }
 
-fn finish(id: u64, rep: &rf_platform::organize::Report, automatic: bool, cx: &mut App) {
+fn finish(id: u64, rep: &rf_win::organize::Report, automatic: bool, cx: &mut App) {
     // a run by itself that did nothing (every file was too new, say) leaves no row
     if automatic && rep.record.count() == 0 && rep.failed.is_empty() {
         crate::status_center::remove(cx, id);
@@ -551,8 +551,8 @@ fn finish(id: u64, rep: &rf_platform::organize::Report, automatic: bool, cx: &mu
 }
 
 /// The skipped files of a run, one line per reason with the first names: "Başka bir uygulama kullanıyor: a.zip, b.zip +3".
-pub fn skipped_lines(skipped: &[rf_platform::organize::Skip]) -> Vec<String> {
-    let mut groups: Vec<(rf_platform::organize::Why, Vec<String>)> = Vec::new();
+pub fn skipped_lines(skipped: &[rf_win::organize::Skip]) -> Vec<String> {
+    let mut groups: Vec<(rf_win::organize::Why, Vec<String>)> = Vec::new();
     for s in skipped {
         let name = s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         match groups.iter_mut().find(|(w, _)| *w == s.why) {
@@ -624,19 +624,19 @@ pub fn undo_run(rec: Record, on_done: Option<crate::status_center::OnDone>, cx: 
         return;
     }
     crate::status_center::start_with(cx, t!("Geri alınıyor: dosya düzenleme").to_string(), move |_| {
-        let u = rf_platform::organize::undo_moves(&rec);
+        let u = rf_win::organize::undo_moves(&rec);
         let mut problems = u.failed.len();
         for f in &u.failed {
             log::warn!("organizer undo: {}: {}", f.path.display(), f.message);
         }
         if !rec.recycled.is_empty() {
             let wanted: Vec<String> = rec.recycled.iter().map(|(_, bin)| bin.to_string_lossy().to_lowercase()).collect();
-            let items: Vec<_> = rf_platform::recycle::list()?.into_iter().filter(|it| wanted.contains(&it.parsing_path.to_lowercase())).collect();
+            let items: Vec<_> = rf_win::recycle::list()?.into_iter().filter(|it| wanted.contains(&it.parsing_path.to_lowercase())).collect();
             if items.is_empty() {
                 problems += rec.recycled.len();
             } else {
                 problems += rec.recycled.len().saturating_sub(items.len());
-                rf_platform::recycle::restore(&items)?;
+                rf_win::recycle::restore(&items)?;
             }
         }
         anyhow::ensure!(problems == 0, "{}", plural(problems, t!("1 dosya geri alınamadı"), t!("{n} dosya geri alınamadı")));
@@ -648,13 +648,13 @@ pub fn undo_run(rec: Record, on_done: Option<crate::status_center::OnDone>, cx: 
 pub fn redo_run(rec: Record, cx: &mut App) {
     UNDONE.lock().unwrap().retain(|t| *t != rec.token);
     crate::status_center::start(cx, t!("Yineleniyor: dosya düzenleme").to_string(), move |tracker| {
-        let r = rf_platform::organize::redo_moves(&rec);
+        let r = rf_win::organize::redo_moves(&rec);
         let mut problems = r.failed.len();
-        let present: Vec<PathBuf> = rec.recycled.iter().map(|(orig, _)| orig.clone()).filter(|p| rf_platform::organize::exists(p)).collect();
+        let present: Vec<PathBuf> = rec.recycled.iter().map(|(orig, _)| orig.clone()).filter(|p| rf_win::organize::exists(p)).collect();
         problems += rec.recycled.len() - present.len();
         if !present.is_empty() {
             // (`false`: to the Recycle Bin)
-            rf_platform::fileops::delete_tracked(&present, false, tracker)?;
+            rf_win::fileops::delete_tracked(&present, false, tracker)?;
         }
         anyhow::ensure!(problems == 0, "{}", plural(problems, t!("1 dosya taşınamadı"), t!("{n} dosya taşınamadı")));
         Ok(true)

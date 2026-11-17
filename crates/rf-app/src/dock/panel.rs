@@ -1,5 +1,5 @@
 //! The dock's panels: borderless windows on HyperGlass that open above an island (the Start panel above the left island, the control
-//! centre above the right one). The arithmetic and the decisions are `rf_platform::dock::panel` (placement, toggle, what closes a panel,
+//! centre above the right one). The arithmetic and the decisions are `rf_win::dock::panel` (placement, toggle, what closes a panel,
 //! who gets the keyboard back, the 120 ms easing); this file puts them on windows. Each panel is a slot: its id, the island it sits
 //! above and lines up with, its window, and the hooks that tell its view what is happening to it.
 //!
@@ -34,10 +34,10 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui_kit::*;
-use rf_platform::dock::grow::Corner;
-use rf_platform::dock::grow_panels;
-use rf_platform::dock::layout::Rect;
-use rf_platform::dock::panel::{self as geo, CloseCause, PanelId, Side};
+use rf_win::dock::grow::Corner;
+use rf_win::dock::grow_panels;
+use rf_win::dock::layout::Rect;
+use rf_win::dock::panel::{self as geo, CloseCause, PanelId, Side};
 
 use super::backdrop::IslandGlass;
 use super::control_centre::CcView;
@@ -63,7 +63,7 @@ pub use eject_panel::{EJECT, toggle_eject};
 
 /// The Start panel's size when the screen has the room, logical px (642 x 720; `StartHooks::size` shortens it to the room above the
 /// island).
-pub const START_SIZE: (f32, f32) = (rf_platform::dock::startpage::PANEL_W, rf_platform::dock::startpage::PANEL_MAX_H);
+pub const START_SIZE: (f32, f32) = (rf_win::dock::startpage::PANEL_W, rf_win::dock::startpage::PANEL_MAX_H);
 
 /// How often an open panel looks at the foreground and the mouse.
 const WATCH_EVERY: Duration = Duration::from_millis(50);
@@ -121,7 +121,7 @@ struct PanelHost {
     /// glass also holds the island's row). The tray strip finds the overflow panel's cells from it.
     content: Rect,
     /// The panel that opens when the one now leaving (shrinking back into its island) is gone: a press on another button of the island's
-    /// row while a panel is open (`rf_platform::dock::grow_panels::press`).
+    /// row while a panel is open (`rf_win::dock::grow_panels::press`).
     after: Option<PanelId>,
     /// How many times each panel has been told to close: the closing task of an earlier close leaves the hiding to a later one.
     close_seqs: grow_panels::CloseSeqs,
@@ -231,8 +231,8 @@ impl Hooks for StartHooks {
         // keeps it inside the work area)
         let room = host::monitor_work(cx)
             .zip(host::visible_glass_rect(Kind::Left, cx))
-            .map(|((scale, work), glass)| rf_platform::dock::startpage::room_above(glass.top, work.top, scale, geo::GAP));
-        (START_SIZE.0, room.map_or(START_SIZE.1, rf_platform::dock::startpage::panel_height))
+            .map(|((scale, work), glass)| rf_win::dock::startpage::room_above(glass.top, work.top, scale, geo::GAP));
+        (START_SIZE.0, room.map_or(START_SIZE.1, rf_win::dock::startpage::panel_height))
     }
     fn redraw(&self, cx: &mut App) {
         // (the growth starting, moving or ending is what moves the field between the panel's top and the island's row: its placeholder follows)
@@ -420,7 +420,7 @@ pub fn toggle_start_reported(cx: &mut App) -> bool {
     // (the Windows key: Start opens on the monitor that has the pointer, but a tap while Start is open CLOSES it, wherever the pointer is)
     let pointer = host::monitor_at_pointer(cx);
     let open_on = before.open.is_some_and(|id| id == PanelId::START).then(|| host::active(cx));
-    toggle_start_on(rf_platform::dock::monitors::key_target(open_on, pointer), cx);
+    toggle_start_on(rf_win::dock::monitors::key_target(open_on, pointer), cx);
     // (a tap while another panel is grown only QUEUES Start behind the one shrinking into its island: that is not "could not open")
     // Nor is the FIRST press after the dock started: the panel's window is made then, from the message loop, and opens as soon as it
     // exists. Reported as a failure, it made the keyboard layer ask Windows for its own Start as well, on the first tap of the
@@ -443,12 +443,12 @@ pub fn show_output_devices_on(mon: MonId, cx: &mut App) {
 }
 
 /// A button of the island of this monitor's dock asked for panel `id`. One panel at a time over all monitors
-/// (`rf_platform::dock::monitors::panel_request`): the same panel open on another monitor moves to this one.
+/// (`rf_win::dock::monitors::panel_request`): the same panel open on another monitor moves to this one.
 fn toggle(id: PanelId, mon: MonId, cx: &mut App) {
     let (open, waiting) = panel(cx).map_or((None, None), |p| (p.open, p.after));
     host_global(cx).want_mon = mon;
     let on = host::active(cx);
-    if rf_platform::dock::monitors::panel_request(open.as_ref().map(|o| (o, &on)), (&id, &mon)) == rf_platform::dock::monitors::PanelAction::MoveTo {
+    if rf_win::dock::monitors::panel_request(open.as_ref().map(|o| (o, &on)), (&id, &mon)) == rf_win::dock::monitors::PanelAction::MoveTo {
         // out of the island it grew from and into the one pressed: it is put away (shrinking back), and opens again on the new monitor
         host_global(cx).after = Some(id);
         close(CloseCause::Button, cx);
@@ -553,7 +553,7 @@ fn open_panel(id: PanelId, cx: &mut App) {
     if let Some(o) = other {
         put_away_now(o, cx);
     }
-    let front = rf_platform::dock::foreground_root();
+    let front = rf_win::dock::foreground_root();
     let front_is_island = host::is_island_window(front, cx);
     let serial = {
         let p = cx.global_mut::<PanelHost>();
@@ -602,7 +602,7 @@ fn open_panel(id: PanelId, cx: &mut App) {
     let h = hooks.clone();
     let is_grown = grown.is_some();
     cx.spawn(async move |cx| {
-        rf_platform::window::set_dark_mode(hwnd, dark);
+        rf_win::window::set_dark_mode(hwnd, dark);
         if is_grown {
             // the window's region is the island's rectangle (or where the glass is) before the window is shown (the styling and the
             // region are window calls: made here, with nothing of the app borrowed, like the showing below)
@@ -612,10 +612,10 @@ fn open_panel(id: PanelId, cx: &mut App) {
         }
         geo::show_at(hwnd, rect);
         // (the quiet kind: no tap of the Alt key into the window that is in front; the click that opened the panel was ours)
-        rf_platform::window::bring_to_front_quietly(hwnd);
+        rf_win::window::bring_to_front_quietly(hwnd);
         if is_grown && let Some(island) = cx.update(|cx| grow_host::island_to_raise(cx)) {
             // the island's window goes back above the panel's, so the logo is drawn over the grown glass and takes its clicks
-            rf_platform::dock::island::raise(island);
+            rf_win::dock::island::raise(island);
         }
         cx.update(|cx| {
             h.on_shown(dark, cx);
@@ -713,7 +713,7 @@ fn refit(id: PanelId, size: Option<(f32, f32)>, cx: &mut App) {
     cx.spawn(async move |_| {
         geo::show_at(hwnd, rect);
         if let Some(island) = island_above {
-            rf_platform::dock::island::raise(island);
+            rf_win::dock::island::raise(island);
         }
         if let Some(resend) = resend {
             resend();
@@ -767,7 +767,7 @@ fn watch_once(serial: u64, cx: &mut App) -> bool {
     // (and the island stays above it: the panel's window covers the island's row, and a panel that was activated again is on top)
     grow_host::keep_island_above(cx);
     let keep = host::visible_glass_rect(kind, cx).unwrap_or_default();
-    let fg = rf_platform::dock::foreground_root();
+    let fg = rf_win::dock::foreground_root();
     let front = fg == hwnd;
     let down = geo::any_button_down();
     let outside = geo::cursor().is_some_and(|c| geo::outside_click(was_down, down, c, rect, keep));
@@ -868,7 +868,7 @@ pub fn close(cause: CloseCause, cx: &mut App) {
         if stale {
             return;
         }
-        let fg = rf_platform::dock::foreground_root();
+        let fg = rf_win::dock::foreground_root();
         geo::hide(hwnd);
         // a panel waits for this one to be gone (a press on another button of the island's row): it opens now, and the window that had
         // the keyboard before this one is not given it back in between: the next panel is handed it as the window to go back to (the

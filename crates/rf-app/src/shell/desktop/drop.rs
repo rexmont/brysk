@@ -11,7 +11,7 @@
 
 use rf_core::desktop::grid::Cell;
 use rf_core::desktop::items::ItemId;
-use rf_platform::fileops::Transfer;
+use rf_win::fileops::Transfer;
 
 /// What an item under the pointer does with files dropped on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

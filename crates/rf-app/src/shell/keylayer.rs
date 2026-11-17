@@ -1,5 +1,5 @@
 //! The shell host's opt-in keyboard layer, the app's side (shell plan increment B7; the rules and the design are in
-//! `docs/design/shell-keys.md`, the hook and its callback are `rf_platform::winkey`).
+//! `docs/design/shell-keys.md`, the hook and its callback are `rf_win::winkey`).
 //!
 //! Two settings, both OFF by default, each one switch on the dock's Settings page:
 //! * `shell_win_key`: a tap of the Windows key alone toggles OUR Start panel (`dock::toggle_start`) instead of Windows' Start;
@@ -12,11 +12,11 @@
 //! dock's shutdown) and when the global is dropped, all of it is removed.
 //!
 //! FAIL OPEN. The beat is what proves this thread is alive: when it stops (this thread stuck for a second) the hook passes every key
-//! (`rf_platform::winkey::shared`). A full-screen program in front stands the layer down too (`dock::is_fullscreen`, stamped with the beat).
+//! (`rf_win::winkey::shared`). A full-screen program in front stands the layer down too (`dock::is_fullscreen`, stamped with the beat).
 //!
 //! WIN+E, WIN+D AND WIN+SHIFT+S (same switch as the Windows key, `shell_win_key`): Explorer answers these chords, and without it they are
 //! dead. While the shell host runs with NO Explorer owning the shell window (`live::current()` is `Shell`), Win+E opens a rustyfiles
-//! window (This PC / Home), Win+D shows the desktop (our Show Desktop, `rf_platform::desktop::showdesktop`) and Win+Shift+S starts our own
+//! window (This PC / Home), Win+D shows the desktop (our Show Desktop, `rf_win::desktop::showdesktop`) and Win+Shift+S starts our own
 //! screen snip (`crate::snip`). Beside Explorer they are left to it (`combos_wanted`). The other Explorer chords stay untouched; the
 //! list is in docs/design/shell-keys.md.
 //!
@@ -32,10 +32,10 @@ use std::time::Duration;
 
 use futures::StreamExt as _;
 use gpui_kit::*;
-use rf_platform::shellhost::ShellMode;
-use rf_platform::switcher::chord::{Effect, Scope};
-use rf_platform::switcher::hook::LowLevelHook;
-use rf_platform::winkey::{Beat, Combo, Deliver, HEARTBEAT_EVERY_MS, KeyService, Posted, Shared};
+use rf_win::shellhost::ShellMode;
+use rf_win::switcher::chord::{Effect, Scope};
+use rf_win::switcher::hook::LowLevelHook;
+use rf_win::winkey::{Beat, Combo, Deliver, HEARTBEAT_EVERY_MS, KeyService, Posted, Shared};
 
 use super::switcher::{self, Closing, OpenRequest};
 use crate::dock::parts::Part;
@@ -184,7 +184,7 @@ pub fn handle(p: Posted, log_only: bool, shared: &Shared, a: &mut dyn Actions) {
 /// How long after a tap of the Windows key the window in front is looked at (Windows' Start needs a moment to come up).
 const AFTER_TAP_MS: u64 = 700;
 
-/// Whether a window's description (`rf_platform::window::describe`: handle, program, class, title) is Windows' own Start menu or its
+/// Whether a window's description (`rf_win::window::describe`: handle, program, class, title) is Windows' own Start menu or its
 /// search, which is what a tap of the Windows key opens when nothing holds it shut. Pure.
 pub fn is_windows_start(described: &str) -> bool {
     let d = described.to_ascii_lowercase();
@@ -200,12 +200,12 @@ impl Actions for GpuiActions<'_> {
     fn toggle_start(&mut self) -> bool {
         let done = crate::dock::toggle_start(self.cx);
         // Whether the mask key kept Windows' own Start shut cannot be seen from the hook: only from what is in front a moment later
-        // (`rf_platform::winkey::mask`: "whether that holds on this Windows build is the first thing the live test looks at"). One line
+        // (`rf_win::winkey::mask`: "whether that holds on this Windows build is the first thing the live test looks at"). One line
         // for each tap that was taken; another window's title is written only when it is Windows' Start.
         self.cx
             .spawn(async move |cx| {
                 cx.background_executor().timer(std::time::Duration::from_millis(AFTER_TAP_MS)).await;
-                let front = rf_platform::window::describe(rf_platform::window::foreground());
+                let front = rf_win::window::describe(rf_win::window::foreground());
                 if is_windows_start(&front) {
                     log::warn!("start: Windows' own Start is in front {AFTER_TAP_MS} ms after the tap ({front}): the mask key did not keep it shut");
                 } else {
@@ -218,7 +218,7 @@ impl Actions for GpuiActions<'_> {
 
     fn windows_start(&mut self) {
         // (the dock's own helper for the logo when our Start is switched off; injected, so the layer does not answer it)
-        rf_platform::dock::triggers::start_menu();
+        rf_win::dock::triggers::start_menu();
     }
 
     fn open_switcher(&mut self, scope: Scope, backwards: bool, seq: u16) -> bool {
@@ -275,7 +275,7 @@ impl Actions for GpuiActions<'_> {
 /// Our Show Desktop. The driver remembers which windows it minimized, so it lives as long as the process; the work is done on a thread
 /// of its own (it enumerates every window and asks each to minimize or restore, without waiting).
 fn toggle_show_desktop() {
-    use rf_platform::desktop::showdesktop::{Driver, SystemOps};
+    use rf_win::desktop::showdesktop::{Driver, SystemOps};
     static DRIVER: parking_lot::Mutex<Option<Driver<SystemOps>>> = parking_lot::Mutex::new(None);
     let spawned = std::thread::Builder::new().name("rf-show-desktop".into()).spawn(|| {
         DRIVER.lock().get_or_insert_with(|| Driver::new(SystemOps)).toggle_show_desktop();
@@ -335,7 +335,7 @@ pub fn watch(cx: &mut App, role: Role) {
         let mut last = None;
         loop {
             cx.background_executor().timer(Duration::from_secs(4)).await;
-            let now = cx.update(|cx| (rf_platform::default_fm::is_enabled(rf_platform::default_fm::CLASSES), cx.try_global::<Settings>().is_some_and(|s| s.dock_enabled)));
+            let now = cx.update(|cx| (rf_win::default_fm::is_enabled(rf_win::default_fm::CLASSES), cx.try_global::<Settings>().is_some_and(|s| s.dock_enabled)));
             if last.is_some_and(|l| l != now) {
                 cx.update(|cx| apply(cx, role));
             }
@@ -352,7 +352,7 @@ fn apply(cx: &mut App, role: Role) {
         Role::Main => (false, false),
     };
     let dock_enabled = cx.try_global::<Settings>().is_some_and(|s| s.dock_enabled);
-    let win_e = win_e_wanted(role, rf_platform::default_fm::is_enabled(rf_platform::default_fm::CLASSES), dock_enabled);
+    let win_e = win_e_wanted(role, rf_win::default_fm::is_enabled(rf_win::default_fm::CLASSES), dock_enabled);
     if !win && !alt && !win_e {
         stop_because(cx, "both settings are off");
         if role == Role::Dock {
@@ -481,14 +481,14 @@ mod win_e_tests {
 mod tests {
     // (explicit names: `super::*` would bring in the toolkit's own `test` attribute, which replaces the standard one)
     use super::{Actions, Settings, combos_wanted, handle, is_windows_start, log_only_from, ready_line, wanted};
-    use rf_platform::switcher::chord::{Effect, Scope};
-    use rf_platform::winkey::{Deliver, KeyService, Posted, Shared};
+    use rf_win::switcher::chord::{Effect, Scope};
+    use rf_win::winkey::{Deliver, KeyService, Posted, Shared};
     use std::sync::Arc;
     use std::time::Duration;
-    use rf_platform::switcher::chord::Dir;
-    use rf_platform::switcher::hook::{FakeFeed, LLKHF_ALTDOWN, VK_LMENU, VK_TAB};
-    use rf_platform::winkey::fakes::{FakeMask, FakeProbe};
-    use rf_platform::winkey::{Clock, KeyProbe};
+    use rf_win::switcher::chord::Dir;
+    use rf_win::switcher::hook::{FakeFeed, LLKHF_ALTDOWN, VK_LMENU, VK_TAB};
+    use rf_win::winkey::fakes::{FakeMask, FakeProbe};
+    use rf_win::winkey::{Clock, KeyProbe};
 
     #[derive(Default)]
     struct Fake {
@@ -635,7 +635,7 @@ mod tests {
         let mut f = Fake { can_open: false, ..Default::default() };
         let s = shared();
         handle(Posted::Chord { effect: Effect::Open { scope: Scope::AllWindows, backwards: false }, seq: 9 }, false, &s, &mut f);
-        assert_eq!(s.take_reset(), Some(rf_platform::winkey::shared::Reset { seq: 9, give_up: true }));
+        assert_eq!(s.take_reset(), Some(rf_win::winkey::shared::Reset { seq: 9, give_up: true }));
         assert_eq!(f.lines, vec!["switcher: could not be opened; the chord was given up"]);
     }
 
@@ -741,8 +741,8 @@ mod tests {
     #[test]
     fn win_e_opens_a_file_window_and_win_d_shows_the_desktop_and_each_says_so() {
         let mut f = Fake::default();
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Explorer), false, &shared(), &mut f);
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Desktop), false, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Explorer), false, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Desktop), false, &shared(), &mut f);
         assert_eq!((f.files, f.desktops), (1, 1));
         assert_eq!(f.lines, vec!["win+e: opened a file window", "win+d: show desktop toggled"]);
     }
@@ -750,7 +750,7 @@ mod tests {
     #[test]
     fn win_shift_s_starts_the_screen_snip_and_says_so() {
         let mut f = Fake::default();
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Snip), false, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Snip), false, &shared(), &mut f);
         assert_eq!((f.snips, f.files, f.desktops), (1, 0, 0));
         assert_eq!(f.lines, vec!["win+shift+s: screen snip started"]);
     }
@@ -758,16 +758,16 @@ mod tests {
     #[test]
     fn in_log_only_mode_the_chords_open_and_toggle_nothing() {
         let mut f = Fake::default();
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Explorer), true, &shared(), &mut f);
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Desktop), true, &shared(), &mut f);
-        handle(Posted::WinCombo(rf_platform::winkey::Combo::Snip), true, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Explorer), true, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Desktop), true, &shared(), &mut f);
+        handle(Posted::WinCombo(rf_win::winkey::Combo::Snip), true, &shared(), &mut f);
         assert_eq!((f.files, f.desktops, f.snips), (0, 0, 0));
         assert!(f.lines.iter().all(|l| l.contains("would")), "{:?}", f.lines);
     }
 
     #[test]
     fn the_chords_are_ours_only_with_the_switch_on_and_no_explorer_as_the_shell() {
-        use rf_platform::shellhost::ShellMode::{Beside, Shell};
+        use rf_win::shellhost::ShellMode::{Beside, Shell};
         assert!(combos_wanted(true, Some(Shell)));
         assert!(!combos_wanted(true, Some(Beside)), "Explorer answers them itself");
         assert!(!combos_wanted(true, None), "the host has not looked yet: left to Windows");

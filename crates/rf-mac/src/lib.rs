@@ -1,7 +1,7 @@
 //! rf-mac: the macOS platform layer of rustyfiles.
 //!
-//! `rf-platform` re-exports this crate on macOS and `rf-win` on Windows, so `rf-app` calls
-//! `rf_platform::<module>` once and gets the right platform. The modules below mirror
+//! `rf-win` re-exports this crate on macOS (its Windows modules are cfg-gated) and is itself
+//! the Windows platform layer, so `rf-app` keeps calling `rf_win::<module>` on both. The modules below mirror
 //! `crates/rf-win`'s public surface; portable modules are included from that tree with
 //! `#[path]` so the two platforms cannot drift, and the rest are macOS implementations or
 //! typed stubs for subsystems that do not exist here (see docs/port-macos.md).

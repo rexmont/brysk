@@ -1,4 +1,4 @@
-//! An island that grows into its panel: the part that carries the pure motion (`rf_platform::dock::grow`) out on windows, glass and the
+//! An island that grows into its panel: the part that carries the pure motion (`rf_win::dock::grow`) out on windows, glass and the
 //! pointer. The Start panel (out of the left island, `Stays::RowAndField`) and the right island's four panels (the control centre, the
 //! calendar, the notifications and the tray's overflow, out of the right island, `Stays::Row`) use it, all with ONE setting
 //! ("Paneller adalardan büyüyerek açılsın", `dock_start_grow`, on by default); see "The right island's panels" at the end of this
@@ -43,7 +43,7 @@
 //! width ([`fits`]: 1920 px wide at 125 %, 1366 or 1600 px at 100 %) the glass would lie under that island, so the panel opens the
 //! ordinary way there (one info line says why). The glass engine's shape is one rectangle: no L-shaped glass.
 //!
-//! THE CLOCK. [`rf_platform::dock::grow::Run`] (phase, clock, animate; pure and tested) is started when the panel's glass is RUNNING (at once
+//! THE CLOCK. [`rf_win::dock::grow::Run`] (phase, clock, animate; pure and tested) is started when the panel's glass is RUNNING (at once
 //! when the engine has none and is not working on one; and, as a net for an engine that neither runs nor fails, after
 //! `grow::ARM_ENGINE_MAX_MS` = 1000 ms: the wait is for the engine's own signal, see `grow::arm_done`): until then the island's own glass is
 //! still the visible one and the panel is only its own rectangle (with no wash), so the hand-over from one glass to the other happens at
@@ -80,7 +80,7 @@
 //!
 //! * PRESSING A BUTTON OF THE ROW while a panel is open: the button of the open panel closes it; another button HANDS OVER. The hand-over
 //!   is "close, then open" (the first shrinks into the island, the second grows out of it when the first has gone) and not one glass
-//!   going from the one panel's size to the other's; why is in `rf_platform::dock::grow_panels` (the rules: `press`), the sequencing is in
+//!   going from the one panel's size to the other's; why is in `rf_win::dock::grow_panels` (the rules: `press`), the sequencing is in
 //!   `panel.rs` (`PanelHost::after`).
 //! * THE ISLAND'S WIDTH CAN CHANGE while a panel is grown (a minute that changes the clock's width, an icon dragged between the
 //!   overflow panel and the strip): the host's layout hands the new island to `panel::layout_applied`, which works the growth out again
@@ -92,13 +92,13 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui_kit::*;
-use rf_platform::dock::grow::{self, Again, Arrival, Corner, FRect, Frame, Phase, Run, Shrink, Spec, Stays};
-use rf_platform::dock::grow_panels;
-use rf_platform::dock::hit;
-use rf_platform::dock::island;
-use rf_platform::dock::layout::{self, Rect};
-use rf_platform::dock::panel::{PanelId, Side};
-use rf_platform::glass::GlassOptions;
+use rf_win::dock::grow::{self, Again, Arrival, Corner, FRect, Frame, Phase, Run, Shrink, Spec, Stays};
+use rf_win::dock::grow_panels;
+use rf_win::dock::hit;
+use rf_win::dock::island;
+use rf_win::dock::layout::{self, Rect};
+use rf_win::dock::panel::{PanelId, Side};
+use rf_win::glass::GlassOptions;
 
 use super::backdrop::{self, IslandGlass};
 use super::grow_head::{self, Layout};
@@ -160,7 +160,7 @@ struct Grow {
     mon: host::MonId,
     cfg: Cfg,
     spec: Spec,
-    /// The life of the growth: its phase and its clock (pure, `rf_platform::dock::grow::Run`; every decision of when is made there).
+    /// The life of the growth: its phase and its clock (pure, `rf_win::dock::grow::Run`; every decision of when is made there).
     run: Run,
     hwnd: isize,
     island: Rc<RefCell<IslandGlass>>,
@@ -233,7 +233,7 @@ struct Push {
 impl Push {
     fn run(self) {
         let glass = || {
-            rf_platform::glass::set_options(
+            rf_win::glass::set_options(
                 self.hwnd,
                 GlassOptions { dark: self.dark, radius_px: Some(self.radius), cut_corners: true, shape: Some(self.shape), shadow: None },
             )
@@ -274,7 +274,7 @@ pub struct Prep {
     pub id: PanelId,
     pub cfg: Cfg,
     pub side: Side,
-    /// The island's visible glass and the panel's content rectangle (`rf_platform::dock::panel::place`), device px, screen coordinates.
+    /// The island's visible glass and the panel's content rectangle (`rf_win::dock::panel::place`), device px, screen coordinates.
     pub island_glass: Rect,
     pub panel: Rect,
     pub hwnd: isize,
@@ -291,7 +291,7 @@ pub struct Prep {
 /// its own 120 ms easing, exactly as with the setting off. Logged (once for each opening).
 pub fn fits(cfg: Cfg, island_glass: Rect, panel: Rect, scale: f32, cx: &App) -> bool {
     let grown = grow::grown_rect(island_glass, panel);
-    let margin = layout::px(rf_platform::dock::panel::GAP, scale);
+    let margin = layout::px(rf_win::dock::panel::GAP, scale);
     let kinds: Vec<Kind> = [Kind::Left, Kind::Middle, Kind::Right].into_iter().filter(|k| *k != cfg.kind).collect();
     // (an island with no glass rectangle yet is an empty one, which is no island)
     let others: Vec<Rect> = kinds.iter().map(|k| host::visible_glass_rect(*k, cx).unwrap_or_default()).collect();
@@ -430,7 +430,7 @@ pub fn after_move(cx: &mut App) -> Option<impl FnOnce() + use<>> {
 /// The island's window (the one the glass grows out of): to be raised above the panel's after the panel is in front, so that the logo
 /// (or the island's row) is drawn over the grown glass and takes its clicks. Only that island: the others are not under the glass
 /// (`fits`) and are none of the growth's business (the app menu, the hover preview and the tray tip stay where they are in the order).
-/// The caller raises it (`rf_platform::dock::island::raise`) outside any update of the app.
+/// The caller raises it (`rf_win::dock::island::raise`) outside any update of the app.
 pub fn island_to_raise(cx: &App) -> Option<isize> {
     let g = grow_ref(cx)?;
     host::island_window_on(g.mon, g.cfg.kind, cx).map(|(_, hwnd)| hwnd)
@@ -477,14 +477,14 @@ pub fn shown(cx: &mut App) {
 }
 
 fn glass_running(hwnd: isize) -> bool {
-    matches!(rf_platform::glass::state(hwnd), rf_platform::glass::GlassState::Running)
+    matches!(rf_win::glass::state(hwnd), rf_win::glass::GlassState::Running)
 }
 
 /// What the engine says about the panel's window now. (`attach_with` has put "starting" in the table by the time the panel's view has
 /// handled `on_shown`, which is before `shown` runs, so "off" here is a window the engine refused or lost, not one it has not met yet.)
 fn engine(hwnd: isize) -> grow::Engine {
-    use rf_platform::glass::GlassState;
-    match rf_platform::glass::state(hwnd) {
+    use rf_win::glass::GlassState;
+    match rf_win::glass::state(hwnd) {
         GlassState::Running => grow::Engine::Running,
         GlassState::Starting => grow::Engine::Starting,
         GlassState::Off | GlassState::Failed(_) => grow::Engine::Gone,
@@ -772,7 +772,7 @@ pub fn head_layout(cx: &App) -> Option<Layout> {
 }
 
 /// Whether the panel's search field stands in the island's row (the glass is grown out of the island and the Start panel draws its
-/// field there): the keys' route between the field and the content follows (`rf_platform::dock::startkeys`).
+/// field there): the keys' route between the field and the content follows (`rf_win::dock::startkeys`).
 pub fn field_in_row(cx: &App) -> bool {
     grow_ref(cx).is_some_and(|g| g.head.is_some())
 }

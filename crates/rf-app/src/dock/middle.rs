@@ -1,6 +1,6 @@
 //! The middle island, the dock itself: the apps pinned to the Windows taskbar in the taskbar's order, then the other running apps,
 //! a thin separator, the Recycle Bin and the Downloads folder. Icons are 44 px at rest. With the pointer over the dock they grow like
-//! the Mac's dock (`rf_platform::dock::magnify`): by a smooth bell of the distance from the pointer to each icon's rest centre, up to 1.55
+//! the Mac's dock (`rf_win::dock::magnify`): by a smooth bell of the distance from the pointer to each icon's rest centre, up to 1.55
 //! times for the one under it (a setting: off / subtle 1.25 / full 1.55), standing on one baseline so they grow UP, over the glass's top
 //! edge, into the window's headroom, and pushing their neighbours apart. The glass widens with them, symmetrically around the island's
 //! centre (its height never changes); coming in and going out are eased over about 160 ms, instantly when the app's animations are off.
@@ -34,11 +34,11 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::assets::IconName as L;
 use gpui_kit::component::Icon;
 use gpui_kit::*;
-use rf_platform::dock::hover::Slot;
-use rf_platform::dock::layout::{ICON_REST, MIDDLE_HEIGHT, RADIUS};
-use rf_platform::dock::magnify::{self, Frame, Presence};
-use rf_platform::dock::{DockItem, IconSource, PinnedApp, Place, hit, model};
-use rf_platform::tasklist::Task;
+use rf_win::dock::hover::Slot;
+use rf_win::dock::layout::{ICON_REST, MIDDLE_HEIGHT, RADIUS};
+use rf_win::dock::magnify::{self, Frame, Presence};
+use rf_win::dock::{DockItem, IconSource, PinnedApp, Place, hit, model};
+use rf_win::tasklist::Task;
 
 use super::backdrop::IslandGlass;
 use super::host::{self, Kind, MonId};
@@ -73,13 +73,13 @@ const WHEEL_PX_PER_LINE: f32 = 16.0;
 #[derive(Clone, Debug, PartialEq)]
 struct VolHud {
     key: String,
-    level: Option<rf_platform::appvolume::Level>,
+    level: Option<rf_win::appvolume::Level>,
     serial: u64,
 }
 
 /// What the icon shows for a level: the symbol, the number, and how much of the bar is filled. An app without a sound session gets the
 /// crossed-out speaker and a dash: the wheel was heard, and there is nothing to turn.
-fn vol_hud_look(level: Option<rf_platform::appvolume::Level>) -> (L, String, f32) {
+fn vol_hud_look(level: Option<rf_win::appvolume::Level>) -> (L, String, f32) {
     match level {
         None => (L::VolumeOff, "\u{2013}".to_string(), 0.0),
         Some(l) => {
@@ -97,7 +97,7 @@ fn vol_hud_look(level: Option<rf_platform::appvolume::Level>) -> (L, String, f32
 
 pub struct MiddleIsland {
     glass: Rc<RefCell<IslandGlass>>,
-    /// The monitor whose dock this island is on: its scale and size, its apps (`rf_platform::dock::monitors`) and its thin state are its own.
+    /// The monitor whose dock this island is on: its scale and size, its apps (`rf_win::dock::monitors`) and its thin state are its own.
     mon: MonId,
     pins: Vec<PinnedApp>,
     pins_loaded: bool,
@@ -296,17 +296,17 @@ impl MiddleIsland {
                         let (rule, monitor) = host::apps_rule(me.mon, cx);
                         (rule, monitor, host::dock_count(cx) > 1)
                     })
-                    .unwrap_or((rf_platform::dock::monitors::AppsWhere::Everywhere, 0, false));
+                    .unwrap_or((rf_win::dock::monitors::AppsWhere::Everywhere, 0, false));
                 // the windows of a packaged app are given their process's package id first, so they meet the app's pin; the listing is the
                 // docks' one (`task_feed.rs`), this island only applies its own monitor's rule to it
                 let groups = cx
                     .background_executor()
                     .spawn(async move {
                         let groups = super::task_feed::running_groups(shared);
-                        rf_platform::dock::monitors::filter_groups(rule, this_monitor, groups, |t: &Task| rf_platform::dock::monitors::monitor_of_window(t.hwnd))
+                        rf_win::dock::monitors::filter_groups(rule, this_monitor, groups, |t: &Task| rf_win::dock::monitors::monitor_of_window(t.hwnd))
                     })
                     .await;
-                let foreground = rf_platform::dock::foreground_root();
+                let foreground = rf_win::dock::foreground_root();
                 let again = this.update(cx, |me, cx| {
                     me.apply(groups, foreground, cx);
                     let again = me.dirty;
@@ -604,7 +604,7 @@ impl MiddleIsland {
     /// The wheel was turned over item `ix`: a running app's own sound level goes a step up or down for each notch (issue 21: "control
     /// volume level per app by scrolling over app icon"), and the icon shows the level for a moment. The level is the app's own, the one
     /// Windows' volume mixer shows; the system's level is not touched. An app that has played nothing has no level: the icon says so and
-    /// nothing is changed. The audio service is asked on a worker (`rf_platform::appvolume`: a few milliseconds).
+    /// nothing is changed. The audio service is asked on a worker (`rf_win::appvolume`: a few milliseconds).
     fn item_scrolled(&mut self, ix: usize, ev: &ScrollEvent, cx: &mut Context<Self>) {
         if self.drag.is_some() || !cx.try_global::<Settings>().is_none_or(|s| s.dock_scroll_volume) {
             return;
@@ -620,7 +620,7 @@ impl MiddleIsland {
         if self.vol_rest.0 != a.key {
             self.vol_rest = (a.key.clone(), 0.0);
         }
-        let notches = rf_platform::appvolume::take_notches(&mut self.vol_rest.1, rf_platform::appvolume::notches_of_lines(lines, rf_platform::appvolume::wheel_lines()));
+        let notches = rf_win::appvolume::take_notches(&mut self.vol_rest.1, rf_win::appvolume::notches_of_lines(lines, rf_win::appvolume::wheel_lines()));
         if notches == 0 {
             return;
         }
@@ -629,14 +629,14 @@ impl MiddleIsland {
         let mut all: Vec<isize> = self.last_groups.iter().flat_map(|(_, tasks)| tasks.iter().map(|t| t.hwnd)).collect();
         all.extend(self.items.iter().filter_map(|i| if let DockItem::App(a) = i { Some(a.windows.iter().copied()) } else { None }).flatten());
         cx.spawn(async move |this, cx| {
-            let level = cx.background_executor().spawn(async move { rf_platform::appvolume::nudge(&mine, &all, notches) }).await;
+            let level = cx.background_executor().spawn(async move { rf_win::appvolume::nudge(&mine, &all, notches) }).await;
             let _ = this.update(cx, |me, cx| me.volume_shown(key, level, cx));
         })
         .detach();
     }
 
     /// An app's level was turned (or found to be none): its icon shows it until [`VOL_HUD_FOR`] after the last turn.
-    fn volume_shown(&mut self, key: String, level: Option<rf_platform::appvolume::Level>, cx: &mut Context<Self>) {
+    fn volume_shown(&mut self, key: String, level: Option<rf_win::appvolume::Level>, cx: &mut Context<Self>) {
         self.vol_serial += 1;
         let serial = self.vol_serial;
         self.vol_hud = Some(VolHud { key, level, serial });
@@ -691,7 +691,7 @@ impl MiddleIsland {
         // (the menu is placed on the monitor of the dock it was asked on; a panel that is open on another monitor's dock is outside this
         // click and goes first, so the menu is not placed from that monitor's numbers)
         if !host::claim_active(self.mon, cx) {
-            super::panel::close(rf_platform::dock::panel::CloseCause::ClickOutside, cx);
+            super::panel::close(rf_win::dock::panel::CloseCause::ClickOutside, cx);
             host::force_active(self.mon, cx);
         }
         app_menu::open(app_menu::MenuRequest { app: app.clone(), icon: self.icon_for(ix, 18.0, cx), anchor_x, glass: self.glass.clone() }, cx);
@@ -714,7 +714,7 @@ impl MiddleIsland {
         }
     }
 
-    /// Files let go on an icon: an app opens them (`rf_platform::dock::launch::open_files`), from a thread of their own; a running app the
+    /// Files let go on an icon: an app opens them (`rf_win::dock::launch::open_files`), from a thread of their own; a running app the
     /// dock cannot start is given them through the program of its window. Anything else (a place) takes no files.
     fn files_dropped(&mut self, ix: usize, files: Vec<std::path::PathBuf>, cx: &mut Context<Self>) {
         let Some(DockItem::App(app)) = self.items.get(ix).cloned() else { return };
@@ -722,13 +722,13 @@ impl MiddleIsland {
             return;
         }
         let launch = app.launch.clone().or_else(|| {
-            let exe = app.windows.first().and_then(|&w| rf_platform::dock::launch::program_of_window(w))?;
-            Some(rf_platform::dock::Launch::Exe { path: exe, args: String::new() })
+            let exe = app.windows.first().and_then(|&w| rf_win::dock::launch::program_of_window(w))?;
+            Some(rf_win::dock::Launch::Exe { path: exe, args: String::new() })
         });
         let Some(launch) = launch else { return };
         let name = app.name.clone();
         std::thread::spawn(move || {
-            if let Err(e) = rf_platform::dock::launch::open_files(&launch, &files) {
+            if let Err(e) = rf_win::dock::launch::open_files(&launch, &files) {
                 log::warn!("dock: {name} could not open the dropped files: {e:#}");
             }
         });
@@ -750,11 +750,11 @@ impl MiddleIsland {
     }
 
     /// A click on an app: what it does is `model::click_action`'s, how the icon answers is `feedback::answer`'s.
-    fn click_app(&mut self, ix: usize, app: rf_platform::dock::DockApp, cx: &mut Context<Self>) {
-        let foreground = rf_platform::dock::foreground_root();
+    fn click_app(&mut self, ix: usize, app: rf_win::dock::DockApp, cx: &mut Context<Self>) {
+        let foreground = rf_win::dock::foreground_root();
         let action = model::click_action(&app.windows, foreground);
         // (an app that is not running and cannot be started: nothing to do, as before)
-        if action == rf_platform::dock::ClickAction::Start && app.launch.is_none() {
+        if action == rf_win::dock::ClickAction::Start && app.launch.is_none() {
             return;
         }
         let key = self.feel_keys.get(ix).cloned().unwrap_or_default();
@@ -869,8 +869,8 @@ impl MiddleIsland {
                     if me.drag.is_none() {
                         return false;
                     }
-                    up = if rf_platform::dock::panel::any_button_down() { 0 } else { up + 1 };
-                    if rf_platform::dock::dragkeys::escape_down() || up >= 2 {
+                    up = if rf_win::dock::panel::any_button_down() { 0 } else { up + 1 };
+                    if rf_win::dock::dragkeys::escape_down() || up >= 2 {
                         me.end_drag(false, cx);
                         return false;
                     }
@@ -1171,7 +1171,7 @@ impl Render for MiddleIsland {
             super::thin::fit_glass(&mut glass_px, bottom_px, &sq, scale, full_px);
             glass_px[3] / env.scale
         };
-        let parts = hit::parts(glass_px, rf_platform::dock::layout::px(RADIUS, scale) as f32, &boxes, (vw * scale).round() as i32, (vh * scale).round() as i32);
+        let parts = hit::parts(glass_px, rf_win::dock::layout::px(RADIUS, scale) as f32, &boxes, (vw * scale).round() as i32, (vh * scale).round() as i32);
         host::set_middle_frame(mon, &self.glass, glass_px, parts, cx);
         // side islands that are as tall as the dock (a setting) are as low as it is while it is thin
         host::set_side_squeeze(mon, &sq, cx);
@@ -1362,7 +1362,7 @@ mod tests {
     /// app with no sound says so without a number.
     #[test]
     fn the_icon_shows_the_level_it_was_turned_to() {
-        use rf_platform::appvolume::Level;
+        use rf_win::appvolume::Level;
         let look = |volume: f32, muted: bool| vol_hud_look(Some(Level { volume, muted }));
         let (glyph, text, fill) = look(0.65, false);
         assert!(matches!(glyph, L::Volume2) && text == "65" && (fill - 0.65).abs() < 1e-6);
@@ -1436,7 +1436,7 @@ mod tests {
         let slots = model::slots(&items);
         assert_eq!(slots, vec![Slot::Separator, Slot::Icon, Slot::Icon]);
         // and its width is the one the layout formula gives for two icons and a separator
-        assert_eq!(plan::middle_width_at_rest(2, 1), rf_platform::dock::layout::middle_width(&[44.0, 44.0], 1));
+        assert_eq!(plan::middle_width_at_rest(2, 1), rf_win::dock::layout::middle_width(&[44.0, 44.0], 1));
     }
 
     fn task(hwnd: isize, title: &str, app: &str) -> Task {
@@ -1470,8 +1470,8 @@ mod tests {
         // the island is 72 high; the biggest icon (44 x 1.55) stands BASELINE up and reaches over the glass's top edge, into the window's
         // headroom (the mark, DOT_DROP below its bottom edge, stays inside the glass)
         let grown_top = BASELINE + ICON_REST * magnify::MAX_PEAK;
-        let over = grown_top - rf_platform::dock::layout::MIDDLE_HEIGHT;
-        assert!(over > 0.0 && over + 1.0 <= rf_platform::dock::layout::HEADROOM, "the grown icon reaches {over} px over the glass; the headroom is {}", rf_platform::dock::layout::HEADROOM);
+        let over = grown_top - rf_win::dock::layout::MIDDLE_HEIGHT;
+        assert!(over > 0.0 && over + 1.0 <= rf_win::dock::layout::HEADROOM, "the grown icon reaches {over} px over the glass; the headroom is {}", rf_win::dock::layout::HEADROOM);
         assert!(BASELINE - DOT_DROP - look::running_dot_size(true).1 >= 0.0, "the mark stays inside the island");
     }
 }

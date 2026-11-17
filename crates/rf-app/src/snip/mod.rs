@@ -1,4 +1,4 @@
-//! Our own screen snip (Win+Shift+S is Explorer's, so without Explorer there was none). The Windows half is `rf_platform::snip` (capture,
+//! Our own screen snip (Win+Shift+S is Explorer's, so without Explorer there was none). The Windows half is `rf_win::snip` (capture,
 //! geometry, the pictures' bytes, the clipboard, the file); this is the interface: one borderless window per monitor that shows the
 //! frozen screen dimmed, the small toolbar, and the notice that follows.
 //!
@@ -16,7 +16,7 @@
 //! NOTHING TAKES THE FOREGROUND. Every window here is `WS_EX_NOACTIVATE` and answers a click's activation with `MA_NOACTIVATE` itself
 //! (the toolkit answers `MA_ACTIVATE`): the program the user was in keeps the keyboard, a click does not raise an overlay over its own
 //! toolbar, and there is nothing to give back. So Escape is not read from a focused window. While the overlay is up a hook for that one
-//! key (`rf_platform::snip::escape`) reports it AND swallows it, so the same Escape does not also cancel the dialog or leave the full-screen
+//! key (`rf_win::snip::escape`) reports it AND swallows it, so the same Escape does not also cancel the dialog or leave the full-screen
 //! video underneath; if the hook cannot be installed the key's state is looked at instead (`place::escape_down`) and the key does reach
 //! the other program. Every other key still goes to the program underneath.
 //!
@@ -45,11 +45,11 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::*;
 use rf_core::desktop::geom::Rect;
-use rf_platform::desktop::monitors::MonitorInfo;
-use rf_platform::snip::capture::Captured;
-use rf_platform::snip::escape::EscapeGrab;
-use rf_platform::snip::geom::Monitor;
-use rf_platform::snip::model::Model;
+use rf_win::desktop::monitors::MonitorInfo;
+use rf_win::snip::capture::Captured;
+use rf_win::snip::escape::EscapeGrab;
+use rf_win::snip::geom::Monitor;
+use rf_win::snip::model::Model;
 
 use crate::settings::Settings;
 use crate::t;
@@ -154,7 +154,7 @@ pub fn start(cx: &mut App) {
         if settle {
             std::thread::sleep(Duration::from_millis(90));
         }
-        let _ = tx.send(rf_platform::snip::capture::capture_all());
+        let _ = tx.send(rf_win::snip::capture::capture_all());
     });
     if let Err(e) = spawned {
         CAPTURING.store(false, Ordering::Relaxed);
@@ -188,7 +188,7 @@ fn fail(why: &str, monitors: &[Monitor], cx: &mut App) {
     log::warn!("snip: {why}");
     let owned;
     let monitors = if monitors.is_empty() {
-        owned = rf_platform::snip::capture::monitors();
+        owned = rf_win::snip::capture::monitors();
         &owned[..]
     } else {
         monitors
@@ -196,7 +196,7 @@ fn fail(why: &str, monitors: &[Monitor], cx: &mut App) {
     if monitors.is_empty() {
         return ended(cx);
     }
-    let on = plan::toolbar_monitor(rf_platform::snip::place::cursor(), monitors);
+    let on = plan::toolbar_monitor(rf_win::snip::place::cursor(), monitors);
     open_notice(finish::Made::failed(why), on, monitors, cx);
 }
 
@@ -216,7 +216,7 @@ fn display_of(m: &Monitor, infos: &[MonitorInfo], cx: &App) -> Option<DisplayId>
         .map(|d| d.id())
 }
 
-/// A pop-up of the toolkit made hidden: it is shown by `rf_platform::snip::place` once it has its place, so it does not flash in the wrong one.
+/// A pop-up of the toolkit made hidden: it is shown by `rf_win::snip::place` once it has its place, so it does not flash in the wrong one.
 fn hidden_popup(x: f32, y: f32, w: f32, h: f32, display: Option<DisplayId>, background: WindowBackgroundAppearance) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(x), px(y)), size(px(w), px(h))))),
@@ -247,8 +247,8 @@ fn begin(captured: Captured, cx: &mut App) {
     if sources.len() != monitors.len() {
         return fail(&format!("{} pictures for {} monitors", sources.len(), monitors.len()), &monitors, cx);
     }
-    let infos = rf_platform::desktop::monitors::list();
-    let pointer = rf_platform::snip::place::cursor();
+    let infos = rf_win::desktop::monitors::list();
+    let pointer = rf_win::snip::place::cursor();
     let on = plan::toolbar_monitor(pointer, &monitors);
     let state = cx.new(|_| State { model: Model::new(monitors.clone(), windows), sources: sources.clone() });
 
@@ -297,7 +297,7 @@ fn begin(captured: Captured, cx: &mut App) {
         log::warn!("snip: the Escape hook could not be installed; Escape cancels but also reaches the program underneath");
     }
     let started = Instant::now();
-    let mut guard = plan::SessionWatch::new(rf_platform::snip::place::foreground(), rf_platform::snip::place::screen_signature());
+    let mut guard = plan::SessionWatch::new(rf_win::snip::place::foreground(), rf_win::snip::place::screen_signature());
     let esc = cx.spawn(async move |cx| {
         let mut watch = plan::EscWatch::default();
         loop {
@@ -306,15 +306,15 @@ fn begin(captured: Captured, cx: &mut App) {
                 if !cx.has_global::<Session>() {
                     return false;
                 }
-                let pressed = if rf_platform::snip::escape::active() { rf_platform::snip::escape::take_pressed() } else { watch.feed(rf_platform::snip::place::escape_down()) };
+                let pressed = if rf_win::snip::escape::active() { rf_win::snip::escape::take_pressed() } else { watch.feed(rf_win::snip::place::escape_down()) };
                 if pressed {
                     cancel(cx);
                     return false;
                 }
                 // nothing else ends an overlay nobody is looking at
-                let fg = rf_platform::snip::place::foreground();
-                let ours = fg != 0 && rf_platform::snip::place::is_ours(fg);
-                if let Some(why) = guard.check(started.elapsed().as_millis() as u64, fg, ours, rf_platform::snip::place::screen_signature()) {
+                let fg = rf_win::snip::place::foreground();
+                let ours = fg != 0 && rf_win::snip::place::is_ours(fg);
+                if let Some(why) = guard.check(started.elapsed().as_millis() as u64, fg, ours, rf_win::snip::place::screen_signature()) {
                     log::info!("snip: ended by the watch: {why:?}");
                     cancel(cx);
                     return false;
@@ -333,11 +333,11 @@ fn begin(captured: Captured, cx: &mut App) {
     cx.spawn(async move |cx| {
         let mut shown = 0usize;
         for (hwnd, rect) in placed {
-            if let Err(e) = rf_platform::snip::place::prepare(hwnd) {
+            if let Err(e) = rf_win::snip::place::prepare(hwnd) {
                 log::warn!("snip: {e:#}");
                 continue;
             }
-            if rf_platform::snip::place::place(hwnd, rect) {
+            if rf_win::snip::place::place(hwnd, rect) {
                 shown += 1;
             } else {
                 log::warn!("snip: Windows refused to place an overlay");
@@ -352,8 +352,8 @@ fn begin(captured: Captured, cx: &mut App) {
             return;
         }
         if let (Some(hwnd), Some(h)) = (toolbar_hwnd, bar_handle) {
-            rf_platform::snip::place::prepare_small(hwnd);
-            rf_platform::snip::place::place_small(hwnd, bar);
+            rf_win::snip::place::prepare_small(hwnd);
+            rf_win::snip::place::place_small(hwnd, bar);
             cx.update(|cx| {
                 let _ = h.update(cx, |v, _, cx| v.start_glass(cx));
             });
@@ -431,7 +431,7 @@ fn open_notice(made: finish::Made, on: usize, monitors: &[Monitor], cx: &mut App
     let Some(m) = monitors.get(on) else { return ended(cx) };
     let o: &plan::Outcome = &made.outcome;
     log::info!("snip: copied {}, saved {}", o.copied.is_ok(), matches!(o.saved, Some(Ok(_))));
-    let infos = rf_platform::desktop::monitors::list();
+    let infos = rf_win::desktop::monitors::list();
     let work = infos.iter().find(|i| i.rect == m.rect).map_or(m.rect, |i| i.work);
     let rect = plan::notice_rect(m, &work);
     let (x, y, w, h) = crate::shell::cover::logical_bounds(rect, m.scale);
@@ -446,8 +446,8 @@ fn open_notice(made: finish::Made, on: usize, monitors: &[Monitor], cx: &mut App
     let Ok(hwnd) = handle.update(cx, |_, window, _| crate::look::window::hwnd_of(window)) else { return ended(cx) };
     cx.set_global(NoticeHost { handle });
     cx.spawn(async move |cx| {
-        rf_platform::snip::place::prepare_small(hwnd);
-        rf_platform::snip::place::place_small(hwnd, rect);
+        rf_win::snip::place::prepare_small(hwnd);
+        rf_win::snip::place::place_small(hwnd, rect);
         cx.update(|cx| {
             if let Some(h) = cx.try_global::<NoticeHost>().map(|n| n.handle) {
                 let _ = h.update(cx, |v, _, cx| v.begin(cx));

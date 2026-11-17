@@ -6,14 +6,14 @@
 //! same run without touching the global one; every Turkish text used here has its English pair in `i18n_en` (a test checks that).
 
 use gpui_kit::assets::IconName as L;
-use rf_platform::sysstatus::audio::{AudioSnapshot, VolumeGlyph};
-use rf_platform::sysstatus::bluetooth::{BluetoothSnapshot, Power};
-use rf_platform::sysstatus::inuse::InUse;
-use rf_platform::sysstatus::toggles::PowerMode;
-use rf_platform::sysstatus::media::{MediaSession, Timeline};
-use rf_platform::sysstatus::network::{DnsOwner, Link, NetworkGlyph, NetworkSnapshot, Reach, dns_owner, router_page, wifi_steps};
-use rf_platform::sysstatus::power::BatterySnapshot;
-use rf_platform::sysstatus::wifi::{Listing, WifiSnapshot};
+use rf_win::sysstatus::audio::{AudioSnapshot, VolumeGlyph};
+use rf_win::sysstatus::bluetooth::{BluetoothSnapshot, Power};
+use rf_win::sysstatus::inuse::InUse;
+use rf_win::sysstatus::toggles::PowerMode;
+use rf_win::sysstatus::media::{MediaSession, Timeline};
+use rf_win::sysstatus::network::{DnsOwner, Link, NetworkGlyph, NetworkSnapshot, Reach, dns_owner, router_page, wifi_steps};
+use rf_win::sysstatus::power::BatterySnapshot;
+use rf_win::sysstatus::wifi::{Listing, WifiSnapshot};
 
 // ------------------------------------------------------------------ measures (logical px)
 
@@ -44,7 +44,7 @@ pub const DETAIL_USABLE_ROWS: usize = 5;
 /// A press on a radio's button is the state its tile shows for this long, while Windows has not yet said so.
 pub const RADIO_PENDING_MS: u64 = 4_000;
 /// The spring a detail opens out and folds back with: the time the motion is felt to take, and how far it swings past its end
-/// (`rf_platform::dock::spring`; a little bounce, so that it is seen to be a spring and comes to rest at once).
+/// (`rf_win::dock::spring`; a little bounce, so that it is seen to be a spring and comes to rest at once).
 pub const UNFOLD_MS: f32 = 380.0;
 pub const UNFOLD_BOUNCE: f32 = 0.25;
 /// A click on the speaker is the "latest" state for this long, while the audio thread has not yet answered with a snapshot.
@@ -321,8 +321,8 @@ impl Unfold {
         Unfold { from: 1.0, vel: 0.0, to: 1.0, started_ms: 0, settle_ms: 0 }
     }
 
-    fn spring() -> rf_platform::dock::spring::Spring {
-        rf_platform::dock::spring::Spring::new(UNFOLD_MS, UNFOLD_BOUNCE)
+    fn spring() -> rf_win::dock::spring::Spring {
+        rf_win::dock::spring::Spring::new(UNFOLD_MS, UNFOLD_BOUNCE)
     }
 
     fn state(&self, now_ms: u64) -> (f32, f32) {
@@ -823,7 +823,7 @@ pub fn media_source_line(app: &str, source: usize, sources: usize) -> String {
 
 /// Where the track is, as a player writes it: "1:05 / 3:20".
 pub fn media_time(t: &Timeline, playing: bool, now: std::time::Instant) -> String {
-    format!("{} / {}", rf_platform::sysstatus::media::clock(t.position_at(now, playing)), rf_platform::sysstatus::media::clock(t.duration_ms))
+    format!("{} / {}", rf_win::sysstatus::media::clock(t.position_at(now, playing)), rf_win::sysstatus::media::clock(t.duration_ms))
 }
 
 // ------------------------------------------------------------------ symbols
@@ -930,7 +930,7 @@ pub fn slider_fraction_at(x: f32, left: f32, width: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_platform::sysstatus::network::Reach;
+    use rf_win::sysstatus::network::Reach;
 
     fn tr_tr(s: &'static str) -> &'static str {
         s
@@ -949,7 +949,7 @@ mod tests {
 
     fn bt(power: Power, connected: &[&str]) -> BluetoothSnapshot {
         let connected: Vec<String> = connected.iter().map(|s| s.to_string()).collect();
-        BluetoothSnapshot { available: true, power, devices: rf_platform::sysstatus::bluetooth::devices_of(Vec::new(), &connected), connected }
+        BluetoothSnapshot { available: true, power, devices: rf_win::sysstatus::bluetooth::devices_of(Vec::new(), &connected), connected }
     }
 
     fn bat(percent: Option<u8>, charging: bool, on_ac: bool, saver: bool) -> BatterySnapshot {
@@ -957,7 +957,7 @@ mod tests {
     }
 
     fn wifi(power: Power, nets: &[(&str, u8, bool)]) -> WifiSnapshot {
-        let networks = nets.iter().map(|(ssid, bars, connected)| rf_platform::sysstatus::wifi::Network { ssid: ssid.to_string(), bars: *bars, secured: true, profile: None, connected: *connected, auth: rf_platform::sysstatus::wifi::Auth::Wpa2 }).collect();
+        let networks = nets.iter().map(|(ssid, bars, connected)| rf_win::sysstatus::wifi::Network { ssid: ssid.to_string(), bars: *bars, secured: true, profile: None, connected: *connected, auth: rf_win::sysstatus::wifi::Auth::Wpa2 }).collect();
         WifiSnapshot { available: true, power, networks, listing: Listing::Ok }
     }
 
@@ -1176,7 +1176,7 @@ mod tests {
 
     #[test]
     fn a_details_rows_are_counted_from_what_the_sources_say() {
-        let dev = |id: &str| rf_platform::sysstatus::audio::Device { id: id.into(), name: id.into(), default: false };
+        let dev = |id: &str| rf_win::sysstatus::audio::Device { id: id.into(), name: id.into(), default: false };
         let audio = AudioSnapshot { available: true, devices: vec![dev("a"), dev("b"), dev("c")], ..Default::default() };
         assert_eq!(detail_rows(Detail::Outputs, Some(&audio), None, None, None, None), 4, "the devices and the link");
         // Wi-Fi: a line and the link while there is no list; the networks and the link; the location text, its link and the link

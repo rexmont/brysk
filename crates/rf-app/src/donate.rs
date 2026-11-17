@@ -7,7 +7,7 @@
 use std::sync::Mutex;
 
 #[cfg(windows)]
-use rf_platform::bench::AppKind;
+use rf_win::bench::AppKind;
 
 #[cfg(windows)]
 use crate::bench::{OpenTest, Results, Versus};

@@ -5,7 +5,7 @@
 //! was told the apps had been removed. And a file operation that needs the shell's engine showed the engine's raw English text. The
 //! texts here say what happened. The choice of text is pure ([`classify_start`], tested); the words are Turkish with an English pair.
 
-use rf_platform::engine_guard::{EngineStalled, NoShellEngine, Op, PartlyDone};
+use rf_win::engine_guard::{EngineStalled, NoShellEngine, Op, PartlyDone};
 
 /// What a failed start of an app was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub fn classify_start(error_text: &str, shell_present: bool) -> StartKind {
 /// The sentence for the Start panel's notice line after a failed start.
 pub fn start_failure_text(err: &anyhow::Error) -> String {
     let text = format!("{err:#}");
-    match classify_start(&text, rf_platform::engine_guard::shell_present()) {
+    match classify_start(&text, rf_win::engine_guard::shell_present()) {
         StartKind::NoShell => crate::t!("Başlatılamadı: Windows kabuğu (Explorer) çalışmıyor ve Windows bu girdiyi kabuksuz açamadı.").to_string(),
         StartKind::ClassMissing => crate::t!("Başlatılamadı: Windows bu girdi için gereken bileşeni bulamadı (sınıf kayıtlı değil).").to_string(),
         StartKind::Gone => crate::t!("Başlatılamadı. Kaldırılmış ya da taşınmış olabilir.").to_string(),

@@ -1,6 +1,6 @@
 //! The switcher's window: a centred glass panel with one card per window. The positions of every card come from
-//! `rf_platform::switcher::layout` (one source for what GPUI draws and for where DWM draws the live pictures); what each key and click
-//! does is `rf_platform::switcher::session`. This file draws and forwards.
+//! `rf_win::switcher::layout` (one source for what GPUI draws and for where DWM draws the live pictures); what each key and click
+//! does is `rf_win::switcher::session`. This file draws and forwards.
 //!
 //! THE PICTURES. DWM draws a live picture on top of everything in the window's client area, so a card is: a box for the picture (a
 //! plain wash behind it, which shows at the sides when the window is not as wide as the box), and under it the app's small icon and
@@ -12,13 +12,13 @@ use std::sync::Arc;
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::icons::icon_bgra_chain;
-use rf_platform::switcher::chord::{Chord, Effect};
-use rf_platform::switcher::layout::Layout;
-use rf_platform::dock::panel as geo;
-use rf_platform::switcher::session::{Session, Step};
-use rf_platform::switcher::thumbs::{Dwm, Picture, ThumbSet};
-use rf_platform::switcher::watch;
+use rf_win::dock::icons::icon_bgra_chain;
+use rf_win::switcher::chord::{Chord, Effect};
+use rf_win::switcher::layout::Layout;
+use rf_win::dock::panel as geo;
+use rf_win::switcher::session::{Session, Step};
+use rf_win::switcher::thumbs::{Dwm, Picture, ThumbSet};
+use rf_win::switcher::watch;
 
 use super::{Closing, keys};
 use crate::glass_watch::{self, PopupGlass};
@@ -54,7 +54,7 @@ fn remember_icon(key: String, img: Arc<RenderImage>) {
 }
 
 /// The picture GPUI draws from the shell's bitmap (straight BGRA, as the dock's icons are).
-fn to_image(b: rf_platform::thumbs::Bgra) -> Option<Arc<RenderImage>> {
+fn to_image(b: rf_win::thumbs::Bgra) -> Option<Arc<RenderImage>> {
     let buf = image::RgbaImage::from_raw(b.width, b.height, b.data)?;
     Some(Arc::new(RenderImage::new(vec![image::Frame::new(buf)])))
 }
@@ -67,7 +67,7 @@ pub struct SwitcherView {
     session: Session,
     layout: Layout,
     /// The work area of the monitor the switcher is on: the cards are laid out in it again when a window is closed from here.
-    work: rf_platform::dock::Rect,
+    work: rf_win::dock::Rect,
     /// The chord for the keys this window itself receives (the switcher opened by a command has no Alt held: `Sticky`).
     chord: Chord,
     dark: bool,
@@ -96,7 +96,7 @@ pub struct SwitcherView {
 
 impl SwitcherView {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(session: Session, layout: Layout, work: rf_platform::dock::Rect, previous: isize, dark: bool, hooked: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(session: Session, layout: Layout, work: rf_win::dock::Rect, previous: isize, dark: bool, hooked: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut chord = Chord::new();
         chord.open_by_command();
         // losing the activation (the user clicked another window, an app took the foreground) puts the switcher away, once it has
@@ -170,7 +170,7 @@ impl SwitcherView {
     /// The live pictures of the session's windows, at the layout's places (the registrations of an earlier set go with it).
     fn show_pictures(&mut self) {
         self.thumbs = None;
-        let cards: Vec<(isize, bool, rf_platform::dock::Rect)> =
+        let cards: Vec<(isize, bool, rf_win::dock::Rect)> =
             self.session.items().iter().enumerate().map(|(i, it)| (it.hwnd, it.no_live_picture(), self.layout.picture(i))).collect();
         let mut set = ThumbSet::new(Dwm, self.hwnd);
         self.pictures = set.show(&cards).into_iter().map(Some).collect();
@@ -188,7 +188,7 @@ impl SwitcherView {
             let mut been_front = false;
             loop {
                 cx.background_executor().timer(WATCH_EVERY).await;
-                let foreground = rf_platform::dock::foreground_root();
+                let foreground = rf_win::dock::foreground_root();
                 been_front |= foreground == hwnd;
                 let down = geo::any_button_down();
                 let look = watch::Look {
@@ -217,7 +217,7 @@ impl SwitcherView {
     /// Asks for the icon of every distinct app that is not known yet, on worker threads (the shell answers them one at a time).
     fn load_icons(&mut self, cx: &mut Context<Self>) {
         let side = self.icon_px;
-        let mut wanted: Vec<(String, bool, Vec<rf_platform::dock::IconSource>)> = Vec::new();
+        let mut wanted: Vec<(String, bool, Vec<rf_win::dock::IconSource>)> = Vec::new();
         for item in self.session.items() {
             let key = item.icon_key(side);
             if self.icons.contains_key(&key) || wanted.iter().any(|(k, _, _)| *k == key) {
@@ -256,7 +256,7 @@ impl SwitcherView {
         self._watch = None;
         self._guard = None;
         self._tasks.clear();
-        rf_platform::switcher::unmark_shell_window(self.hwnd);
+        rf_win::switcher::unmark_shell_window(self.hwnd);
     }
 
     // ---------------------------------------------------------------- what happens
@@ -291,12 +291,12 @@ impl SwitcherView {
     /// window alone: for a look at the new layout without closing anybody's window.
     fn after_close(&mut self, hwnd: isize, pid: u32, cx: &mut Context<Self>) {
         if std::env::var_os("RUSTYFILES_SWITCHER_DRY_CLOSE").is_none() {
-            rf_platform::dock::winops::close_window(rf_platform::dock::winops::WinRef { hwnd, pid });
+            rf_win::dock::winops::close_window(rf_win::dock::winops::WinRef { hwnd, pid });
         }
         if self.session.is_empty() {
             return self.finish(Closing::Cancelled, cx);
         }
-        let plan = rf_platform::switcher::layout::plan(self.session.items().len(), self.work, self.layout.scale);
+        let plan = rf_win::switcher::layout::plan(self.session.items().len(), self.work, self.layout.scale);
         self.session.fit(&plan);
         self.layout = plan;
         self.show_pictures();

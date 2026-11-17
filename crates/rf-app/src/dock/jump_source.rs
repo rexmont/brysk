@@ -1,6 +1,6 @@
 //! Where the app menu gets its jump-list sections (Tasks, an app's own categories, Pinned, Recent or Frequent) and how an entry is run.
 //!
-//! THIS FILE IS THE SEAM between the menu and the jump-list reader (`rf_platform::jumplists`): the menu is written against this small model
+//! THIS FILE IS THE SEAM between the menu and the jump-list reader (`rf_win::jumplists`): the menu is written against this small model
 //! (a section is a title and entries, an entry is a title, an optional icon and an ACTION the menu never looks into), and [`sections`]
 //! and [`run`] are the only two functions it calls. The order is the Windows taskbar's, top to bottom: Pinned, the app's own
 //! categories, Recent or Frequent (whichever the app asked Windows to show), Tasks. An entry's action carries its whole target as
@@ -11,8 +11,8 @@
 
 use std::path::PathBuf;
 
-use rf_platform::dock::{DockApp, IconSource};
-use rf_platform::jumplists::{AppKey, JumpItem, JumpTarget, Which};
+use rf_win::dock::{DockApp, IconSource};
+use rf_win::jumplists::{AppKey, JumpItem, JumpTarget, Which};
 
 use crate::t;
 
@@ -33,26 +33,26 @@ pub struct JumpApp {
 
 impl JumpApp {
     pub fn of(app: &DockApp) -> JumpApp {
-        let (aumid, exe) = rf_platform::dock::model::jump_identity(app);
+        let (aumid, exe) = rf_win::dock::model::jump_identity(app);
         JumpApp { key: app.key.clone(), name: app.name.clone(), pinned: app.pinned, aumid, exe }
     }
 }
 
 /// The name for the menu's bold line when the shell knows a better one than the dock's, else `None` (keep the dock's). A running app
 /// nobody pinned is named by its program's file name ("WindowsTerminal"); the Start panel shows "Terminal". The order is
-/// `rf_platform::dock::appmenu::menu_name`'s: a pin's own name, the "All apps" name of a packaged app, the program's file description, the
+/// `rf_win::dock::appmenu::menu_name`'s: a pin's own name, the "All apps" name of a packaged app, the program's file description, the
 /// file name. Asks the shell thread: a worker thread only, and never waited for by the menu.
 pub fn display_name(app: &JumpApp) -> Option<String> {
     if app.pinned {
         return None;
     }
-    let known = rf_platform::dock::launch::known_names(rf_platform::dock::launch::packaged_id(app.aumid.as_deref()), app.exe.as_deref());
+    let known = rf_win::dock::launch::known_names(rf_win::dock::launch::packaged_id(app.aumid.as_deref()), app.exe.as_deref());
     better_name(app, &known)
 }
 
 /// [`display_name`] over already-asked names (pure).
-fn better_name(app: &JumpApp, known: &rf_platform::dock::launch::KnownNames) -> Option<String> {
-    rf_platform::dock::appmenu::better_name(app.pinned, &app.name, known.display.as_deref(), known.description.as_deref())
+fn better_name(app: &JumpApp, known: &rf_win::dock::launch::KnownNames) -> Option<String> {
+    rf_win::dock::appmenu::better_name(app.pinned, &app.name, known.display.as_deref(), known.description.as_deref())
 }
 
 /// What an entry does when chosen. The menu keeps it and hands it back to [`run`]; it never looks inside.
@@ -83,7 +83,7 @@ pub fn sections(app: &JumpApp) -> Vec<Section> {
     if key.is_empty() {
         return Vec::new();
     }
-    let list = rf_platform::jumplists::read(&key, PER_PART);
+    let list = rf_win::jumplists::read(&key, PER_PART);
     let mut out: Vec<Section> = Vec::new();
     let mut push = |title: String, items: &[JumpItem]| {
         // (a line between groups of tasks starts a new block without a heading)
@@ -149,13 +149,13 @@ fn decode(a: &Action) -> Option<JumpTarget> {
 /// Runs an entry's action (starts the task, opens the document). Blocks: a worker thread only.
 pub fn run(_app: &JumpApp, action: &Action) -> anyhow::Result<()> {
     let target = decode(action).ok_or_else(|| anyhow::anyhow!("not an entry of a jump list"))?;
-    rf_platform::jumplists::open(&JumpItem { title: String::new(), icon: None, target })
+    rf_win::jumplists::open(&JumpItem { title: String::new(), icon: None, target })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_platform::dock::Launch;
+    use rf_win::dock::Launch;
 
     fn app(key: &str, launch: Option<Launch>, icon: IconSource) -> DockApp {
         DockApp { key: key.into(), name: "x".into(), pinned: true, launch, icon, windows: vec![], active: false }
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn a_running_app_nobody_pinned_gets_the_name_the_shell_shows_and_a_pinned_one_keeps_its_own() {
-        use rf_platform::dock::launch::KnownNames;
+        use rf_win::dock::launch::KnownNames;
         let known = KnownNames { display: Some("Terminal".into()), description: Some("Windows Terminal".into()) };
         assert_eq!(better_name(&named("WindowsTerminal", false), &known).as_deref(), Some("Terminal"));
         assert_eq!(better_name(&named("WindowsTerminal", true), &known), None, "a pin's name stays");

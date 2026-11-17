@@ -2,7 +2,7 @@
 //! options" and "New" in the background, as the file list's menus do (`ctx_menu.rs`).
 //!
 //! The file list's helper that turns the shell's menu into our items is private to `ctx_menu.rs` and tied to the file list's view
-//! (it hands "Rename" back to it). The few lines here do the same job for this view over the same `rf_platform::ctxmenu` calls; the list
+//! (it hands "Rename" back to it). The few lines here do the same job for this view over the same `rf_win::ctxmenu` calls; the list
 //! of verbs that are hidden because we show them ourselves is the file list's.
 
 use std::path::PathBuf;
@@ -14,8 +14,8 @@ use gpui_kit::*;
 use rf_core::desktop::grid::IconSize;
 use rf_core::desktop::items::Origin;
 use rf_core::desktop::store::SortName;
-use rf_platform::ctxmenu::{MenuOutcome, ShellItem, ShellTarget};
-use rf_platform::fileops::Transfer;
+use rf_win::ctxmenu::{MenuOutcome, ShellItem, ShellTarget};
+use rf_win::fileops::Transfer;
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
@@ -157,7 +157,7 @@ impl DesktopView {
         let (undo, redo) = crate::undo::next_labels();
         let ctx = BgCtx {
             read_only,
-            clipboard_files: rf_platform::clipboard::has_files(),
+            clipboard_files: rf_win::clipboard::has_files(),
             undo: undo.map(str::to_string),
             redo: redo.map(str::to_string),
             has_folder: self.backend.as_ref().and_then(|b| b.target_dir()).is_some(),
@@ -242,8 +242,8 @@ impl DesktopView {
     /// Fills "Show more options" (and, for the background, the shell's templates under "New") when the shell has answered.
     fn load_shell(&mut self, menu: WeakEntity<MenuView>, target: ShellTarget, background: bool, own: Vec<BgCmd>, cx: &mut Context<Self>) {
         let (tx, rx) = oneshot::channel();
-        rf_platform::sta::run(move |owner| {
-            let _ = tx.send(rf_platform::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
+        rf_win::sta::run(move |owner| {
+            let _ = tx.send(rf_win::ctxmenu::build(owner, &target, false).map_err(|e| format!("{e:#}")));
         });
         let me = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
@@ -406,8 +406,8 @@ fn to_items(me: &Me, session: u64, items: &[ShellItem], cx: &mut App) -> Vec<Ite
 
 fn invoke_shell(me: &Me, session: u64, id: u32, cx: &mut App) {
     let (tx, rx) = oneshot::channel();
-    rf_platform::sta::run(move |owner| {
-        let r = rf_platform::ctxmenu::invoke(owner, session, id, cursor());
+    rf_win::sta::run(move |owner| {
+        let r = rf_win::ctxmenu::invoke(owner, session, id, cursor());
         if let Err(e) = &r {
             log::warn!("desktop shell command: {e:#}");
         }

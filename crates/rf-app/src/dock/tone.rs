@@ -1,7 +1,7 @@
 //! Light or dark foreground for one island, chosen from how bright the picture behind its glass is.
 //!
 //! The islands follow the system's theme: light text on a dark glass. Over a white page the glass is light grey and light text can
-//! hardly be read. So each island looks at the brightness of what is BEHIND its glass (`rf_platform::glass::backdrop_luma`, 0 to 1) and
+//! hardly be read. So each island looks at the brightness of what is BEHIND its glass (`rf_win::glass::backdrop_luma`, 0 to 1) and
 //! turns its foreground and its glass tint the other way when the page behind is bright: dark glass with light text, or light glass
 //! with dark text. Two docks that were read for ideas do the same (the value, not the thresholds, is theirs).
 //!

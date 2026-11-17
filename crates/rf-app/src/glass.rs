@@ -1,4 +1,4 @@
-//! The app's side of the experimental Glass backdrop (the engine is `rf_platform::glass`): the switch that forces it for one run, the reason it
+//! The app's side of the experimental Glass backdrop (the engine is `rf_win::glass`): the switch that forces it for one run, the reason it
 //! was given up (for the settings page) and the one rule the app's own popups follow.
 
 use std::collections::BTreeMap;
@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use gpui_kit::{Bounds, IntoElement, Pixels, Styled, Window, canvas, div, px};
-use rf_platform::glass::LensSpec;
+use rf_win::glass::LensSpec;
 
 /// `RUSTYFILES_GLASS=1`: every main window uses the Glass backdrop for this run, whatever the saved setting says (and nothing is saved).
 /// Read once. "0" and an empty value mean off.
@@ -81,13 +81,13 @@ pub fn liquid(hwnd: isize) -> bool {
 /// applies the exclusion when glass starts (also for a window that is already open) and lifts it when the last glass goes.
 pub(crate) fn keep_out_of_capture(hwnd: isize) {
     if hwnd != 0 {
-        rf_platform::glass::exclude_from_capture(hwnd, true);
+        rf_win::glass::exclude_from_capture(hwnd, true);
     }
 }
 
 // ---------------------------------------------------------------- lenses (the selection pill of a list)
 
-/// The lens slots the app uses (the engine has `rf_platform::glass::MAX_LENSES`): the sidebar's selected entry, the selected entry of the
+/// The lens slots the app uses (the engine has `rf_win::glass::MAX_LENSES`): the sidebar's selected entry, the selected entry of the
 /// settings page's own list (both can be on screen at once: the sidebar stays beside the settings page), the selected tab of the tab
 /// strip and the round glass behind the strip's "+" button.
 pub const SLOT_SIDEBAR: u8 = 0;
@@ -306,20 +306,20 @@ pub fn report_lens(window: &mut Window, slot: u8, key: u64, shape: LensShape, re
     match phase {
         LensPhase::Moving => {
             if lenses().changed(hwnd, slot, None) {
-                rf_platform::glass::set_lens(hwnd, slot, None, false);
+                rf_win::glass::set_lens(hwnd, slot, None, false);
             }
             window.request_animation_frame();
         }
         LensPhase::Settling => {
             // back at once, under the stand-in that is still painted: no fade, there is nothing to fade from
             if lenses().changed(hwnd, slot, spec) {
-                rf_platform::glass::set_lens(hwnd, slot, spec, false);
+                rf_win::glass::set_lens(hwnd, slot, spec, false);
             }
             window.request_animation_frame();
         }
         LensPhase::Rest => {
             if lenses().changed(hwnd, slot, spec) {
-                rf_platform::glass::set_lens(hwnd, slot, spec, crate::settings::animations());
+                rf_win::glass::set_lens(hwnd, slot, spec, crate::settings::animations());
             }
         }
     }
@@ -398,7 +398,7 @@ pub fn clear_lens(hwnd: isize, slot: u8, fade: bool) {
         return;
     }
     if lenses().changed(hwnd, slot, None) {
-        rf_platform::glass::set_lens(hwnd, slot, None, fade && crate::settings::animations());
+        rf_win::glass::set_lens(hwnd, slot, None, fade && crate::settings::animations());
     }
 }
 
@@ -657,7 +657,7 @@ mod tests {
     fn the_slots_are_all_different_and_inside_the_engine() {
         let slots = [super::SLOT_SIDEBAR, super::SLOT_SETTINGS, super::SLOT_TAB, super::SLOT_NEW_TAB];
         for (i, a) in slots.iter().enumerate() {
-            assert!((*a as usize) < rf_platform::glass::MAX_LENSES);
+            assert!((*a as usize) < rf_win::glass::MAX_LENSES);
             assert!(slots[i + 1..].iter().all(|b| a != b), "slot {a} is used twice");
         }
     }

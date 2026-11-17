@@ -1,9 +1,9 @@
 //! The left island: the Windows logo (opens the Start menu), the search field (opens rustyfiles' quick search) and, at its right end,
 //! the weather: for the PC's position when "Konumumu kullan" is on and Windows gives it, else for the city the user typed in Settings
-//! (the order is in `rf_platform::weather_location`).
+//! (the order is in `rf_win::weather_location`).
 //!
 //! ON A SECONDARY MONITOR (`mon` is not the home dock) the island has the logo and the search and no weather (that is the primary
-//! monitor's); on a narrow monitor the search field is a button as big as the logo (`rf_platform::dock::monitors::content`).
+//! monitor's); on a narrow monitor the search field is a button as big as the logo (`rf_win::dock::monitors::content`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -13,9 +13,9 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::monitors::{Content, Search};
-use rf_platform::weather::{Observation, Outcome};
-use rf_platform::weather_location::LocatedWeather;
+use rf_win::dock::monitors::{Content, Search};
+use rf_win::weather::{Observation, Outcome};
+use rf_win::weather_location::LocatedWeather;
 
 use super::backdrop::IslandGlass;
 use super::host::{Kind, MonId};
@@ -360,7 +360,7 @@ impl Render for LeftIsland {
                 if own_start(cx) {
                     super::panel::toggle_start_on(mon, cx);
                 } else {
-                    rf_platform::dock::triggers::start_menu();
+                    rf_win::dock::triggers::start_menu();
                 }
             });
 

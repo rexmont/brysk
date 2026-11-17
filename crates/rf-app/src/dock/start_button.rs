@@ -19,7 +19,7 @@
 //! frames only then, so a button at rest costs nothing.
 
 use gpui_kit::*;
-use rf_platform::dock::magnify::ease_in_out;
+use rf_win::dock::magnify::ease_in_out;
 
 use super::look::Tint;
 

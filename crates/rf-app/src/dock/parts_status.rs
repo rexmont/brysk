@@ -52,9 +52,9 @@ pub fn decode(text: &str) -> Vec<(Part, Why)> {
     out
 }
 
-/// `rf_platform::taskbar_hide::Fault` as the reason the page tells.
-pub fn why_of_fault(f: rf_platform::taskbar_hide::Fault) -> Why {
-    use rf_platform::taskbar_hide::Fault;
+/// `rf_win::taskbar_hide::Fault` as the reason the page tells.
+pub fn why_of_fault(f: rf_win::taskbar_hide::Fault) -> Why {
+    use rf_win::taskbar_hide::Fault;
     match f {
         Fault::GuardMissing => Why::GuardMissing,
         Fault::GuardNotConfirmed => Why::GuardNotConfirmed,
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn the_fault_of_the_taskbar_becomes_the_reason_the_page_tells() {
-        use rf_platform::taskbar_hide::Fault;
+        use rf_win::taskbar_hide::Fault;
         assert_eq!(why_of_fault(Fault::GuardMissing), Why::GuardMissing);
         assert_eq!(why_of_fault(Fault::GuardNotConfirmed), Why::GuardNotConfirmed);
         assert_eq!(why_of_fault(Fault::GuardLost), Why::GuardLost);

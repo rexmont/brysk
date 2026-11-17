@@ -17,7 +17,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::format;
 use rf_core::transfer::{self as xfer, Outcome, Ring, Stage, Strip};
-use rf_platform::fastcopy::Resolve;
+use rf_win::fastcopy::Resolve;
 
 use crate::settings::TransferProgress;
 use crate::status_center::{OpPhase, OpView, Ops, RingState, fmt_duration};

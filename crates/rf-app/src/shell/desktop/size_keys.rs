@@ -1,5 +1,5 @@
 //! The keys that choose an icon size on the desktop (Explorer's Ctrl+Shift+2 / 3 / 4), and what each is called by the keyboard
-//! layout in use. Pure: the layout is a parameter (the caller passes `rf_platform::keys::shifted_char`, the tests a fake layout).
+//! layout in use. Pure: the layout is a parameter (the caller passes `rf_win::keys::shifted_char`, the tests a fake layout).
 //!
 //! WHY MORE THAN ONE FORM. GPUI reports a Shift+digit chord as the layout's shifted character with no Shift (Turkish Q: Ctrl+Shift+2
 //! arrives as `ctrl-"`, Ctrl+Shift+4 as `ctrl-+`), so `ctrl-shift-4` alone never fires there. The table in `menu_plan::SIZE_KEYS` is the

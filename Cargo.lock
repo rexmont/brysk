@@ -6199,8 +6199,8 @@ dependencies = [
  "rf-archive",
  "rf-core",
  "rf-dialog",
- "rf-platform",
  "rf-player",
+ "rf-win",
  "rustdecoder",
  "serde",
  "serde_json",
@@ -6307,14 +6307,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rf-platform"
-version = "0.8.8"
-dependencies = [
- "rf-mac",
- "rf-win",
-]
-
-[[package]]
 name = "rf-player"
 version = "0.8.8"
 dependencies = [
@@ -6356,6 +6348,7 @@ dependencies = [
  "rayon",
  "resvg 0.46.0",
  "rf-core",
+ "rf-mac",
  "rf-shellguard",
  "roxmltree 0.20.0",
  "serde",

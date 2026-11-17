@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use rf_platform::dock::ClickAction;
+use rf_win::dock::ClickAction;
 
 /// The first bounce's height and the second's (dock units), and how long both take.
 pub const BOUNCE_PEAK: f32 = 10.0;
@@ -225,7 +225,7 @@ pub struct Feedback {
 /// identity can differ from the pin's, and a start's mark has to find the app again once it has a window); a running app that is not
 /// pinned has its group's. (The pin's name is its identity, not its launch: the launch changes under a pin when the dock's list is read
 /// again from its own copy of the shortcut.)
-pub fn key_of(app: &rf_platform::dock::DockApp) -> String {
+pub fn key_of(app: &rf_win::dock::DockApp) -> String {
     if app.pinned { format!("pin:{}", app.name.to_lowercase()) } else { format!("run:{}", app.key) }
 }
 
@@ -531,7 +531,7 @@ mod tests {
 
     #[test]
     fn a_raised_or_grown_picture_is_inside_the_windows_region() {
-        use rf_platform::dock::hit;
+        use rf_win::dock::hit;
         // the glass lies at y 24..96 (window units), the icons stand on y 84; the icon under the pointer is 68 wide at full magnification:
         // its cell is y 16..84, eight units over the glass's top edge
         let glass = [0.0, 24.0, 400.0, 72.0];
@@ -563,7 +563,7 @@ mod tests {
 
     #[test]
     fn a_pinned_app_keeps_one_identity_before_and_while_it_runs() {
-        use rf_platform::dock::{DockApp, IconSource, Launch};
+        use rf_win::dock::{DockApp, IconSource, Launch};
         let launch = Launch::Exe { path: "C:/a/a.exe".into(), args: String::new() };
         let mut app = DockApp { key: "c:/a/a.exe".into(), name: "A".into(), pinned: true, launch: Some(launch), icon: IconSource::File("C:/a/a.exe".into()), windows: vec![], active: false };
         let idle = key_of(&app);

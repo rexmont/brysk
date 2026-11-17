@@ -1,5 +1,5 @@
 //! The wallpaper under the icons: the user's own picture, placed for the rectangle the canvas is shown in (the model's placement maths
-//! and decoder, `rf_platform::desktop::render`), as ONE bitmap of exactly that size. Nothing is drawn per frame: the view uploads the
+//! and decoder, `rf_win::desktop::render`), as ONE bitmap of exactly that size. Nothing is drawn per frame: the view uploads the
 //! bitmap once and asks for a new one when the shown size changes (after the window has stopped resizing) or when the wallpaper
 //! setting changes.
 //!
@@ -14,10 +14,10 @@ use std::sync::Arc;
 use rf_core::desktop::geom::{Rect, Rgb, Size};
 use rf_core::desktop::placement::TileAnchor;
 use rf_core::desktop::wallpaper::{MonitorWallpaper, Source, Wallpaper};
-use rf_platform::desktop::render::{ImageDecoder, RenderOptions, render_all};
-use rf_platform::desktop::wallcache::DiskCache;
-use rf_platform::desktop::wallpaper::DiskStamper;
-use rf_platform::thumbs::Bgra;
+use rf_win::desktop::render::{ImageDecoder, RenderOptions, render_all};
+use rf_win::desktop::wallcache::DiskCache;
+use rf_win::desktop::wallpaper::DiskStamper;
+use rf_win::thumbs::Bgra;
 
 /// How many bitmaps the preview keeps on disk (one per size it has been shown at).
 pub const CACHE_ENTRIES: usize = 6;

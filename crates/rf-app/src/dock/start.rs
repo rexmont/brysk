@@ -1,6 +1,6 @@
 //! The Start panel: the view that opens above the left island when its logo (or its search field) is clicked. 642 x 720 logical px at
 //! most (never taller than the room above the island), on HyperGlass (`panel.rs` opens, places and closes it; this is what is inside).
-//! The numbers and the decisions are `rf_platform::dock::startpage`; the drawing of the pages is `start_home.rs`.
+//! The numbers and the decisions are `rf_win::dock::startpage`; the drawing of the pages is `start_home.rs`.
 //!
 //! * Top: a search field (a pill) with the keyboard in it. Typing is the search from either page. (While the left island's glass has
 //!   grown into the panel the field stands in the island's row at the bottom of the glass, exactly where the island's own field is, and
@@ -20,7 +20,7 @@
 //! and the list (or the results), Page Up and Page Down turn the grid's pages, Tab goes field, Tümü (Geri), gear, power; Enter starts
 //! the one under the cursor, Ctrl+Enter shows it in its folder in rustyfiles, Escape steps back (query, all apps, then the panel).
 //! With the field in the island's row under the content the way to the content is Up and the way back Down, and Tab follows the order on
-//! the screen (`rf_platform::dock::startkeys`). The result list reads top down with the best match first, selected and marked "Enter".
+//! the screen (`rf_win::dock::startkeys`). The result list reads top down with the best match first, selected and marked "Enter".
 //!
 //! Beside the result list stands the DETAIL PANE of the selected result (`start_pane.rs`): what it is, what can be done with it, an
 //! app's jump list. Tab leads into it, and Ctrl+Shift+Enter starts the selected app as administrator.
@@ -38,15 +38,15 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::apps::App as AppEntry;
-use rf_platform::dock::IconSource;
-use rf_platform::dock::panel::{self as geo, CloseCause, PanelId};
-use rf_platform::dock::power::{self, Action as PowerAction, Menu as PowerMenu, Step as PowerStep};
-use rf_platform::dock::startapps;
-use rf_platform::dock::startkeys::{self, FieldAt};
-use rf_platform::dock::startlist::{self, Cursor, Move, Row};
-use rf_platform::dock::startpage::{self as page, Page, Spot};
-use rf_platform::dock::startpins::{self, Loaded, PinFile, Plan};
+use rf_win::apps::App as AppEntry;
+use rf_win::dock::IconSource;
+use rf_win::dock::panel::{self as geo, CloseCause, PanelId};
+use rf_win::dock::power::{self, Action as PowerAction, Menu as PowerMenu, Step as PowerStep};
+use rf_win::dock::startapps;
+use rf_win::dock::startkeys::{self, FieldAt};
+use rf_win::dock::startlist::{self, Cursor, Move, Row};
+use rf_win::dock::startpage::{self as page, Page, Spot};
+use rf_win::dock::startpins::{self, Loaded, PinFile, Plan};
 
 use super::backdrop::IslandGlass;
 use super::icons::{self, IconCache};
@@ -277,7 +277,7 @@ fn load_or_seed_pins(apps: &[AppEntry]) -> Option<PinFile> {
                     }
                 }
             }
-            let taskbar = rf_platform::dock::pins::read_pins_checked();
+            let taskbar = rf_win::dock::pins::read_pins_checked();
             let f = startpins::seeded_file(base, taskbar.as_deref(), apps)?;
             save_pins(f.clone());
             Some(f)
@@ -320,7 +320,7 @@ impl StartView {
             apps_ready: false,
             apps_failed: false,
             loading: false,
-            turkish: rf_platform::encoding::user_locale_is_turkish(),
+            turkish: rf_win::encoding::user_locale_is_turkish(),
             pins: PinFile::default(),
             pins_loaded: false,
             pin_cells: Vec::new(),
@@ -562,8 +562,8 @@ impl StartView {
                 });
                 let pins = if have_pins { None } else { load_or_seed_pins(&list) };
                 // (a domain account's display name can take a moment to come from the server: not on the UI thread)
-                let user = (!have_user).then(rf_platform::dock::power::display_name);
-                let avatar = want_avatar.map(rf_platform::dock::startuser::account_picture);
+                let user = (!have_user).then(rf_win::dock::power::display_name);
+                let avatar = want_avatar.map(rf_win::dock::startuser::account_picture);
                 (list, sorted, pins, user, avatar)
             });
             let (list, sorted, pins, user, avatar) = work.await;
@@ -765,13 +765,13 @@ impl StartView {
     ///
     /// WHY (the user, 2026-11-14: "başlattan bir uygulamayı açınca mesela tam ekran chrome açıksa onun arkasında açılıyor sanki").
     /// An entry of "All apps" is started by the shell's "open" of its AppsFolder item, and that verb is carried out by Explorer, not
-    /// by this process (with no Explorer running it answers "class not registered": `rf_platform::apps::launch`). So the program is a child
+    /// by this process (with no Explorer running it answers "class not registered": `rf_win::apps::launch`). So the program is a child
     /// of Explorer, which is not the process in front, and Windows' foreground lock applies to it: when the panel goes, the window
     /// that was in front before it (a maximised browser) is in front again, and the new window opens behind it. The same holds for
     /// an app that is running already and only shows its window, and for Windows' Settings. A program this process starts itself (the
     /// dock's icons: a shortcut or a program file) inherits the right and never had the problem.
     fn let_it_come_forward() {
-        rf_platform::look::win::allow_any_foreground();
+        rf_win::look::win::allow_any_foreground();
     }
 
     /// Runs a start, a sign-out or the like off the UI thread and closes the panel when it went through. A failure that is reported
@@ -840,7 +840,7 @@ impl StartView {
         Self::let_it_come_forward();
         std::thread::spawn(move || {
             // (the path is not logged: it can be a document from the user's recent files)
-            if rf_platform::sta::call(Duration::from_secs(15), move || rf_platform::openrules::open(&path)).and_then(Result::ok).is_none() {
+            if rf_win::sta::call(Duration::from_secs(15), move || rf_win::openrules::open(&path)).and_then(Result::ok).is_none() {
                 log::warn!("start: a file or folder could not be opened");
             }
         });
@@ -1045,7 +1045,7 @@ impl StartView {
                         let launch = launch.clone();
                         Self::let_it_come_forward();
                         std::thread::spawn(move || {
-                            if rf_platform::sta::call(Duration::from_secs(15), move || crate::settings_rows::open(&launch)).and_then(Result::ok).is_none() {
+                            if rf_win::sta::call(Duration::from_secs(15), move || crate::settings_rows::open(&launch)).and_then(Result::ok).is_none() {
                                 log::warn!("start: a settings page could not be opened");
                             }
                         });
@@ -1714,7 +1714,7 @@ impl StartView {
                         div()
                             .id("start-results")
                             .h_full()
-                            .when(has_pane, |d| d.w(px(rf_platform::dock::startpane::LIST_W)).flex_shrink_0())
+                            .when(has_pane, |d| d.w(px(rf_win::dock::startpane::LIST_W)).flex_shrink_0())
                             .when(!has_pane, |d| d.flex_1())
                             .min_h_0()
                             .overflow_y_scroll()
@@ -1976,7 +1976,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     fn menu(location: Option<&str>) -> AppMenu {
-        AppMenu { app: rf_platform::apps::App { name: "Paint".into(), id: "p!App".into() }, at: gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)), location: location.map(Into::into) }
+        AppMenu { app: rf_win::apps::App { name: "Paint".into(), id: "p!App".into() }, at: gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)), location: location.map(Into::into) }
     }
 
     /// The field in the island's row shows the word the island's own field shows (a long sentence was cut mid-word in the 220 unit pill:

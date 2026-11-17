@@ -8,7 +8,7 @@
 //! * `reload`  - the settings file changed: read it again
 //! * `stop`    - undo everything and exit
 //! * `size <stamp> <permille> <0|1>` - the Dock page's slider moved (1: it was let go): follow it now, without waiting for the file
-//!   (`rf_platform::dock::size_live`)
+//!   (`rf_win::dock::size_live`)
 //!
 //! The dock KEEPS RUNNING when rustyfiles' window closes or rustyfiles quits: it is the user's taskbar. It stops only when the
 //! switch in Settings goes off (a `stop` message), when it is asked to from outside the same way, or when Windows ends the session.
@@ -27,7 +27,7 @@ pub enum Command {
     Stop,
     Reload,
     /// The size slider moved or was let go.
-    Size(rf_platform::dock::size_live::Msg),
+    Size(rf_win::dock::size_live::Msg),
     /// "ping", the hello of a second `--dock` launch, or anything unknown: nothing to do.
     Nothing,
 }
@@ -36,7 +36,7 @@ pub fn parse_command(line: &str) -> Command {
     match line.trim() {
         "stop" => Command::Stop,
         "reload" => Command::Reload,
-        other => rf_platform::dock::size_live::parse_message(other).map_or(Command::Nothing, Command::Size),
+        other => rf_win::dock::size_live::parse_message(other).map_or(Command::Nothing, Command::Size),
     }
 }
 
@@ -78,7 +78,7 @@ fn may_send_size_in(side_process: bool, no_dock: bool, config_dir_override: bool
 
 /// Whether a dock process answers on its pipe right now.
 pub fn is_running() -> bool {
-    rf_platform::single_instance::send_to(APP, "ping")
+    rf_win::single_instance::send_to(APP, "ping")
 }
 
 /// Starts the process. It outlives this one (its own process group, no console).
@@ -255,7 +255,7 @@ pub fn sync_process(s: &Settings) {
         Step::Reload => {
             let send = needs_reload(&mut TOLD.lock().unwrap_or_else(|p| p.into_inner()).keys, Keys::of(s));
             if send {
-                let _ = rf_platform::single_instance::send_to(APP, "reload");
+                let _ = rf_win::single_instance::send_to(APP, "reload");
             }
         }
         Step::Nothing => {}
@@ -267,7 +267,7 @@ pub fn sync_process(s: &Settings) {
 /// True when the word was written to the dock's pipe.
 fn tell_to_stop() -> bool {
     for _ in 0..20 {
-        if rf_platform::single_instance::send_to(APP, "stop") {
+        if rf_win::single_instance::send_to(APP, "stop") {
             return true;
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn a_size_message_is_a_command_and_a_malformed_one_is_harmless() {
-        use rf_platform::dock::size_live::Msg;
+        use rf_win::dock::size_live::Msg;
         assert_eq!(parse_command("size 12 1250 0"), Command::Size(Msg { stamp: 12, permille: 1250, released: false }));
         assert_eq!(parse_command("size 13 1250 1\r"), Command::Size(Msg { stamp: 13, permille: 1250, released: true }));
         for bad in ["size", "size 1", "size 1 2", "size a b c", "size 1 1000 5", "sizes 1 1000 0"] {

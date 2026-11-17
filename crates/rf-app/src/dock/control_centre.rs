@@ -5,18 +5,18 @@
 //! 1. Connectivity tiles, two to a row (a last one alone takes the row): Wi-Fi and Bluetooth on a machine that has the radio, the
 //!    network that is not Wi-Fi (the cable) and, on a machine with a battery, the battery. A tile whose source is not on the
 //!    machine is left out. THE ROUND BUTTON of the Wi-Fi and the Bluetooth tile switches the radio on and off
-//!    (`rf_platform::sysstatus::radio`); THE TILE opens its detail: the networks in range (a click connects to one Windows has saved or
+//!    (`rf_win::sysstatus::radio`); THE TILE opens its detail: the networks in range (a click connects to one Windows has saved or
 //!    to an open one, leaves the connected one, and sends a network that wants a new password to Windows' own page), the paired
 //!    Bluetooth devices, the cable's state and address. The battery's tile opens Windows' page.
 //! 2. "Now playing", only while the system has a media session: artwork, title, artist, the program, previous / play-pause / next.
 //! 3. Sound: a liquid slider for the master volume with a speaker at its left that mutes, the default output device's name under it,
 //!    and a chevron that lists the output devices. A click on one makes it Windows' default output
-//!    (`rf_platform::sysstatus::audio::set_default_output`, which says how); the list ends with a link to Windows' sound settings. A
+//!    (`rf_win::sysstatus::audio::set_default_output`, which says how); the list ends with a link to Windows' sound settings. A
 //!    right click on the island's volume symbol opens the panel with this list open ([`ask_devices`]).
 //!
 //! AND, since the user asked what the panel still lacked beside Windows' quick settings and macOS's Control Centre and then for all
 //! of it ("hepsini ekleyelim. ama isteyen orayı minimalize edebilsin de."): a line at the top that says which programs are using
-//! the microphone or the camera now (`rf_platform::sysstatus::inuse`; nothing while nobody is); a row of QUICK BUTTONS under the tiles
+//! the microphone or the camera now (`rf_win::sysstatus::inuse`; nothing while nobody is); a row of QUICK BUTTONS under the tiles
 //! (`cc_model::Quick`: dark mode, keep awake and the power mode switch something themselves, the others open the page or panel of
 //! Windows that does); a MICROPHONE card under the sound card (level, mute, and a list of the input devices that opens out like
 //! the outputs'). EVERY PART CAN BE HIDDEN (Settings > Dock, `dock_cc_hidden`; the button with the sliders in the bottom row
@@ -39,7 +39,7 @@
 //!
 //! WHAT RUNS. The sound and the network are followed all the time by the dock (the island shows them: `sysstate.rs`); this view only
 //! reads them (and is redrawn when they change). Media, Bluetooth, the battery and the brightness are followed only while the panel
-//! is open: each is a thread of `rf_platform::sysstatus` that ends when the panel is hidden, and what they last said is kept so that the
+//! is open: each is a thread of `rf_win::sysstatus` that ends when the panel is hidden, and what they last said is kept so that the
 //! next opening starts with the same cards and corrects them within a moment. The panel's height follows what is shown; when a card
 //! appears or goes while it is open the window is placed again (`panel::relayout`), growing upwards.
 //!
@@ -63,19 +63,19 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::panel::{self as geo, CloseCause, PanelId};
-use rf_platform::sysstatus::Subscription;
-use rf_platform::sysstatus::audio;
-use rf_platform::sysstatus::bluetooth::{self, BluetoothSnapshot};
-use rf_platform::sysstatus::btaudio;
-use rf_platform::sysstatus::brightness::{self, BrightnessSnapshot};
-use rf_platform::sysstatus::media::{self, Artwork, Media, MediaSnapshot, Transport};
-use rf_platform::sysstatus::inuse::{self, InUse};
-use rf_platform::sysstatus::network::{self, Link};
-use rf_platform::sysstatus::power::{self, BatterySnapshot};
-use rf_platform::sysstatus::radio::{self, Kind as RadioKind, Power as RadioPower};
-use rf_platform::sysstatus::toggles::{self, PowerMode};
-use rf_platform::sysstatus::wifi::{self, Listing, WifiSnapshot};
+use rf_win::dock::panel::{self as geo, CloseCause, PanelId};
+use rf_win::sysstatus::Subscription;
+use rf_win::sysstatus::audio;
+use rf_win::sysstatus::bluetooth::{self, BluetoothSnapshot};
+use rf_win::sysstatus::btaudio;
+use rf_win::sysstatus::brightness::{self, BrightnessSnapshot};
+use rf_win::sysstatus::media::{self, Artwork, Media, MediaSnapshot, Transport};
+use rf_win::sysstatus::inuse::{self, InUse};
+use rf_win::sysstatus::network::{self, Link};
+use rf_win::sysstatus::power::{self, BatterySnapshot};
+use rf_win::sysstatus::radio::{self, Kind as RadioKind, Power as RadioPower};
+use rf_win::sysstatus::toggles::{self, PowerMode};
+use rf_win::sysstatus::wifi::{self, Listing, WifiSnapshot};
 
 use super::backdrop::IslandGlass;
 use super::cc_model::{self, Area, Detail, Quick, QuickState, Section, Shown, Swap, Tile, Unfold, Words};
@@ -135,7 +135,7 @@ enum Ev {
     Media(MediaSnapshot),
     Mic(audio::AudioSnapshot),
     /// The programs that play now, with their levels (read while the list of outputs is out).
-    Mixer(Vec<rf_platform::appvolume::MixerApp>),
+    Mixer(Vec<rf_win::appvolume::MixerApp>),
     /// What was read off the interface's thread: who uses the microphone and the camera, Windows' dark mode, the power mode.
     Seen(InUse, bool, Option<PowerMode>),
     Wifi(WifiSnapshot),
@@ -233,14 +233,14 @@ pub struct CcView {
     mic_mute_ask: Option<(bool, Instant)>,
     /// The mixer: the programs that play now, and the level a row shows while its slider is dragged (the list is read again only
     /// every few seconds).
-    mixer: Vec<rf_platform::appvolume::MixerApp>,
+    mixer: Vec<rf_win::appvolume::MixerApp>,
     mixer_drag: Option<(String, f32)>,
     /// The height last given to the window (logical px).
     reported: f32,
     _subs: Vec<Subscription2>,
 }
 
-/// GPUI's observer handle (named apart from `rf_platform::sysstatus::Subscription`).
+/// GPUI's observer handle (named apart from `rf_win::sysstatus::Subscription`).
 type Subscription2 = gpui_kit::Subscription;
 
 /// The wish for the list of output devices (a right click on the island's volume symbol), with when it was made: the control centre
@@ -585,7 +585,7 @@ impl CcView {
     /// Reads the mixer off this thread (the audio service is asked across processes) and takes it when it has come.
     fn read_mixer(&self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
-            let mixer = cx.background_executor().spawn(async { rf_platform::appvolume::mixer() }).await;
+            let mixer = cx.background_executor().spawn(async { rf_win::appvolume::mixer() }).await;
             let _ = this.update(cx, |me, cx| me.apply(Ev::Mixer(mixer), cx));
         })
         .detach();
@@ -1024,7 +1024,7 @@ impl CcView {
         self.closing = true;
         std::thread::spawn(move || {
             let shown = url.clone();
-            let ok = rf_platform::sta::call(Duration::from_secs(15), move || rf_platform::shell::open(Path::new(&url))).and_then(Result::ok);
+            let ok = rf_win::sta::call(Duration::from_secs(15), move || rf_win::shell::open(Path::new(&url))).and_then(Result::ok);
             if ok.is_none() {
                 log::warn!("control centre: cannot open {shown}");
             }
@@ -1062,7 +1062,7 @@ impl CcView {
             app if app >= SL_APP => {
                 if let Some(name) = self.mixer.get(app - SL_APP).map(|a| a.name.clone()) {
                     let level = fraction.clamp(0.0, 1.0);
-                    rf_platform::appvolume::set_mixer_level(&name, level);
+                    rf_win::appvolume::set_mixer_level(&name, level);
                     self.mixer_drag = Some((name, level));
                 }
             }
@@ -1338,7 +1338,7 @@ impl CcView {
 
 
     /// The level a mixer row shows: the one being dragged to, else the program's own.
-    fn mixer_level(&self, app: &rf_platform::appvolume::MixerApp) -> f32 {
+    fn mixer_level(&self, app: &rf_win::appvolume::MixerApp) -> f32 {
         self.mixer_drag.as_ref().filter(|(name, _)| *name == app.name).map_or(app.level.volume, |(_, v)| *v)
     }
 
@@ -1898,7 +1898,7 @@ fn art_image(a: &Artwork) -> Option<Arc<RenderImage>> {
 /// Opens a Windows page (`ms-settings:...`) through the shell, on the one shell thread and from a thread that may wait for it.
 fn open_uri(uri: &'static str) {
     std::thread::spawn(move || {
-        let ok = rf_platform::sta::call(Duration::from_secs(15), move || rf_platform::shell::open(Path::new(uri))).and_then(Result::ok);
+        let ok = rf_win::sta::call(Duration::from_secs(15), move || rf_win::shell::open(Path::new(uri))).and_then(Result::ok);
         if ok.is_none() {
             log::warn!("control centre: cannot open {uri}");
         }

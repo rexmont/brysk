@@ -7,7 +7,7 @@
 
 use std::io::Write as _;
 
-use rf_platform::shellhost::probe::{self, Inputs};
+use rf_win::shellhost::probe::{self, Inputs};
 
 use crate::dock::parts::Part;
 use crate::settings::Settings;

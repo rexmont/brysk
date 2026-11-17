@@ -1,12 +1,12 @@
 //! Windows' settings and tools as rows of the search (the dock's Start search and the quick search window share them).
 //!
 //! The catalogue itself (every Settings page, the settings on the pages, the Control Panel's tasks and tools, in the display
-//! language) is Windows' own and is read by `rf_platform::settingscat`, once, in the background; until it has been read a search simply
+//! language) is Windows' own and is read by `rf_win::settingscat`, once, in the background; until it has been read a search simply
 //! has no such rows. This file ranks its entries for a query: pure, with tests, and nothing here opens anything.
 
 use std::sync::{Arc, Mutex};
 
-use rf_platform::settingscat::{Entry, Launch};
+use rf_win::settingscat::{Entry, Launch};
 
 use crate::quick_search::{Item, Section, Target, fold, score_folded};
 use crate::t;
@@ -30,7 +30,7 @@ static FOLDED: Mutex<Option<(usize, Arc<Vec<Folded>>)>> = Mutex::new(None);
 /// The catalogue, folded; `None` until Windows' files have been read (the first call starts that and does not wait).
 fn folded() -> Option<Arc<Vec<Folded>>> {
     let dir = crate::settings::app_dir()?;
-    let cat = rf_platform::settingscat::get_or_start(&dir)?;
+    let cat = rf_win::settingscat::get_or_start(&dir)?;
     let mut held = FOLDED.lock().unwrap_or_else(|p| p.into_inner());
     // (the catalogue is read once in a process: its address is its identity)
     let id = Arc::as_ptr(&cat) as usize;
@@ -129,14 +129,14 @@ pub(crate) fn find(q: &str, lift: &dyn Fn(&Target) -> i32) -> Vec<Item> {
 /// search has its rows: without this the first query started the reading and showed nothing of it. Returns at once.
 pub(crate) fn warm() {
     if let Some(dir) = crate::settings::app_dir() {
-        let _ = rf_platform::settingscat::get_or_start(&dir);
+        let _ = rf_win::settingscat::get_or_start(&dir);
     }
 }
 
 /// Opens what a settings row stands for (blocks while the system starts it: off the UI thread).
 pub(crate) fn open(launch: &str) -> anyhow::Result<()> {
     let launch = Launch::decode(launch).ok_or_else(|| anyhow::anyhow!("not a settings row"))?;
-    rf_platform::settingscat::open(&launch)
+    rf_win::settingscat::open(&launch)
 }
 
 #[cfg(test)]

@@ -2,14 +2,14 @@
 //! watching what the engine reports, telling the island when to paint its own fill instead, and trying again after a failure.
 //!
 //! The decisions are in [`Machine`] (pure: the engine's report and the time are arguments); [`IslandGlass`] is the thin layer that
-//! makes the calls into `rf_platform::glass`. It also holds the island's [`Tone`]: whether the foreground is light or dark, which follows
-//! the brightness of what is behind the glass (`rf_platform::glass::backdrop_luma`) and gives the engine the matching glass tint.
+//! makes the calls into `rf_win::glass`. It also holds the island's [`Tone`]: whether the foreground is light or dark, which follows
+//! the brightness of what is behind the glass (`rf_win::glass::backdrop_luma`) and gives the engine the matching glass tint.
 
 use std::sync::LazyLock;
 use std::time::Instant;
 
-use rf_platform::dock::layout::RADIUS;
-use rf_platform::glass::{GlassOptions, GlassState, Shadow};
+use rf_win::dock::layout::RADIUS;
+use rf_win::glass::{GlassOptions, GlassState, Shadow};
 
 use super::look::Palette;
 use super::tone::Tone;
@@ -29,14 +29,14 @@ pub fn radius_px(scale: f32) -> f32 {
 
 /// The glass options of an island: its own radius, its own corners cut, its own rectangle inside the window (`shape`: x, y, w, h in
 /// device px from the window's top left corner) and, only when the dock's shadow is switched on (`layout::shadow_on`: the window
-/// region is expected to clip it away, see `rf_platform::dock::hit`), the soft shadow around it. The window is bigger than the glass;
+/// region is expected to clip it away, see `rf_win::dock::hit`), the soft shadow around it. The window is bigger than the glass;
 /// everything outside the shape is transparent.
 pub fn options(dark: bool, scale: f32, shape: [f32; 4]) -> GlassOptions {
     GlassOptions { dark, radius_px: Some(radius_px(scale)), cut_corners: true, shape: Some(shape), shadow: shadow_on().then_some(Shadow::SOFT) }
 }
 
 fn shadow_on() -> bool {
-    rf_platform::dock::layout::shadow_on()
+    rf_win::dock::layout::shadow_on()
 }
 
 /// Where an island's glass is until it is told: nowhere (it draws nothing), never the whole window for a moment.
@@ -74,7 +74,7 @@ impl IslandGlass {
         }
         self.hidden = hidden;
         if self.attached {
-            rf_platform::glass::set_options(self.hwnd, self.engine_options());
+            rf_win::glass::set_options(self.hwnd, self.engine_options());
         }
     }
 
@@ -100,7 +100,7 @@ impl IslandGlass {
         }
         self.shape = shape;
         if self.attached && !self.hidden {
-            rf_platform::glass::set_options(self.hwnd, self.engine_options());
+            rf_win::glass::set_options(self.hwnd, self.engine_options());
         }
     }
 
@@ -143,7 +143,7 @@ impl IslandGlass {
             return false;
         }
         // a glass that is not running measures nothing: the system's theme decides, as for the fallback fill
-        let luma = if self.attached && !self.machine.fallback() { rf_platform::glass::backdrop_luma(self.hwnd) } else { None };
+        let luma = if self.attached && !self.machine.fallback() { rf_win::glass::backdrop_luma(self.hwnd) } else { None };
         let changed = self.tone.feed(luma, now_ms);
         if changed {
             self.send_tint();
@@ -155,7 +155,7 @@ impl IslandGlass {
     fn send_tint(&mut self) {
         let dark = self.tone.glass_dark();
         if self.attached && dark != self.sent_dark {
-            rf_platform::glass::set_dark(self.hwnd, dark);
+            rf_win::glass::set_dark(self.hwnd, dark);
             self.sent_dark = dark;
         }
     }
@@ -178,11 +178,11 @@ impl IslandGlass {
             return;
         }
         let dark = self.tone.glass_dark();
-        if rf_platform::glass::attach_with(self.hwnd, options(dark, self.scale, if self.hidden { NO_SHAPE } else { self.shape })) {
+        if rf_win::glass::attach_with(self.hwnd, options(dark, self.scale, if self.hidden { NO_SHAPE } else { self.shape })) {
             self.sent_dark = dark;
             self.attached = true;
         } else {
-            let why = match rf_platform::glass::state(self.hwnd) {
+            let why = match rf_win::glass::state(self.hwnd) {
                 GlassState::Failed(why) => why,
                 _ => "the glass engine did not accept the window".into(),
             };
@@ -197,7 +197,7 @@ impl IslandGlass {
     pub fn sync(&mut self, dark: bool, scale: f32, now_ms: u64) {
         let scale_changed = (scale - self.scale).abs() > 0.001;
         self.scale = scale;
-        let known = self.attached && !self.machine.fallback() && rf_platform::glass::backdrop_luma(self.hwnd).is_some();
+        let known = self.attached && !self.machine.fallback() && rf_win::glass::backdrop_luma(self.hwnd).is_some();
         self.tone.set_system(dark, known, now_ms);
         if !self.attached {
             return;
@@ -205,7 +205,7 @@ impl IslandGlass {
         if scale_changed {
             // the radius is in device px: it follows the DPI (this also carries the tint and the shape)
             self.sent_dark = self.tone.glass_dark();
-            rf_platform::glass::set_options(self.hwnd, self.engine_options());
+            rf_win::glass::set_options(self.hwnd, self.engine_options());
         } else {
             self.send_tint();
         }
@@ -214,7 +214,7 @@ impl IslandGlass {
     /// One look at the engine. True when the island's picture has to change (its fill appeared or went).
     pub fn tick(&mut self, now_ms: u64) -> bool {
         let before = self.machine.fallback();
-        let engine = if self.attached { rf_platform::glass::state(self.hwnd) } else { GlassState::Off };
+        let engine = if self.attached { rf_win::glass::state(self.hwnd) } else { GlassState::Off };
         // a window we never managed to attach is "off" for the machine, but that is a failure it already knows
         let act = if self.attached || matches!(self.machine.phase, Phase::Failed { .. }) { self.machine.observe(&engine, now_ms) } else { Act::Nothing };
         match act {
@@ -234,7 +234,7 @@ impl IslandGlass {
     /// Takes the glass off the window (the capture exclusion goes with it). Safe to call twice, and without glass.
     pub fn release(&mut self) {
         if self.attached {
-            rf_platform::glass::detach(self.hwnd);
+            rf_win::glass::detach(self.hwnd);
             self.attached = false;
         }
     }

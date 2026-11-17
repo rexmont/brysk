@@ -1,5 +1,5 @@
 //! Drag and drop in the Start panel, drawn and driven. A child module of `start.rs`: it works on that view's own state. The rules (click or
-//! drag, where a point is, what may be dropped where, the order of the pins, the slide) are `rf_platform::dock::startdrag`, pure and tested;
+//! drag, where a point is, what may be dropped where, the order of the pins, the slide) are `rf_win::dock::startdrag`, pure and tested;
 //! this file is the part that reads the mouse and puts the result on the screen.
 //!
 //! * A press on a pinned tile, an app of "Tümü" or a recommended entry is remembered (`press`). If the pointer moves more than the
@@ -11,7 +11,7 @@
 //! * OVER THE DOCK'S MIDDLE ISLAND (screen position against the layout's glass rectangle) the island is highlighted (`drop_hint`) and
 //!   letting go adds the app to the end of the dock's own pins (`own_pins::pin_start_app`); the panel closes.
 //! * OUT IN THE OPEN: an app that has a shortcut in the Start menu's folders becomes a real file drag of a COPY of that shortcut, the
-//!   system's own drag (`rf_platform::dnd`, the one the file list uses), copy or link only, the moment the pointer leaves the panel; a
+//!   system's own drag (`rf_win::dnd`, the one the file list uses), copy or link only, the moment the pointer leaves the panel; a
 //!   packaged app has no such file and the pointer says "not here". The shortcut is only LOOKED FOR when the press becomes a drag (no
 //!   write); the copy is made when the pointer first leaves the panel, so a reorder inside it writes nothing to the disk. A recommended
 //!   file is a real file drag from the first moment the press has moved.
@@ -30,7 +30,7 @@
 use std::cell::Cell;
 use std::path::PathBuf;
 
-use rf_platform::dock::startdrag::{self as rules, Feedback, Grid, Item, Scene, Slides, Where};
+use rf_win::dock::startdrag::{self as rules, Feedback, Grid, Item, Scene, Slides, Where};
 
 use super::*;
 use crate::dock::host::{self, Kind};
@@ -198,12 +198,12 @@ fn show_feedback(fb: Feedback) {
 }
 
 /// A window's outer rectangle, screen device px.
-fn window_rect(hwnd: isize) -> Option<rf_platform::dock::layout::Rect> {
+fn window_rect(hwnd: isize) -> Option<rf_win::dock::layout::Rect> {
     use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
     let mut r = RECT::default();
     unsafe { GetWindowRect(HWND(hwnd as *mut _), &mut r).ok()? };
-    Some(rf_platform::dock::layout::Rect::new(r.left, r.top, r.right, r.bottom))
+    Some(rf_win::dock::layout::Rect::new(r.left, r.top, r.right, r.bottom))
 }
 
 /// The top-level window at a screen point (device px), if any.
@@ -636,7 +636,7 @@ impl StartView {
 
     // ------------------------------------------------------------------ the system's file drag
 
-    /// The system's own file drag takes over (the one the file list uses, `rf_platform::dnd`; a copy or a link only, so nothing is MOVED out
+    /// The system's own file drag takes over (the one the file list uses, `rf_win::dnd`; a copy or a link only, so nothing is MOVED out
     /// of the Start menu or the user's folders by a drop on a program that moves by default). It runs on the shell thread and owns the
     /// mouse until the drop.
     ///
@@ -661,8 +661,8 @@ impl StartView {
         }
         // (the pointer is read on the shell thread the moment the loop ends: it is where the drop was)
         let (tx, rx) = futures::channel::oneshot::channel::<(Result<u32, String>, Option<(i32, i32)>)>();
-        rf_platform::sta::run(move |owner| {
-            let done = rf_platform::dnd::drag_out_copy_only(owner, ui_thread, &files).map(|effect| effect.0).map_err(|e| format!("{e:#}"));
+        rf_win::sta::run(move |owner| {
+            let done = rf_win::dnd::drag_out_copy_only(owner, ui_thread, &files).map(|effect| effect.0).map_err(|e| format!("{e:#}"));
             let _ = tx.send((done, geo::cursor()));
         });
         // the island is lit while the pointer is over it (an app only: a file has nothing to do there)

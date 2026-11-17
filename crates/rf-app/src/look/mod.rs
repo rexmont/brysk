@@ -96,7 +96,7 @@ impl LookManager {
         if m.active.is_some_and(|h| !alive.contains(&h)) {
             m.active = None;
         }
-        rf_platform::look::hook::set_own_windows(hwnds);
+        rf_win::look::hook::set_own_windows(hwnds);
     }
 
     pub fn show(path: PathBuf, opts: ShowOpts, cx: &mut App) {
@@ -120,9 +120,9 @@ impl LookManager {
 
     fn open(path: PathBuf, opts: ShowOpts, cx: &mut App) {
         let s = cx.global::<LookSettings>().clone();
-        let work = rect(rf_platform::look::win::work_area_at_cursor());
+        let work = rect(rf_win::look::win::work_area_at_cursor());
         // a file in a slow place (a network drive) opens off the UI thread, in the window
-        let slow = rf_platform::drives::slow_to_read(&path);
+        let slow = rf_win::drives::slow_to_read(&path);
         let (viewer, prepared): (Box<dyn viewer::Viewer>, _) =
             if slow { (Box::new(window::Opening), window::Opening::prepared(&path)) } else { window::prepare_viewer(&path, cx) };
         let size = geometry::fit(prepared.preferred, work, prepared.fit_ratio);
@@ -148,9 +148,9 @@ impl LookManager {
         let show_in_taskbar = s.look_show_in_taskbar;
         match cx.open_window(options, move |window, cx| {
             let hwnd = window::hwnd_of(window);
-            rf_platform::look::win::set_show_in_taskbar(hwnd, show_in_taskbar);
+            rf_win::look::win::set_show_in_taskbar(hwnd, show_in_taskbar);
             if topmost {
-                rf_platform::look::win::set_topmost(hwnd, true);
+                rf_win::look::win::set_topmost(hwnd, true);
             }
             cx.new(|cx| LookWindow::new(path, topmost, viewer, prepared, window, cx))
         }) {
@@ -191,9 +191,9 @@ impl LookManager {
 
     pub fn run_and_close(cx: &mut App) {
         if let Some(p) = Self::current_path(cx) {
-            rf_platform::sta::run(move |_| {
+            rf_win::sta::run(move |_| {
                 crate::open_rules_page::follow_file();
-                if let Err(e) = rf_platform::openrules::open(&p) {
+                if let Err(e) = rf_win::openrules::open(&p) {
                     log::warn!("look run: {e:#}");
                 }
             });

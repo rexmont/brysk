@@ -13,7 +13,7 @@ use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::propcols::{self as pc, Category, ChooserRow, ChosenColumns};
-use rf_platform::propcols::{Listing, PropInfo};
+use rf_win::propcols::{Listing, PropInfo};
 
 use crate::folder_view::prop_cols;
 use crate::t;
@@ -99,7 +99,7 @@ impl ChooserView {
         if known.is_none() {
             // the schema is loaded off the UI thread (it takes a moment the first time)
             cx.spawn(async move |this, cx| {
-                let list = cx.background_executor().spawn(async move { rf_platform::propcols::list_properties(Listing::Viewable) }).await;
+                let list = cx.background_executor().spawn(async move { rf_win::propcols::list_properties(Listing::Viewable) }).await;
                 let list = prop_cols::set_property_list(list);
                 let _ = this.update(cx, |v, cx| {
                     v.all = list;

@@ -18,11 +18,11 @@
 //!
 //! A DOCK ON EVERY MONITOR (setting "Dock'u her ekranda göster", on by default; see docs/design/dock.md): `host.rs` keeps a list of docks,
 //! the home dock (the primary monitor's, the one above) and one for each other monitor, found by the monitor's device name
-//! (`rf_platform::dock::monitors`). A secondary dock has the logo and the search, the apps, and the clock and the bell. With one monitor, or
+//! (`rf_win::dock::monitors`). A secondary dock has the logo and the search, the apps, and the clock and the bell. With one monitor, or
 //! the switch off, there is the home dock only.
 //!
 //! Each island is a window of its own (a GPUI pop-up with a transparent background) that is never activated, has no taskbar
-//! button and is always on top; `rf_platform::dock` makes it so and places it. Each has HyperGlass behind it with its own corner radius
+//! button and is always on top; `rf_win::dock` makes it so and places it. Each has HyperGlass behind it with its own corner radius
 //! (`backdrop.rs`), and paints its own translucent fill while the glass is not running (`host::island_box`).
 //!
 //! THE PROCESS. `--dock` is a process of its own, like `--bar-preview`: it never hands over to a running rustyfiles, never starts
@@ -35,7 +35,7 @@
 //! WHAT IS PURE (and tested): the widths and the icon layout (`plan.rs`), the glass state machine (`backdrop.rs`), the colours
 //! (`look.rs`), the light or dark foreground that follows the brightness behind the glass (`tone.rs`), the process decisions (`control.rs`), the settings differences (`host.rs`), the icon cache (`icons.rs`) and the
 //! click commands (`actions.rs`). The rectangles, the hover animation, the click decision, the clock, the weather parsing and the
-//! full-screen decision are pure and tested in `rf_platform::dock` / `rf_platform::weather`.
+//! full-screen decision are pure and tested in `rf_win::dock` / `rf_win::weather`.
 
 pub mod actions;
 mod app_menu;
@@ -101,12 +101,12 @@ pub const ARG: &str = "--dock";
 
 /// Takes the dock's single-instance place. `None`: a dock is already running (it has been greeted) and this process should end.
 /// The guard must be kept for the life of the process; the receiver carries the messages other processes send (`stop`, `reload`).
-pub fn acquire() -> Option<(rf_platform::single_instance::InstanceGuard, UnboundedReceiver<String>)> {
-    match rf_platform::single_instance::acquire_app(control::APP, "hello") {
-        rf_platform::single_instance::Role::Forwarded => None,
-        rf_platform::single_instance::Role::Primary(guard) => {
+pub fn acquire() -> Option<(rf_win::single_instance::InstanceGuard, UnboundedReceiver<String>)> {
+    match rf_win::single_instance::acquire_app(control::APP, "hello") {
+        rf_win::single_instance::Role::Forwarded => None,
+        rf_win::single_instance::Role::Primary(guard) => {
             let (tx, rx) = futures::channel::mpsc::unbounded::<String>();
-            rf_platform::single_instance::serve_app(control::APP, move |m| {
+            rf_win::single_instance::serve_app(control::APP, move |m| {
                 let _ = tx.unbounded_send(m);
             });
             Some((guard, rx))

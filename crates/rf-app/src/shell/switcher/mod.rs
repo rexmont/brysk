@@ -1,20 +1,20 @@
 //! Our own window switcher (shell plan increment G1), the app's side: a centred glass panel with one card per window, a live picture
 //! through DWM on each card, opened by a command or by a function the shell host calls. The model, the rules, the chord, the layout
-//! and the activation sequence are `rf_platform::switcher` (pure where they can be, tested there); this module makes the window.
+//! and the activation sequence are `rf_win::switcher` (pure where they can be, tested there); this module makes the window.
 //!
 //! HOW IT IS OPENED IN THIS TRACK. Only `rustyfiles --switcher-preview` (see [`open_preview`]): the switcher is shown once, as if
 //! the chord had been pressed, and stays until a window is chosen (Enter, a click), Escape, Alt+F4, or the window loses the
-//! foreground (a click outside it, or a foreground that stays somebody else's, also put it away: `rf_platform::switcher::watch`).
+//! foreground (a click outside it, or a foreground that stays somebody else's, also put it away: `rf_win::switcher::watch`).
 //! Tab / Shift+Tab step, the arrows move over the grid. NO global hotkey and NO keyboard hook is registered by anything
 //! that runs here. The shell host, later, calls [`open`] when its chord fires and feeds the chord's effects to [`apply_effect`]
-//! (the chord and the hook are `rf_platform::switcher::{chord, hook}`).
+//! (the chord and the hook are `rf_win::switcher::{chord, hook}`).
 //!
 //! WHAT EXISTS WHEN. Nothing while the switcher is closed: no window, no thumbnails, no timer, no thread of its own. [`open`] makes
 //! the window (a transparent pop-up, created when needed, not kept hidden: creating it is the cost, measured live and logged at
 //! info level as "switcher: opened in ..."), lists the windows once, and registers one DWM picture per live card; [`close`] removes
 //! all of it. Only a few dozen small icon bitmaps are kept in memory between two openings (`view::forget_icons` lets go of them).
 //!
-//! WHERE IT OPENS. On the monitor under the pointer, centred in its work area, sized by `rf_platform::switcher::layout` for the number of
+//! WHERE IT OPENS. On the monitor under the pointer, centred in its work area, sized by `rf_win::switcher::layout` for the number of
 //! windows (up to about 12 at full size, more scale the cards down). It takes the foreground (the click or the chord that opened
 //! it was ours), so choosing a window can bring that window forward by the ordinary rules; Escape and losing the foreground give
 //! the window that was in front before its place back.
@@ -26,12 +26,12 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui_kit::*;
-use rf_platform::dock::panel as geo;
-use rf_platform::switcher::activate::{self, Outcome, Win32Ops};
-use rf_platform::switcher::chord::{Effect, Scope};
-use rf_platform::switcher::layout;
-use rf_platform::switcher::session::Session;
-use rf_platform::switcher::{ComRoute, Options};
+use rf_win::dock::panel as geo;
+use rf_win::switcher::activate::{self, Outcome, Win32Ops};
+use rf_win::switcher::chord::{Effect, Scope};
+use rf_win::switcher::layout;
+use rf_win::switcher::session::Session;
+use rf_win::switcher::{ComRoute, Options};
 
 pub use view::{SwitcherView, forget_icons};
 
@@ -96,17 +96,17 @@ pub fn open(req: OpenRequest, cx: &mut App) -> bool {
         return true;
     }
     let started = Instant::now();
-    let Some(mon) = rf_platform::switcher::monitor_at_cursor() else {
+    let Some(mon) = rf_win::switcher::monitor_at_cursor() else {
         log::warn!("switcher: no monitor under the pointer");
         return false;
     };
-    let listing = rf_platform::switcher::list(ComRoute::ShellThread, Options::default());
+    let listing = rf_win::switcher::list(ComRoute::ShellThread, Options::default());
     let listed_at = started.elapsed();
-    let previous = rf_platform::dock::foreground_root();
+    let previous = rf_win::dock::foreground_root();
     let mut session = Session::open_from(listing.items, req.scope, req.backwards, listing.front_listed);
     let plan = layout::plan(session.items().len(), mon.work, mon.scale());
     session.fit(&plan);
-    let dark = rf_platform::accent::system_is_dark();
+    let dark = rf_win::accent::system_is_dark();
 
     let display = DisplayId::new(mon.handle as u64);
     let (w, h) = plan.window_logical();
@@ -140,11 +140,11 @@ pub fn open(req: OpenRequest, cx: &mut App) -> bool {
     let took = listing.took;
     // (showing, ordering and focusing a window send it messages: from a task, with nothing borrowed, like the dock's panels)
     cx.spawn(async move |cx| {
-        rf_platform::window::set_dark_mode(hwnd, dark);
-        rf_platform::switcher::mark_shell_window(hwnd);
+        rf_win::window::set_dark_mode(hwnd, dark);
+        rf_win::switcher::mark_shell_window(hwnd);
         geo::show_at(hwnd, plan.window);
         // (the quiet kind: no tap of the Alt key into the program that is in front)
-        rf_platform::window::bring_to_front_quietly(hwnd);
+        rf_win::window::bring_to_front_quietly(hwnd);
         let shown_at = started.elapsed();
         let (cards, live) = cx.update(|cx| handle.update(cx, |v, window, cx| {
             v.on_shown(window, cx);
@@ -203,7 +203,7 @@ pub fn close(how: Closing, cx: &mut App) {
         });
         if let (Some((hwnd, previous)), Closing::Cancelled) = (gone, how) {
             // Escape: the window that was in front is in front again (a click elsewhere or another program's window is left alone)
-            let fg = rf_platform::dock::foreground_root();
+            let fg = rf_win::dock::foreground_root();
             if let Some(target) = geo::restore_to(previous, fg, hwnd, geo::exists(previous)) {
                 geo::give_back(target);
             }

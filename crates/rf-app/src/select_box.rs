@@ -197,7 +197,7 @@ fn open(key: SharedString, field: Bounds<Pixels>, choices: Vec<Choice>, window: 
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         if let Ok(h) = w.window_handle() {
             if let RawWindowHandle::Win32(h) = h.as_raw() {
-                rf_platform::window::set_dark_mode(h.hwnd.get(), dark);
+                rf_win::window::set_dark_mode(h.hwnd.get(), dark);
                 crate::glass::keep_out_of_capture(h.hwnd.get());
             }
         }

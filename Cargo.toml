@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/rf-core", "crates/rf-win", "crates/rf-mac", "crates/rf-platform", "crates/rf-app", "crates/rf-archive", "crates/rf-dialog", "crates/rf-shellguard", "crates/rf-player", "crates/rustdecoder", "crates/gpui-windows-shim", "tools/gpustress"]
+members = ["crates/rf-core", "crates/rf-win", "crates/rf-mac", "crates/rf-app", "crates/rf-archive", "crates/rf-dialog", "crates/rf-shellguard", "crates/rf-player", "crates/rustdecoder", "crates/gpui-windows-shim", "tools/gpustress"]
 
 # macOS fork: plain `cargo build` / `cargo test` must not try to compile the Windows-only
-# crates. They stay in the tree (rf-platform still names rf-win for cfg(windows) builds).
+# crates (rf-win is the façade and builds on both; its Windows modules are cfg-gated).
 default-members = [
     "crates/rf-app",
+    "crates/rf-win",
     "crates/rf-mac",
-    "crates/rf-platform",
     "crates/rf-core",
     "crates/rf-archive",
     "crates/rf-player",
@@ -25,7 +25,6 @@ publish = false
 rf-core = { path = "crates/rf-core" }
 rf-win = { path = "crates/rf-win" }
 rf-mac = { path = "crates/rf-mac" }
-rf-platform = { path = "crates/rf-platform" }
 gpui-windows-shim = { path = "crates/gpui-windows-shim" }
 rf-player = { path = "crates/rf-player" }
 rustdecoder = { path = "crates/rustdecoder" }

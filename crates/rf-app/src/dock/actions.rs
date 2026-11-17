@@ -5,7 +5,7 @@
 //! argument over its single-instance pipe (a new tab, the quick search), and when none runs this starts one, exactly as a shortcut
 //! or the hotkey would.
 
-use rf_platform::dock::{ClickAction, DockApp, Launch, Place};
+use rf_win::dock::{ClickAction, DockApp, Launch, Place};
 
 /// The command line that opens the quick search in rustyfiles.
 pub fn quick_search_args() -> Vec<String> {
@@ -61,7 +61,7 @@ pub fn open_place(place: Place) {
 }
 
 /// Whether a start of Task Manager is under way or has just been made (a second right click in that moment must not start another).
-static TASK_MANAGER: std::sync::Mutex<rf_platform::dock::taskmgr::StartGate> = std::sync::Mutex::new(rf_platform::dock::taskmgr::StartGate::new());
+static TASK_MANAGER: std::sync::Mutex<rf_win::dock::taskmgr::StartGate> = std::sync::Mutex::new(rf_win::dock::taskmgr::StartGate::new());
 
 /// The clock the gate is timed on: milliseconds since the first look at it.
 fn gate_ms() -> u64 {
@@ -73,7 +73,7 @@ fn gate_ms() -> u64 {
 /// A right click on the empty glass of an island: Windows' Task Manager, as a right click on Windows' taskbar offers it. Started
 /// through the shell's "open" (no elevation is asked for by us: Task Manager's own manifest decides what it needs), once: a second
 /// right click while it starts, or in the moment after, starts nothing. If Task Manager is already open, starting it again brings it
-/// forward. The shell call is made on the shell thread (`rf_platform::sta`), not on a thread of our own: a worker that calls the shell
+/// forward. The shell call is made on the shell thread (`rf_win::sta`), not on a thread of our own: a worker that calls the shell
 /// becomes an apartment that never pumps, which that module's comment says the shell does not survive. The gate is opened from the
 /// same job when the call returns, so it stays shut for as long as the call is held (an elevation prompt waiting for an answer).
 pub fn open_task_manager() {
@@ -81,11 +81,11 @@ pub fn open_task_manager() {
     if !go {
         return;
     }
-    rf_platform::sta::run(|_| {
-        match rf_platform::dock::launch::start(&rf_platform::dock::taskmgr::launch()) {
+    rf_win::sta::run(|_| {
+        match rf_win::dock::launch::start(&rf_win::dock::taskmgr::launch()) {
             Ok(()) => {}
             // the user said no at the prompt Task Manager's manifest asked for: an answer, not a fault
-            Err(e) if rf_platform::dock::taskmgr::was_cancelled(&e) => log::debug!("dock: Task Manager was not started: the prompt was declined"),
+            Err(e) if rf_win::dock::taskmgr::was_cancelled(&e) => log::debug!("dock: Task Manager was not started: the prompt was declined"),
             Err(e) => log::warn!("dock: cannot start Task Manager: {e:#}"),
         }
         if let Ok(mut g) = TASK_MANAGER.lock() {
@@ -94,21 +94,21 @@ pub fn open_task_manager() {
     });
 }
 
-/// A click on an app: start, bring forward or minimise, as `rf_platform::dock::model::click_action` decides.
+/// A click on an app: start, bring forward or minimise, as `rf_win::dock::model::click_action` decides.
 pub fn click_app(app: &DockApp, foreground: isize) {
-    perform(rf_platform::dock::model::click_action(&app.windows, foreground), app.launch.clone(), |_| {});
+    perform(rf_win::dock::model::click_action(&app.windows, foreground), app.launch.clone(), |_| {});
 }
 
 /// [`click_app`] that says how it went: `done` is called from the worker thread when the action is over, with `None` when it worked and
 /// with the sentence for the user (`shellless::start_failure_text`, the one the Start panel shows) when it failed. The dock's icon shakes
 /// on it.
 pub fn click_app_reporting(app: &DockApp, foreground: isize, done: impl FnOnce(Option<String>) + Send + 'static) {
-    perform(rf_platform::dock::model::click_action(&app.windows, foreground), app.launch.clone(), done);
+    perform(rf_win::dock::model::click_action(&app.windows, foreground), app.launch.clone(), done);
 }
 
 /// A middle click on an app: another instance.
 pub fn middle_click_app(app: &DockApp) {
-    perform(rf_platform::dock::model::middle_click_action(), app.launch.clone(), |_| {});
+    perform(rf_win::dock::model::middle_click_action(), app.launch.clone(), |_| {});
 }
 
 fn perform(action: ClickAction, launch: Option<Launch>, done: impl FnOnce(Option<String>) + Send + 'static) {
@@ -116,7 +116,7 @@ fn perform(action: ClickAction, launch: Option<Launch>, done: impl FnOnce(Option
     // hangs would hold up whichever thread asks, so none of it runs on the UI thread. Any thread of this process may bring a window
     // forward: what lets it is that the process has just received the user's click, not which thread handles it.
     std::thread::spawn(move || {
-        match rf_platform::dock::launch::perform(action, launch.as_ref()) {
+        match rf_win::dock::launch::perform(action, launch.as_ref()) {
             Ok(()) => done(None),
             Err(e) => {
                 log::warn!("dock: {action:?} failed: {e:#}");
@@ -146,7 +146,7 @@ mod tests {
     fn task_manager_is_started_on_the_shell_thread_and_not_on_a_thread_of_our_own() {
         let src = include_str!("actions.rs");
         let body = src.split("pub fn open_task_manager()").nth(1).and_then(|rest| rest.split("\n}").next()).expect("the function is there");
-        assert!(body.contains("rf_platform::sta::run("), "the shell call belongs on the shell thread");
+        assert!(body.contains("rf_win::sta::run("), "the shell call belongs on the shell thread");
         assert!(!body.contains("thread::spawn"), "a worker that calls the shell becomes an apartment that never pumps");
     }
 

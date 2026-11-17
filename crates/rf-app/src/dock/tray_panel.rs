@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use gpui_kit::*;
-use rf_platform::dock::layout::Rect;
+use rf_win::dock::layout::Rect;
 
 use super::{Hooks, PanelId, Side, Slot, host, host_global, open_hidden, panel};
 use crate::dock::host::Kind;

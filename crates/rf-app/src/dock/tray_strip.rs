@@ -1,6 +1,6 @@
 //! The tray strip of the right island (shell plan increment D3): the other programs' notification icons as a row of small pictures to the
 //! left of the island's own symbols, with a chevron that opens the overflow panel (`tray_overflow.rs`, a panel of `panel.rs`) for the
-//! rest. This file is the state and the glue; the arithmetic and the decisions are `rf_platform::dock::{tray_strip, tray_order, tray_tip}`
+//! rest. This file is the state and the glue; the arithmetic and the decisions are `rf_win::dock::{tray_strip, tray_order, tray_tip}`
 //! (pure, tested), the icons and the clicks go through `tray_source.rs` (the one seam to the tray host).
 //!
 //! WHEN THERE IS NO SOURCE NOTHING IS MADE: `start` does nothing without `tray_source::available()`, and with a source that has no
@@ -22,7 +22,7 @@
 //! While it is held nothing else runs, and when nothing is pressed nothing runs at all.
 //!
 //! THE KEYBOARD. The islands are never activated, so keys reach the strip only after `focus_strip`: it takes the foreground for the
-//! island's window (`rf_platform::dock::tray_strip::take_keyboard`), which then gets the keys. The arrows, Home and End move a ring over the
+//! island's window (`rf_win::dock::tray_strip::take_keyboard`), which then gets the keys. The arrows, Home and End move a ring over the
 //! icons and the chevron, Enter or Space is a left click, the context-menu key or Shift+F10 a right click, Tab and Escape leave. The
 //! keyboard goes back to the window that had it (after Escape or Tab at once; after a click once the program has had 400 ms to take the
 //! foreground itself, and only if nobody has; the overflow panel opened from here is told which window that was, so its Escape gives the
@@ -43,11 +43,11 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::layout::{Rect, px as device_px};
-use rf_platform::dock::panel::{self as geo, CloseCause};
-use rf_platform::dock::tray_order::{self, Arrangement, Dest, Loaded, StableId, TrayOrder};
-use rf_platform::dock::tray_strip::{self as ts, ClickKind, DropTarget, Geometry, Layout, PointerButton, Press, Step, StripOutcome};
-use rf_platform::dock::tray_tip as rules;
+use rf_win::dock::layout::{Rect, px as device_px};
+use rf_win::dock::panel::{self as geo, CloseCause};
+use rf_win::dock::tray_order::{self, Arrangement, Dest, Loaded, StableId, TrayOrder};
+use rf_win::dock::tray_strip::{self as ts, ClickKind, DropTarget, Geometry, Layout, PointerButton, Press, Step, StripOutcome};
+use rf_win::dock::tray_tip as rules;
 
 use super::host::{self, Kind};
 use super::look::{Env, Palette};
@@ -452,7 +452,7 @@ fn read_order(cx: &mut App) {
 /// The right island's visible glass and the device px per dock unit (the monitor's scale times the dock's size): what the strip's cells
 /// and chevron are placed with. (The overflow panel's own cells keep the monitor's scale: see `source_rect`.)
 fn glass_and_unit(cx: &App) -> Option<(Rect, f32)> {
-    Some((host::current_glass_rect_on(host::MonId::HOME, Kind::Right, cx)?, rf_platform::dock::size::unit(host::home_work(cx)?.0, super::look::dock_size(cx))))
+    Some((host::current_glass_rect_on(host::MonId::HOME, Kind::Right, cx)?, rf_win::dock::size::unit(host::home_work(cx)?.0, super::look::dock_size(cx))))
 }
 
 /// What the strip shows now, for the right island's empty-glass test (`empty.rs`): `None` without a strip.
@@ -1000,7 +1000,7 @@ pub fn focus_strip(cx: &mut App) -> bool {
     let Some(right) = st.right.upgrade() else { return false };
     // (the island has a focus handle once it has drawn a strip; before that there are no keys to give it)
     let Some(focus) = right.read(cx).focus_handle() else { return false };
-    let previous = rf_platform::dock::foreground_root();
+    let previous = rf_win::dock::foreground_root();
     let first = st.key_at_stop(0);
     cx.update_global::<TrayState, _>(|s, _| {
         s.kb = Some(Keyboard { cursor: 0, on: first, previous: if previous == hwnd { 0 } else { previous }, opened_at: Instant::now(), been_front: false });
@@ -1036,7 +1036,7 @@ pub fn focus_strip(cx: &mut App) -> bool {
 fn key_look(hwnd: isize, cx: &mut App) -> bool {
     let Some(st) = cx.try_global::<TrayState>() else { return false };
     let Some(kb) = st.kb else { return false };
-    let fg = rf_platform::dock::foreground_root();
+    let fg = rf_win::dock::foreground_root();
     let front = fg == hwnd;
     if front && !kb.been_front {
         cx.global_mut::<TrayState>().kb = Some(Keyboard { been_front: true, ..kb });
@@ -1076,7 +1076,7 @@ fn leave_keyboard(back: GiveBack, cx: &mut App) {
             if back == GiveBack::AfterClick {
                 cx.background_executor().timer(CLICK_SETTLE).await;
             }
-            let fg = rf_platform::dock::foreground_root();
+            let fg = rf_win::dock::foreground_root();
             if let Some(target) = geo::restore_to(kb.previous, fg, hwnd, geo::exists(kb.previous)) {
                 geo::give_back(target);
             }
@@ -1152,7 +1152,7 @@ mod tests {
     fn the_strips_padding_is_the_islands() {
         assert_eq!(ts::SIDE_PAD, super::super::plan::SIDE_PAD);
         assert_eq!(ts::SEP_GAP, super::super::plan::RIGHT_SEP_GAP);
-        assert_eq!(ts::SEP_W, rf_platform::dock::layout::SEPARATOR_WIDTH);
+        assert_eq!(ts::SEP_W, rf_win::dock::layout::SEPARATOR_WIDTH);
     }
 
     #[test]
@@ -1370,7 +1370,7 @@ mod tests {
         let mut snap = tray_source::test_snapshot(0);
         let mut extra = snap.icons[0].clone();
         extra.key = 900;
-        extra.id = rf_platform::dock::tray_order::StableId::from_program(r"C:\Fake\Yeni.exe", 9);
+        extra.id = rf_win::dock::tray_order::StableId::from_program(r"C:\Fake\Yeni.exe", 9);
         snap.icons.insert(0, extra);
         let _ = st.set_snapshot(Some(snap), Some(2560.0));
         let k = st.kb.unwrap();

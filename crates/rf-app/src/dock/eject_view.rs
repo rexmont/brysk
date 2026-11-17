@@ -4,10 +4,10 @@
 //! The user asked for it as OUR window ("aygıt çıkarma bizim penceremiz ile olsun"), not Windows' own notification icon and its
 //! menu, which reach a taskbar that is not Explorer's only by luck. The drives are read by the right island (every few seconds,
 //! off the UI thread) and kept in [`Removables`]; this view draws them and ejects one the way the file manager does
-//! (`rf_platform::volume::eject`: the shell's own verb, on the shell thread).
+//! (`rf_win::volume::eject`: the shell's own verb, on the shell thread).
 //!
 //! NOT COVERED YET: a USB hard disk reports itself as a fixed drive and the other hot-plug devices Windows' own list has are not
-//! drives at all; only what `rf_platform::volume::removable_drives` gives is here.
+//! drives at all; only what `rf_win::volume::removable_drives` gives is here.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -17,7 +17,7 @@ use gpui_kit::assets::IconName as L;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::panel::{self as geo, CloseCause};
+use rf_win::dock::panel::{self as geo, CloseCause};
 
 use super::backdrop::IslandGlass;
 use super::panel_parts::Look;
@@ -74,7 +74,7 @@ pub fn read_drives() -> Vec<(char, String)> {
     if std::env::var_os("RUSTYFILES_EJECT_FAKE").is_some() {
         return vec![('Z', "DENEME".to_string())];
     }
-    rf_platform::volume::removable_drives()
+    rf_win::volume::removable_drives()
 }
 
 /// The panel's size for this many drives.
@@ -201,7 +201,7 @@ impl EjectView {
         cx.spawn(async move |_, cx| {
             let done = cx
                 .background_executor()
-                .spawn(async move { rf_platform::sta::call(Duration::from_secs(30), move || rf_platform::volume::eject(letter).map_err(|e| e.to_string())) })
+                .spawn(async move { rf_win::sta::call(Duration::from_secs(30), move || rf_win::volume::eject(letter).map_err(|e| e.to_string())) })
                 .await;
             let failed = !matches!(done, Some(Ok(())));
             if failed {

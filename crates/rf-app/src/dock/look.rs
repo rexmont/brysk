@@ -100,7 +100,7 @@ pub struct Env {
     pub accent: u32,
     /// Device px per logical px of the primary monitor.
     pub scale: f32,
-    /// The dock's size factor (`rf_platform::dock::size`; 1.0 is the default size). Every length of the islands is multiplied by it; the
+    /// The dock's size factor (`rf_win::dock::size`; 1.0 is the default size). Every length of the islands is multiplied by it; the
     /// panels' own contents are not (they keep `scale`).
     pub size: f32,
 }
@@ -116,17 +116,17 @@ impl Env {
     /// The environment for a dock of this size factor (1.0 is the default size).
     pub fn read_sized(scale: f32, size: f32) -> Env {
         Env {
-            dark: rf_platform::accent::system_is_dark(),
-            accent: rf_platform::accent::color(),
+            dark: rf_win::accent::system_is_dark(),
+            accent: rf_win::accent::color(),
             scale: if scale > 0.0 { scale } else { 1.0 },
-            size: rf_platform::dock::size::sane(size),
+            size: rf_win::dock::size::sane(size),
         }
     }
 
     /// Device px per dock unit (a length of the default-size dock): the monitor's scale times the dock's size. What the layout takes
     /// where it took the monitor's scale before.
     pub fn unit(&self) -> f32 {
-        rf_platform::dock::size::unit(self.scale, self.size)
+        rf_win::dock::size::unit(self.scale, self.size)
     }
 }
 

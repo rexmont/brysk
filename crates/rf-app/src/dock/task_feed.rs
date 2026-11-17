@@ -6,7 +6,7 @@
 //! watched twice and swept twice. Now the watch is started once, by the first island, and tells every island that listens; and the
 //! listing is made once for the islands that ask while no window event has come in between (the second island gets the first one's
 //! answer). What stays per dock is only what is drawn, laid out and pointed at: each island applies its own monitor's rule
-//! (`rf_platform::dock::monitors::filter_groups`) to the shared listing.
+//! (`rf_win::dock::monitors::filter_groups`) to the shared listing.
 //!
 //! With ONE dock nothing is kept: the listing is made at every request, as before, and the only addition is a lock.
 
@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedSender;
-use rf_platform::tasklist::{self, Changes, Task, TaskWatch};
+use rf_win::tasklist::{self, Changes, Task, TaskWatch};
 
-/// The windows as the dock groups them (`rf_platform::dock::identity::running_groups`).
+/// The windows as the dock groups them (`rf_win::dock::identity::running_groups`).
 pub type Groups = Vec<(String, Vec<Task>)>;
 
 /// A listing is reused for at most this long even when no event came: a watch that failed to start would otherwise leave it stale for
@@ -78,7 +78,7 @@ fn reusable(at_events: u64, now_events: u64, age: Duration) -> bool {
 pub fn running_groups(shared: bool) -> Groups {
     if !shared {
         LISTING.lock().unwrap_or_else(|p| p.into_inner()).take();
-        return rf_platform::dock::identity::running_groups();
+        return rf_win::dock::identity::running_groups();
     }
     // (the lock is held across the listing on purpose: the island that comes second waits and then takes the first one's answer)
     let mut cache = LISTING.lock().unwrap_or_else(|p| p.into_inner());
@@ -89,7 +89,7 @@ pub fn running_groups(shared: bool) -> Groups {
     {
         return l.groups.clone();
     }
-    let groups = rf_platform::dock::identity::running_groups();
+    let groups = rf_win::dock::identity::running_groups();
     *cache = Some(Listing { events: seen, at: Instant::now(), groups: groups.clone() });
     groups
 }

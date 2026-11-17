@@ -1,5 +1,5 @@
 //! The two things of the system the right island shows ALL the time, so they run for as long as the dock does: the sound (volume
-//! level and mute) and the network (Ethernet, Wi-Fi bars, not connected). Both come from `rf_platform::sysstatus`, which calls back from
+//! level and mute) and the network (Ethernet, Wi-Fi bars, not connected). Both come from `rf_win::sysstatus`, which calls back from
 //! its own threads when Windows says something changed; here that is handed to the app's thread through a channel and kept in a
 //! global that the island's symbols and the control centre read. Nothing is polled.
 //!
@@ -9,9 +9,9 @@
 use futures::StreamExt;
 use gpui_kit::assets::IconName as L;
 use gpui_kit::*;
-use rf_platform::sysstatus::Subscription;
-use rf_platform::sysstatus::audio::{self, AudioSnapshot};
-use rf_platform::sysstatus::network::{self, NetworkSnapshot};
+use rf_win::sysstatus::Subscription;
+use rf_win::sysstatus::audio::{self, AudioSnapshot};
+use rf_win::sysstatus::network::{self, NetworkSnapshot};
 
 use super::cc_model;
 use super::right::RightIsland;

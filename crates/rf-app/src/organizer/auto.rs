@@ -17,8 +17,8 @@ use gpui_kit::*;
 use rf_core::organize::safety::norm;
 use rf_core::organize::store::RulesFile;
 use rf_core::organize::{Dest, ProtectedPaths, Rule};
-use rf_platform::tree_watch::TreeWatch;
-use rf_platform::watch::DirWatch;
+use rf_win::tree_watch::TreeWatch;
+use rf_win::watch::DirWatch;
 
 use super::{RunSpec, Source};
 use crate::t;
@@ -169,12 +169,12 @@ pub fn sync(cx: &mut App) {
             let _ = tx.lock().unwrap().unbounded_send(Msg { key: key.clone(), paths, rescan, attempt: 0 });
         };
         if w.tree {
-            match rf_platform::tree_watch::watch_tree(&w.folder, SETTLE, move |c| send(c.paths, c.rescan)) {
+            match rf_win::tree_watch::watch_tree(&w.folder, SETTLE, move |c| send(c.paths, c.rescan)) {
                 Ok(t) => watches.push(Watch { _dir: None, _tree: Some(t) }),
                 Err(e) => log::warn!("organizer: cannot watch {}: {e:#}", w.folder.display()),
             }
         } else {
-            match rf_platform::watch::watch_dir_changes(&w.folder, SETTLE, move |c| send(c.names.iter().map(|n| folder.join(n)).collect(), c.rescan)) {
+            match rf_win::watch::watch_dir_changes(&w.folder, SETTLE, move |c| send(c.names.iter().map(|n| folder.join(n)).collect(), c.rescan)) {
                 Ok(d) => watches.push(Watch { _dir: Some(d), _tree: None }),
                 Err(e) => log::warn!("organizer: cannot watch {}: {e:#}", w.folder.display()),
             }

@@ -1,4 +1,4 @@
-//! The middle island's icons kept at several sizes. One picture per kept size (`rf_platform::dock::iconpick::level_sizes`: the rest size,
+//! The middle island's icons kept at several sizes. One picture per kept size (`rf_win::dock::iconpick::level_sizes`: the rest size,
 //! the peak size and a step or two between, each made by our own resampling), and the one drawn is the smallest that is not smaller
 //! than the size the icon is drawn at right then. So the picture at rest is pixel for pixel what is on the screen, the one at the
 //! peak is too, and between them the toolkit's plain bilinear sampling reduces a picture by a quarter at most (so a bilinear tap never
@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use gpui_kit::{App, RenderImage};
-use rf_platform::dock::iconpick;
+use rf_win::dock::iconpick;
 
 /// How many icon sets the store keeps before it lets go of the ones no item of the dock uses.
 pub const LIMIT: usize = 64;

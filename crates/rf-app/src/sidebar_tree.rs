@@ -16,9 +16,9 @@ use std::time::{Duration, Instant};
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use rf_core::navtree::{Change, DirItem, ListFailure, LoadRequest, NavTree, NodeId, RootKind, RootSpec, Row, RowKind, SLOW_LOAD_MS, TreeFilter, TreeKey, norm, scroll_goal, visible_range};
-use rf_platform::DriveKind;
-use rf_platform::listing::ListError;
-use rf_platform::watch::DirWatch;
+use rf_win::DriveKind;
+use rf_win::listing::ListError;
+use rf_win::watch::DirWatch;
 
 use super::*;
 
@@ -79,7 +79,7 @@ impl Slide {
     fn at(&self, now: Instant) -> (f32, bool) {
         let Some(since) = self.since else { return (self.to, false) };
         let x = now.saturating_duration_since(since).as_secs_f32() * 1000.0 / SLIDE_MS;
-        if x >= 1.0 { (self.to, false) } else { (self.from + (self.to - self.from) * rf_platform::dock::spring::curve_with(x, 0.0), true) }
+        if x >= 1.0 { (self.to, false) } else { (self.from + (self.to - self.from) * rf_win::dock::spring::curve_with(x, 0.0), true) }
     }
 
     /// Sends it to `to`: from where it is at this moment (a slide that is turned around does not jump), or at once.
@@ -198,7 +198,7 @@ pub struct Holder {
 /// The folders of a folder, on a worker thread.
 fn list_folders(path: &Path) -> Result<Vec<DirItem>, ListFailure> {
     let mut out = Vec::new();
-    let r = rf_platform::list_dir(path, 4096, &|| false, &mut |batch| {
+    let r = rf_win::list_dir(path, 4096, &|| false, &mut |batch| {
         out.extend(batch.iter().filter(|e| e.is_dir()).map(dir_item));
     });
     match r {
@@ -214,7 +214,7 @@ fn read_changes(dir: &Path, names: Vec<String>) -> Result<Vec<Change>, ListError
     names
         .into_iter()
         .map(|n| {
-            rf_platform::stat_entry(dir, &n).map(|e| match e {
+            rf_win::stat_entry(dir, &n).map(|e| match e {
                 Some(e) if e.is_dir() => Change { name: e.name.to_string(), item: Some(dir_item(&e)) },
                 _ => Change { name: n, item: None },
             })
@@ -228,7 +228,7 @@ fn dir_item(e: &rf_core::Entry) -> DirItem {
         label: e.label.as_deref().map(str::to_string),
         hidden: e.is_hidden(),
         system: e.is_system(),
-        own_icon: rf_platform::thumbs::folder_has_own_icon(e.attrs),
+        own_icon: rf_win::thumbs::folder_has_own_icon(e.attrs),
     }
 }
 
@@ -399,7 +399,7 @@ impl SidebarTree {
             // Opening the directory handle can block (an offline share): not on the UI thread.
             let setup = cx.background_spawn(async move {
                 let dir = path.clone();
-                rf_platform::watch::watch_dir_changes(&path, Duration::from_millis(250), move |ch| {
+                rf_win::watch::watch_dir_changes(&path, Duration::from_millis(250), move |ch| {
                     // read on the watcher's own thread: which names are folders now
                     let msg = if ch.rescan || ch.names.is_empty() {
                         Msg::Rescan(dir.clone())
@@ -1100,7 +1100,7 @@ mod tests {
         assert_eq!(tree.watch_set(), std::slice::from_ref(&d));
         let (tx, rx) = std::sync::mpsc::channel::<Msg>();
         let dir = d.clone();
-        let w = rf_platform::watch::watch_dir_changes(&d, Duration::from_millis(100), move |ch| {
+        let w = rf_win::watch::watch_dir_changes(&d, Duration::from_millis(100), move |ch| {
             let msg = if ch.rescan || ch.names.is_empty() {
                 Msg::Rescan(dir.clone())
             } else {

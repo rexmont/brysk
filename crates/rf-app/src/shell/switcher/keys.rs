@@ -1,6 +1,6 @@
 //! GPUI's key events as the chord wants them. Pure.
 
-use rf_platform::switcher::chord::{Key, KeyInput};
+use rf_win::switcher::chord::{Key, KeyInput};
 
 /// The chord's key for the name GPUI gives a keystroke. The "same app" key is the back quote; on layouts where that key types
 /// something else GPUI names it differently and the key is just another key here (the real chord, fed by the hook, goes by the

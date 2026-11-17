@@ -1,8 +1,8 @@
 //! The condition in words under the dock's temperature ("Çok bulutlu", as Windows' own taskbar shows it): one text for every group of
-//! WMO codes `rf_platform::weather` knows, Turkish with an English pair. A code outside every group has no text (the picture and the
+//! WMO codes `rf_win::weather` knows, Turkish with an English pair. A code outside every group has no text (the picture and the
 //! temperature are shown, as before).
 
-use rf_platform::weather::{Condition, condition};
+use rf_win::weather::{Condition, condition};
 
 use crate::t;
 

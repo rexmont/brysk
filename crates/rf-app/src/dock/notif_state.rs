@@ -1,7 +1,7 @@
 //! What the dock keeps of the notification list while the bell's panel is CLOSED: a count, nothing else (for the bell's dot).
 //!
 //! It is read once when the dock starts, again when the panel closes (the panel tells what it last saw) and, when the notification
-//! folder of Windows changes, once per burst of changes (`rf_platform::toasts::hint`: a plain directory-change wait, no polling). So the
+//! folder of Windows changes, once per burst of changes (`rf_win::toasts::hint`: a plain directory-change wait, no polling). So the
 //! dot is as fresh as the last signal; if the folder cannot be watched it is as fresh as the last time the panel was open. The
 //! texts of the notifications are never kept here: they are read for the count and dropped.
 //!
@@ -12,8 +12,8 @@
 
 use futures::StreamExt;
 use gpui_kit::*;
-use rf_platform::toasts::hint::{Dot, DotCount};
-use rf_platform::toasts::{self, Access};
+use rf_win::toasts::hint::{Dot, DotCount};
+use rf_win::toasts::{self, Access};
 
 use super::right::RightIsland;
 

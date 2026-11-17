@@ -17,7 +17,7 @@ path = "src/bin/directlook.rs"
 # the speed test asks rustyfiles.com for a short result link (already in the tree through velopack)
 ureq = "3.5"
 rf-core.workspace = true
-rf-platform = { path = "../rf-platform" }
+rf-win.workspace = true
 # installer and auto-update (GitHub Releases)
 velopack = "=1.2.161"
 rf-archive.workspace = true

@@ -201,7 +201,7 @@ impl FolderView {
             .fold(0., f32::max);
         // git: the states this folder's items have now (a new state is a new status, and the column is measured again)
         let git_w = match (&self.git, &dir) {
-            (Some(g), Some(d)) => rf_platform::git::states_in(g, d).into_iter().map(|s| width(super::git_label(s), sm)).fold(0., f32::max),
+            (Some(g), Some(d)) => rf_win::git::states_in(g, d).into_iter().map(|s| width(super::git_label(s), sm)).fold(0., f32::max),
             _ => 0.,
         };
 

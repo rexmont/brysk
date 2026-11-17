@@ -49,7 +49,7 @@ impl PreviewView {
         let plan = cx.background_spawn(async move {
             // (a folder that cannot be opened must not pass for "nothing matches")
             let folder_problem = match &source {
-                Source::Scan { root, .. } => rf_platform::organize::folder_problem(root),
+                Source::Scan { root, .. } => rf_win::organize::folder_problem(root),
                 Source::Paths(_) => None,
             };
             (super::make_plan(&rules, &source, &HashSet::new(), &protected, &|| flag.load(Ordering::Relaxed)), folder_problem)

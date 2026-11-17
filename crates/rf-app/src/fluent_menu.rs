@@ -265,14 +265,14 @@ pub fn current(window: &Window, cx: &App) -> Option<Entity<MenuView>> {
 }
 
 /// The screen rectangle of a window of ours (device px); `None` when it is gone.
-fn screen_rect(w: AnyWindowHandle, cx: &mut App) -> Option<rf_platform::dock::layout::Rect> {
+fn screen_rect(w: AnyWindowHandle, cx: &mut App) -> Option<rf_win::dock::layout::Rect> {
     #[cfg(windows)]
     {
         let hwnd = w.update(cx, |_, window, _| crate::look::window::hwnd_of(window)).ok()?;
         let mut r = windows::Win32::Foundation::RECT::default();
         // SAFETY: a plain read of a window's rectangle.
         unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowRect(windows::Win32::Foundation::HWND(hwnd as *mut _), &mut r).ok()? };
-        Some(rf_platform::dock::layout::Rect { left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+        Some(rf_win::dock::layout::Rect { left: r.left, top: r.top, right: r.right, bottom: r.bottom })
     }
     #[cfg(not(windows))]
     {
@@ -309,7 +309,7 @@ fn front_is_ours() -> bool {
 /// never got the foreground is never told that it lost it). A look every [`ORPHAN_LOOK`] while this menu is the open one; nothing
 /// runs once it is closed.
 fn watch_orphan(view: Entity<MenuView>, cx: &mut App) {
-    use rf_platform::dock::panel as geo;
+    use rf_win::dock::panel as geo;
     let opened = Instant::now();
     cx.spawn(async move |cx| {
         let mut was_down = geo::any_button_down();
@@ -458,7 +458,7 @@ fn open_level(
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         if let Ok(h) = w.window_handle() {
             if let RawWindowHandle::Win32(h) = h.as_raw() {
-                rf_platform::window::set_dark_mode(h.hwnd.get(), dark);
+                rf_win::window::set_dark_mode(h.hwnd.get(), dark);
                 crate::glass::keep_out_of_capture(h.hwnd.get());
             }
         }
@@ -548,7 +548,7 @@ impl Render for LevelView {
 struct IconCache(std::collections::HashMap<u64, Arc<RenderImage>>);
 impl Global for IconCache {}
 
-pub fn shell_icon(icon: &rf_platform::ctxmenu::ShellIcon, cx: &mut App) -> Option<Arc<RenderImage>> {
+pub fn shell_icon(icon: &rf_win::ctxmenu::ShellIcon, cx: &mut App) -> Option<Arc<RenderImage>> {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (icon.width, icon.height).hash(&mut h);

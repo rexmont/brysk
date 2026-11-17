@@ -1,5 +1,5 @@
 //! What happens when the last main window is gone: the app ends, or stays in the notification area. Also looked at again when a
-//! second launch's request (see `rf_platform::handover`) held back a quit and then left no window open (GitHub issue 15).
+//! second launch's request (see `rf_win::handover`) held back a quit and then left no window open (GitHub issue 15).
 
 use gpui_kit::App;
 

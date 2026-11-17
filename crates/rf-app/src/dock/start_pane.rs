@@ -1,7 +1,7 @@
 //! The Start panel's detail pane: beside the result list, for the result that is selected. Its picture and name, what kind of thing it
 //! is, a few facts (where a file is, how big, when it was changed; an app's maker and version), the things that can be done with it,
 //! and for an app the lines of its jump list (its tasks and its recent documents). A child module of `start.rs`: it draws that view's
-//! own state and shares its private parts. The rules (which actions, in which order, which keys) are `rf_platform::dock::startpane`.
+//! own state and shares its private parts. The rules (which actions, in which order, which keys) are `rf_win::dock::startpane`.
 //!
 //! HOW IT IS USED. The pane follows the selection: the arrows move it, and the small arrow at the end of a row selects that row
 //! without opening it (a click on the row itself opens it, as before). Tab from the field puts the keyboard on the pane's rows: Up and
@@ -16,7 +16,7 @@
 //! dash until they are known; an app's "open its folder" is offered until the shell says it has no program), and what arrives late
 //! (the jump list) is added below everything else.
 
-use rf_platform::dock::startpane::{self as pane, Act, Facts, Kind};
+use rf_win::dock::startpane::{self as pane, Act, Facts, Kind};
 
 use super::*;
 use crate::dock::jump_source::{self, JumpApp};
@@ -66,7 +66,7 @@ fn read(entry: &Entry) -> Read {
             let app = AppEntry { id: id.clone(), name: name.clone() };
             let program = startapps::location(&app);
             let exe = program.clone().filter(|p| is_program(p));
-            let info = exe.as_deref().and_then(rf_platform::pe::info);
+            let info = exe.as_deref().and_then(rf_win::pe::info);
             // (the app is named by the panel already: `pinned` keeps that name)
             let jump_app = JumpApp { key: id.to_lowercase(), name: name.clone(), pinned: true, aumid: Some(id.clone()), exe };
             let jump = jump_source::sections(&jump_app);
@@ -83,7 +83,7 @@ fn read(entry: &Entry) -> Read {
             let meta = std::fs::metadata(path).ok();
             let modified_ms = meta.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64);
             // (a program file says who made it and which version it is, like an app)
-            let info = (!dir && is_program(path)).then(|| rf_platform::pe::info(path)).flatten();
+            let info = (!dir && is_program(path)).then(|| rf_win::pe::info(path)).flatten();
             Read {
                 size: meta.filter(|_| !dir).map(|m| m.len()),
                 modified_ms,
@@ -308,7 +308,7 @@ impl StartView {
                 if let Some(path) = path {
                     Self::let_it_come_forward();
                     std::thread::spawn(move || {
-                        if rf_platform::sta::call(Duration::from_secs(15), move || rf_platform::shell::open_with(&path)).and_then(Result::ok).is_none() {
+                        if rf_win::sta::call(Duration::from_secs(15), move || rf_win::shell::open_with(&path)).and_then(Result::ok).is_none() {
                             log::warn!("start: the open-with dialog could not be shown");
                         }
                     });

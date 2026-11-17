@@ -45,11 +45,11 @@ pub enum CopyVerify {
 }
 
 impl CopyVerify {
-    pub fn engine(self) -> rf_platform::fastcopy::Verify {
+    pub fn engine(self) -> rf_win::fastcopy::Verify {
         match self {
-            CopyVerify::Off => rf_platform::fastcopy::Verify::Off,
-            CopyVerify::Quick => rf_platform::fastcopy::Verify::Quick,
-            CopyVerify::Full => rf_platform::fastcopy::Verify::Full,
+            CopyVerify::Off => rf_win::fastcopy::Verify::Off,
+            CopyVerify::Quick => rf_win::fastcopy::Verify::Quick,
+            CopyVerify::Full => rf_win::fastcopy::Verify::Full,
         }
     }
 }
@@ -142,8 +142,8 @@ pub enum DockMagnify {
 
 impl DockMagnify {
     /// What the dock's magnification takes.
-    pub fn strength(self) -> rf_platform::dock::magnify::Strength {
-        use rf_platform::dock::magnify::Strength;
+    pub fn strength(self) -> rf_win::dock::magnify::Strength {
+        use rf_win::dock::magnify::Strength;
         match self {
             DockMagnify::Off => Strength::Off,
             DockMagnify::Subtle => Strength::Subtle,
@@ -177,11 +177,11 @@ pub enum DockAppsWhere {
 }
 
 impl DockAppsWhere {
-    /// The rule `rf_platform::dock::monitors` works with.
-    pub fn rule(self) -> rf_platform::dock::monitors::AppsWhere {
+    /// The rule `rf_win::dock::monitors` works with.
+    pub fn rule(self) -> rf_win::dock::monitors::AppsWhere {
         match self {
-            DockAppsWhere::All => rf_platform::dock::monitors::AppsWhere::Everywhere,
-            DockAppsWhere::Window => rf_platform::dock::monitors::AppsWhere::WindowMonitor,
+            DockAppsWhere::All => rf_win::dock::monitors::AppsWhere::Everywhere,
+            DockAppsWhere::Window => rf_win::dock::monitors::AppsWhere::WindowMonitor,
         }
     }
 }
@@ -196,7 +196,7 @@ pub enum BackdropPref {
     MicaAlt,
     Acrylic,
     Solid,
-    /// Experimental: the screen behind the window, bent and frosted like glass (rf_platform::glass).
+    /// Experimental: the screen behind the window, bent and frosted like glass (rf_win::glass).
     /// An older version does not know this value and reads the field as the default (Mica);
     /// the other settings are kept (see `parse_lenient`).
     Glass,
@@ -428,7 +428,7 @@ pub struct Settings {
     /// Folder aliases: `@name` in the address box (Files' folder aliases).
     pub folder_aliases: std::collections::BTreeMap<String, PathBuf>,
     /// The drives that are not listed (the sidebar, the Home page, the address bar's list of drives), as letters ("V"). A drive
-    /// Explorer hides by its own policy is hidden too, without being named here (`rf_platform::drives::visible_drives`).
+    /// Explorer hides by its own policy is hidden too, without being named here (`rf_win::drives::visible_drives`).
     pub hidden_drives: Vec<String>,
     /// The accent colour of rustyfiles as "#RRGGBB"; empty: Windows' own accent (Settings > Appearance).
     pub accent_color: String,
@@ -492,14 +492,14 @@ pub struct Settings {
     /// 0.05 … 0.6
     pub background_opacity: f32,
     /// HyperGlass look (Settings > Appearance, shown while the backdrop is Glass), each 0..=100; a value outside is cut to that when it is
-    /// used. See `rf_platform::glass::LookParams` for what the first four do; the surface value is the app's own two washes over the glass.
+    /// used. See `rf_win::glass::LookParams` for what the first four do; the surface value is the app's own two washes over the glass.
     pub hg_frost: u8,
     pub hg_tint: u8,
     pub hg_refraction: u8,
     pub hg_saturation: u8,
     pub hg_surface: u8,
     /// Freeze the glass of this app's windows while they are not in front: the last picture stays and nothing is captured or drawn for
-    /// the window until it is in front again or the pointer is over it (`rf_platform::glass::set_freeze_when_behind`). Off by default.
+    /// the window until it is in front again or the pointer is over it (`rf_win::glass::set_freeze_when_behind`). Off by default.
     pub hg_freeze_behind: bool,
     /// UI font family; `None` = Segoe UI Variable / system.
     pub font: Option<String>,
@@ -598,7 +598,7 @@ pub struct Settings {
     /// The city the dock's weather is for. Empty: no weather and no network request.
     pub dock_weather_city: String,
     /// The dock's weather is for the PC's approximate position from Windows' location service (off by default). The order: the position
-    /// when this is on and Windows gives it, else the city above, else no weather (see `rf_platform::weather_location`). The position is
+    /// when this is on and Windows gives it, else the city above, else no weather (see `rf_win::weather_location`). The position is
     /// never stored here or anywhere else.
     pub dock_weather_location: bool,
     /// The dock's logo opens our own Start panel and its search field our own search (on). Off: the old behaviour, the logo sends the
@@ -616,7 +616,7 @@ pub struct Settings {
     /// it sends Win+N.
     pub dock_own_notifications: bool,
     /// The order of the right island's own buttons, as keys ("eject", "security", "network", "volume"); empty: the usual order. A list
-    /// that names only some, or names a key this version does not know, is completed (`rf_platform::dock::status_order`).
+    /// that names only some, or names a key this version does not know, is completed (`rf_win::dock::status_order`).
     pub dock_status_order: Vec<String>,
     /// Which of those buttons the user hid (the same keys); empty: all are shown.
     pub dock_status_hidden: Vec<String>,
@@ -882,7 +882,7 @@ pub fn animations() -> bool {
     match ANIM.load(Ordering::Relaxed) {
         x if x == AnimPref::On as u8 => true,
         x if x == AnimPref::Off as u8 => false,
-        _ => rf_platform::sysparams::client_area_animation(),
+        _ => rf_win::sysparams::client_area_animation(),
     }
 }
 
@@ -892,12 +892,12 @@ pub fn solid_backdrop() -> bool {
     SOLID.load(Ordering::Relaxed) || !materials_available()
 }
 
-/// Whether Windows gives windows a material (Mica, Mica Alt, Acrylic): from Windows 11 22H2 on (`rf_platform::osver`, issue 24). Where it
+/// Whether Windows gives windows a material (Mica, Mica Alt, Acrylic): from Windows 11 22H2 on (`rf_win::osver`, issue 24). Where it
 /// does not, every window is the "Solid" look and every popup paints itself: see `theme::window_material` and `theme::popup_fill`.
 /// `RUSTYFILES_NO_BACKDROP=1` answers "no" on any Windows, to look at that state on a developer's PC. Read once.
 pub fn materials_available() -> bool {
     static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *V.get_or_init(|| std::env::var_os("RUSTYFILES_NO_BACKDROP").is_none() && rf_platform::osver::system_backdrops())
+    *V.get_or_init(|| std::env::var_os("RUSTYFILES_NO_BACKDROP").is_none() && rf_win::osver::system_backdrops())
 }
 
 /// How strongly the app's own washes lie over the glass, 0..=100 (Settings > HyperGlass > Surface wash).
@@ -1081,8 +1081,8 @@ impl Settings {
     }
 
     /// The four values the engine takes, cut to 0..=100.
-    pub fn hyperglass_look(&self) -> rf_platform::glass::LookParams {
-        rf_platform::glass::LookParams {
+    pub fn hyperglass_look(&self) -> rf_win::glass::LookParams {
+        rf_win::glass::LookParams {
             frost: f32::from(self.hg_frost.min(100)),
             tint: f32::from(self.hg_tint.min(100)),
             refraction: f32::from(self.hg_refraction.min(100)),
@@ -1104,14 +1104,14 @@ impl Settings {
         sync_name_index(self.name_index, &self.index_excluded);
         crate::i18n::set(self.language);
         crate::aliases::set(self.folder_aliases.clone());
-        rf_platform::openrules::set(self.open_rules.clone());
-        rf_platform::drives::set_hidden(rf_platform::drives::mask_of_letters(&self.hidden_drives));
+        rf_win::openrules::set(self.open_rules.clone());
+        rf_win::drives::set_hidden(rf_win::drives::mask_of_letters(&self.hidden_drives));
         // (a text that is no colour is no colour: Windows' accent)
-        rf_platform::accent::set_override(rf_platform::accent::parse_hex(&self.accent_color));
+        rf_win::accent::set_override(rf_win::accent::parse_hex(&self.accent_color));
         crate::background::sync_tray(self.run_in_background);
         crate::quick_search::sync(self);
         // (the system's own short date and time for the "System" style and older dates, issue 59; set once)
-        rf_core::format::set_system_format(rf_platform::datefmt::short_date_time);
+        rf_core::format::set_system_format(rf_win::datefmt::short_date_time);
         rf_core::format::set_date_style(match self.date_format {
             DatePref::Application => rf_core::format::DateStyle::Relative,
             DatePref::System => rf_core::format::DateStyle::Local,
@@ -1122,8 +1122,8 @@ impl Settings {
         ANIM.store(self.animations as u8, Ordering::Relaxed);
         // HyperGlass: the engine redraws every glass window once when the look changes, and does nothing for the same look again
         HG_SURFACE.store(self.hg_surface.min(100), Ordering::Relaxed);
-        rf_platform::glass::set_look(self.hyperglass_look());
-        rf_platform::glass::set_freeze_when_behind(self.hg_freeze_behind);
+        rf_win::glass::set_look(self.hyperglass_look());
+        rf_win::glass::set_freeze_when_behind(self.hg_freeze_behind);
         gpui_windows::SMOOTH_SCROLL.store(self.smooth_scroll, Ordering::Relaxed);
         THEME.store(
             match self.theme {
@@ -1355,7 +1355,7 @@ yeni_alan = 3").unwrap();
     #[test]
     fn hyperglass_defaults_match_the_engine_and_the_shipped_look() {
         let d = Settings::default();
-        let engine = rf_platform::glass::LookParams::DEFAULT;
+        let engine = rf_win::glass::LookParams::DEFAULT;
         assert_eq!(d.hyperglass_look(), engine, "the settings default is the engine's default");
         assert_eq!(super::HG_DEFAULT.map(f32::from)[..4], [engine.frost, engine.tint, engine.refraction, engine.saturation]);
         assert_eq!(d.hg_surface, 50);
@@ -1446,7 +1446,7 @@ fn sync_name_index(on: bool, excluded: &[String]) {
         let changed = e.as_deref() != Some(excluded);
         if changed {
             *e = Some(excluded.to_vec());
-            rf_platform::nameindex::set_excluded(&excluded.iter().map(std::path::PathBuf::from).collect::<Vec<_>>());
+            rf_win::nameindex::set_excluded(&excluded.iter().map(std::path::PathBuf::from).collect::<Vec<_>>());
         }
         changed
     };
@@ -1457,7 +1457,7 @@ fn sync_name_index(on: bool, excluded: &[String]) {
         return;
     }
     if !on {
-        std::thread::spawn(rf_platform::indexer::stop);
+        std::thread::spawn(rf_win::indexer::stop);
         return;
     }
     let delay = if was == 0 { 5 } else { 0 };
@@ -1477,9 +1477,9 @@ fn sync_name_index(on: bool, excluded: &[String]) {
         // RUSTYFILES_INDEX_ROOTS="E:\;F:\" picks the roots (testing)
         let roots = match std::env::var("RUSTYFILES_INDEX_ROOTS") {
             Ok(v) => v.split(';').filter(|s| !s.is_empty()).map(std::path::PathBuf::from).collect(),
-            Err(_) => rf_platform::indexer::local_roots(),
+            Err(_) => rf_win::indexer::local_roots(),
         };
-        rf_platform::indexer::start(roots, dir);
+        rf_win::indexer::start(roots, dir);
     });
 }
 
@@ -1564,14 +1564,14 @@ dock_own_notifications = 3
     #[test]
     fn the_magnification_is_full_by_default_and_round_trips() {
         use super::DockMagnify;
-        use rf_platform::dock::magnify::Strength;
+        use rf_win::dock::magnify::Strength;
         assert_eq!(Settings::default().dock_magnify, DockMagnify::Full);
         // the user's own programs for a kind of file: none at first, and a list comes back from the file as it was written
         assert!(Settings::default().open_rules.is_empty());
         // the accent: Windows' own until the user writes a colour, and a text that is no colour is none
         assert!(Settings::default().accent_color.is_empty());
         assert_eq!(Settings::parse_lenient("accent_color = '#F7630C'\n").unwrap().accent_color, "#F7630C");
-        assert_eq!(rf_platform::accent::parse_hex(&Settings::parse_lenient("accent_color = 'turuncu'\n").unwrap().accent_color), None);
+        assert_eq!(rf_win::accent::parse_hex(&Settings::parse_lenient("accent_color = 'turuncu'\n").unwrap().accent_color), None);
         let rule = rf_core::openrules::OpenRule { exts: vec!["dll".into(), "sys".into()], programs: vec![r"C:\Araçlar\dnSpy.exe".into()], double_click: false };
         let text = toml::to_string_pretty(&Settings { open_rules: vec![rule.clone()], ..Default::default() }).unwrap();
         assert!(text.contains("[[open_rules]]"), "{text}");

@@ -22,8 +22,8 @@ use std::time::Instant;
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rf_platform::dock::panel::{self as geo, CloseCause};
-use rf_platform::dock::tray_strip as ts;
+use rf_win::dock::panel::{self as geo, CloseCause};
+use rf_win::dock::tray_strip as ts;
 
 use super::backdrop::IslandGlass;
 use super::panel_parts::Look;

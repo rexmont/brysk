@@ -4,11 +4,11 @@
 //! to the front), its window is made when the first tip is due and kept hidden afterwards, and while it is open one 100 ms look reads the
 //! real pointer (the toolkit's hover events do not report a pointer that leaves a window).
 //!
-//! THE TIMING is `rf_platform::dock::tray_tip::TipMachine` (pure, tested). A press on an icon (which also covers the menu the program opens
+//! THE TIMING is `rf_win::dock::tray_tip::TipMachine` (pure, tested). A press on an icon (which also covers the menu the program opens
 //! from the click: the tip stays shut until the pointer has left the icon), a drag, and the keyboard being in the strip close the tip and
 //! keep it from opening (`tray_strip::sync_tip_block`). Nothing runs while no tip is due or open.
 //!
-//! THE TEXT is the program's tip, cleaned (`rf_platform::dock::tray_tip::clean`); an icon with no tip has no tooltip. Its picture is none: the
+//! THE TEXT is the program's tip, cleaned (`rf_win::dock::tray_tip::clean`); an icon with no tip has no tooltip. Its picture is none: the
 //! tip is text only.
 
 use std::cell::RefCell;
@@ -16,10 +16,10 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui_kit::*;
-use rf_platform::dock::island;
-use rf_platform::dock::layout::Rect;
-use rf_platform::dock::panel as geo;
-use rf_platform::dock::tray_tip::{self as rules, TipInput, TipMachine, TipOutput};
+use rf_win::dock::island;
+use rf_win::dock::layout::Rect;
+use rf_win::dock::panel as geo;
+use rf_win::dock::tray_tip::{self as rules, TipInput, TipMachine, TipOutput};
 
 use super::backdrop::IslandGlass;
 use super::host;
@@ -264,7 +264,7 @@ fn show_now(key: IconKey, started: Instant, cx: &mut App) {
     };
     // show without activating (never brought to the front: the program in front keeps the keyboard), then the glass
     cx.spawn(async move |cx| {
-        rf_platform::window::set_dark_mode(hwnd, dark);
+        rf_win::window::set_dark_mode(hwnd, dark);
         geo::show_at(hwnd, rect);
         cx.update(|cx| {
             let _ = handle.update(cx, |v, _, cx| v.on_shown(dark, cx));

@@ -1,25 +1,25 @@
 //! The boxes of the islands' controls, in dock units from the island's glass corner, and what a right click on the island's empty glass
-//! does. The decision is `rf_platform::dock::empty_spot`; this file knows where the controls of each island are (from the numbers the views
+//! does. The decision is `rf_win::dock::empty_spot`; this file knows where the controls of each island are (from the numbers the views
 //! are built from, `plan.rs` and the tray strip's) so that a right click on the logo, the field, a symbol, the clock, the bell, a tray
 //! icon or a dock icon is theirs and a right click on any other glass starts Windows' Task Manager (`actions::open_task_manager`).
 //!
 //! The weather and the thin separators are drawn but are not controls: a right click on them is a right click on the glass. The running
 //! mark under an icon is part of the icon (the user sees it as the icon's): a right click on it is the icon's, see [`IconBox`].
 
-use rf_platform::dock::empty_spot::{self, Box4};
-use rf_platform::dock::layout::{RADIUS, SIDE_HEIGHT};
-use rf_platform::dock::tray_strip as ts;
+use rf_win::dock::empty_spot::{self, Box4};
+use rf_win::dock::layout::{RADIUS, SIDE_HEIGHT};
+use rf_win::dock::tray_strip as ts;
 
 use super::plan;
 
 /// The left island's controls: the logo and the search field, centred in the island's height.
 pub fn left_controls() -> Vec<Box4> {
-    left_controls_secondary(rf_platform::dock::monitors::Search::Field)
+    left_controls_secondary(rf_win::dock::monitors::Search::Field)
 }
 
 /// A secondary monitor's left island's controls: the logo and the search (a field, or a button as big as the logo).
-pub fn left_controls_secondary(search: rf_platform::dock::monitors::Search) -> Vec<Box4> {
-    use rf_platform::dock::monitors::Search;
+pub fn left_controls_secondary(search: rf_win::dock::monitors::Search) -> Vec<Box4> {
+    use rf_win::dock::monitors::Search;
     let y = |h: f32| (SIDE_HEIGHT - h) / 2.0;
     let logo = [plan::SIDE_PAD, y(plan::LOGO), plan::LOGO, plan::LOGO];
     // (the search as the setting shows it: none when it is hidden, see `plan::shown_search`)
@@ -124,29 +124,29 @@ pub fn mark_owner(icons: &[IconBox], point: (f32, f32)) -> Option<usize> {
 /// `mark_drop` is how far the running mark's lower edge is below the icons' bottom edge). An iterator so that the view, which makes
 /// them on every frame of the magnification, can reuse one list.
 pub fn middle_icon_boxes<'a>(
-    slots: &'a [rf_platform::dock::hover::Slot],
+    slots: &'a [rf_win::dock::hover::Slot],
     pic: &'a plan::DockPicture,
     margin_top: f32,
     baseline: f32,
     mark_drop: f32,
 ) -> impl Iterator<Item = IconBox> + 'a {
-    let bottom = margin_top + rf_platform::dock::layout::MIDDLE_HEIGHT - baseline;
+    let bottom = margin_top + rf_win::dock::layout::MIDDLE_HEIGHT - baseline;
     slots
         .iter()
         .zip(&pic.items)
         .enumerate()
-        .filter(|(_, (s, _))| **s == rf_platform::dock::hover::Slot::Icon)
+        .filter(|(_, (s, _))| **s == rf_win::dock::hover::Slot::Icon)
         .map(move |(ix, (_, &(x, w)))| IconBox { ix, icon: [x, bottom - w, w, w], mark: [x, bottom, w, mark_drop] })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_platform::dock::clock::ClockLines;
+    use rf_win::dock::clock::ClockLines;
 
     #[test]
     fn a_secondary_islands_controls_end_where_their_widths_do() {
-        use rf_platform::dock::monitors::Search;
+        use rf_win::dock::monitors::Search;
         let lines = ClockLines { time: "14:05".into(), date: "12.11.2026".into() };
         let cw = plan::clock_width(&lines);
         for search in [Search::Field, Search::Button] {
@@ -240,12 +240,12 @@ mod tests {
 
     #[test]
     fn the_middle_island_is_empty_between_the_icons_and_not_on_them() {
-        use rf_platform::dock::hover::Slot;
+        use rf_win::dock::hover::Slot;
         let slots = [Slot::Icon, Slot::Icon, Slot::Separator, Slot::Icon];
         let width = plan::middle_width_at_rest(3, 1);
         let rest = plan::rest_layout(&slots, width);
         let margins = [44.0, 12.0, 44.0, 4.0];
-        let frame = rf_platform::dock::magnify::Frame::at_rest(&rest, width);
+        let frame = rf_win::dock::magnify::Frame::at_rest(&rest, width);
         let pic = plan::picture(&frame, &slots, margins, 12.0);
         let boxes: Vec<IconBox> = middle_icon_boxes(&slots, &pic, margins[1], 12.0, 7.0).collect();
         assert_eq!(boxes.len(), 3);
@@ -283,13 +283,13 @@ mod tests {
 
     #[test]
     fn an_icon_grown_out_of_the_glass_keeps_its_box_while_the_pointer_is_on_it() {
-        use rf_platform::dock::hover::Slot;
+        use rf_win::dock::hover::Slot;
         let slots = vec![Slot::Icon; 5];
         let width = plan::middle_width_at_rest(5, 0);
         let rest = plan::rest_layout(&slots, width);
         let centre = rest[2].0 + rest[2].1 / 2.0;
         let margins = [44.0, 12.0, 44.0, 4.0];
-        let frame = rf_platform::dock::magnify::frame(&slots, &rest, width, centre, 1.0, rf_platform::dock::magnify::Strength::Full, width + 80.0);
+        let frame = rf_win::dock::magnify::frame(&slots, &rest, width, centre, 1.0, rf_win::dock::magnify::Strength::Full, width + 80.0);
         let pic = plan::picture(&frame, &slots, margins, 12.0);
         let boxes: Vec<IconBox> = middle_icon_boxes(&slots, &pic, margins[1], 12.0, 7.0).collect();
         // the biggest icon reaches over the glass's top edge, and its top is a control, not empty glass
@@ -329,7 +329,7 @@ mod tests {
         let lines = ClockLines { time: "14:05".into(), date: "12.11.2026".into() };
         let c = right_controls(plan::clock_width(&lines), None, 0.0, 2);
         let w = plan::right_width(&lines);
-        let tall = rf_platform::dock::layout::MIDDLE_HEIGHT;
+        let tall = rf_win::dock::layout::MIDDLE_HEIGHT;
         let x = plan::SIDE_PAD + 16.0;
         assert!(!side_is_empty(w, SIDE_HEIGHT, &c, (x, 24.0)));
         assert!(!side_is_empty(w, tall, &c, (x, 36.0)), "the middle of the tall glass");

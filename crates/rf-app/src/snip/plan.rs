@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 
 use rf_core::desktop::geom::Rect;
-use rf_platform::snip::clip::Written;
-use rf_platform::snip::geom::Monitor;
+use rf_win::snip::clip::Written;
+use rf_win::snip::geom::Monitor;
 
 /// The toolbar's size, logical px.
 pub const TOOLBAR_W: f32 = 404.0;
@@ -52,13 +52,13 @@ pub fn notice_rect(m: &Monitor, work: &Rect) -> Rect {
 
 /// The monitor the toolbar goes to: the one under the pointer when the snip began, else the first (the primary).
 pub fn toolbar_monitor(pointer: Option<(i32, i32)>, monitors: &[Monitor]) -> usize {
-    pointer.and_then(|p| rf_platform::snip::geom::nearest_monitor(p, monitors)).unwrap_or(0)
+    pointer.and_then(|p| rf_win::snip::geom::nearest_monitor(p, monitors)).unwrap_or(0)
 }
 
 /// The monitor a finished snip's notice goes to: the one under the middle of the region.
 pub fn notice_monitor(region: &Rect, monitors: &[Monitor]) -> usize {
     let mid = ((region.left + region.right) / 2, (region.top + region.bottom) / 2);
-    rf_platform::snip::geom::nearest_monitor(mid, monitors).unwrap_or(0)
+    rf_win::snip::geom::nearest_monitor(mid, monitors).unwrap_or(0)
 }
 
 /// A rectangle in a window's logical px: (x, y, width, height).
@@ -186,7 +186,7 @@ pub enum EndReason {
 pub struct SessionWatch {
     /// The window that was in front when the overlay appeared.
     foreground: isize,
-    /// The screen's shape then (`rf_platform::snip::place::screen_signature`).
+    /// The screen's shape then (`rf_win::snip::place::screen_signature`).
     screen: [i32; 5],
 }
 

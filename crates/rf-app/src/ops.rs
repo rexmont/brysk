@@ -7,11 +7,11 @@ use std::path::PathBuf;
 use futures::channel::oneshot;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
-use rf_platform::ctxmenu::MenuOutcome;
-use rf_platform::fileops::{self, Transfer};
+use rf_win::ctxmenu::MenuOutcome;
+use rf_win::fileops::{self, Transfer};
 
 use crate::folder_view::FolderView;
-use rf_platform::ctxmenu::ExtraItem;
+use rf_win::ctxmenu::ExtraItem;
 
 const MENU_NEW_TAB: u32 = 1;
 const MENU_PIN: u32 = 2;
@@ -204,8 +204,8 @@ impl FolderView {
             return;
         }
         // OpenClipboard can wait on other apps: never on the UI thread.
-        rf_platform::sta::run(move |owner| {
-            if let Err(e) = rf_platform::clipboard::set_files(owner, &paths, kind) {
+        rf_win::sta::run(move |owner| {
+            if let Err(e) = rf_win::clipboard::set_files(owner, &paths, kind) {
                 log::warn!("clipboard: {e:#}");
             }
         });
@@ -233,7 +233,7 @@ impl FolderView {
         let paths: Vec<PathBuf> = self
             .selection_paths()
             .into_iter()
-            .filter(|p| rf_platform::rotate::can_rotate(p) && crate::archive_view::split(p).is_none())
+            .filter(|p| rf_win::rotate::can_rotate(p) && crate::archive_view::split(p).is_none())
             .collect();
         if paths.is_empty() {
             return;
@@ -241,7 +241,7 @@ impl FolderView {
         let task = cx.background_spawn(async move {
             let mut errors = Vec::new();
             for p in &paths {
-                if let Err(e) = rf_platform::rotate::rotate(p, clockwise) {
+                if let Err(e) = rf_win::rotate::rotate(p, clockwise) {
                     errors.push(format!("{}: {e:#}", p.file_name().unwrap_or_default().to_string_lossy()));
                 }
             }
@@ -294,12 +294,12 @@ impl FolderView {
             return;
         }
         let Some(dir) = self.current_dir() else { return };
-        if rf_platform::ftp::is_ftp(&dir) {
+        if rf_win::ftp::is_ftp(&dir) {
             return;
         }
         let (tx, rx) = oneshot::channel();
-        rf_platform::sta::run(move |owner| {
-            let _ = tx.send(rf_platform::clipboard::get_files(owner).map_err(|e| log::warn!("paste: {e:#}")).ok().flatten());
+        rf_win::sta::run(move |owner| {
+            let _ = tx.send(rf_win::clipboard::get_files(owner).map_err(|e| log::warn!("paste: {e:#}")).ok().flatten());
         });
         cx.spawn(async move |this, cx| {
             let Ok(Some((paths, _))) = rx.await else { return };
@@ -313,7 +313,7 @@ impl FolderView {
                         link = dir.join(format!("{stem} ({n}).lnk"));
                         n += 1;
                     }
-                    if let Err(e) = rf_platform::shortcut::create(&link, &p) {
+                    if let Err(e) = rf_win::shortcut::create(&link, &p) {
                         log::warn!("shortcut {link:?}: {e:#}");
                     }
                 }
@@ -327,17 +327,17 @@ impl FolderView {
     pub(crate) fn paste_to(&mut self, dir: PathBuf, _window: &mut Window, cx: &mut Context<Self>) {
         // GetClipboardData can block on a slow source app (delayed rendering).
         let (tx, rx) = oneshot::channel();
-        rf_platform::sta::run(move |owner| {
-            let _ = tx.send(rf_platform::clipboard::get_files(owner).map_err(|e| log::warn!("paste: {e:#}")).ok().flatten());
+        rf_win::sta::run(move |owner| {
+            let _ = tx.send(rf_win::clipboard::get_files(owner).map_err(|e| log::warn!("paste: {e:#}")).ok().flatten());
         });
-        if rf_platform::ftp::is_ftp(&dir) {
+        if rf_win::ftp::is_ftp(&dir) {
             // FTP: upload the clipboard files (folders are skipped), then refresh
             let url = dir.to_string_lossy().into_owned();
             cx.spawn(async move |this, cx| {
                 if let Ok(Some((paths, _))) = rx.await {
                     let work = cx.background_spawn(async move {
                         for p in paths.iter().filter(|p| p.is_file()) {
-                            if let Err(e) = rf_platform::ftp::upload(p, &url) {
+                            if let Err(e) = rf_win::ftp::upload(p, &url) {
                                 log::warn!("ftp upload {p:?}: {e}");
                             }
                         }
@@ -352,8 +352,8 @@ impl FolderView {
         cx.spawn(async move |this, cx| {
             let clip = rx.await.ok().flatten();
             // No files with paths: files that live only in the program that copied them (a remote desktop session, a tool that
-            // carries the clipboard between PCs) are pasted from that program's own data (`rf_platform::vfiles`).
-            if clip.is_none() && !rf_platform::vfiles::clipboard_has() {
+            // carries the clipboard between PCs) are pasted from that program's own data (`rf_win::vfiles`).
+            if clip.is_none() && !rf_win::vfiles::clipboard_has() {
                 return;
             }
             let _ = cx.update(|cx| {
@@ -697,7 +697,7 @@ impl FolderView {
             vec![
                 item(MENU_NEW_FOLDER, t!("Yeni klasör\tCtrl+Shift+N")),
                 item(MENU_NEW_TEXT, t!("Yeni metin belgesi")),
-                ExtraItem { id: MENU_PASTE, label: t!("Yapıştır\tCtrl+V").into(), enabled: rf_platform::clipboard::can_paste() },
+                ExtraItem { id: MENU_PASTE, label: t!("Yapıştır\tCtrl+V").into(), enabled: rf_win::clipboard::can_paste() },
                 item(MENU_TERMINAL, t!("Terminalde aç")),
                 item(MENU_COPY_PATH, t!("Yolu kopyala")),
             ]
@@ -743,13 +743,13 @@ impl FolderView {
         let paste_dir_ui = dir.clone();
         let (tx, rx) = oneshot::channel::<(MenuOutcome, Option<(Vec<PathBuf>, Transfer)>)>();
         // Read Shift here: the shell thread has its own input state.
-        let extended = rf_platform::input::shift_down();
-        rf_platform::sta::run(move |owner| {
-            let pt = rf_platform::input::cursor_pos();
+        let extended = rf_win::input::shift_down();
+        rf_win::sta::run(move |owner| {
+            let pt = rf_win::input::cursor_pos();
             let r = if background {
-                rf_platform::ctxmenu::show_for_background(owner, &dir, pt, extended, &extra)
+                rf_win::ctxmenu::show_for_background(owner, &dir, pt, extended, &extra)
             } else {
-                rf_platform::ctxmenu::show_for_items(owner, &items, pt, extended, &extra)
+                rf_win::ctxmenu::show_for_items(owner, &items, pt, extended, &extra)
             };
             let r = r.unwrap_or_else(|e| {
                 log::warn!("context menu: {e:#}");
@@ -757,7 +757,7 @@ impl FolderView {
             });
             // Read the clipboard right here on the shell thread; the UI starts the transfer.
             let clip = if r == MenuOutcome::Custom(MENU_PASTE) {
-                rf_platform::clipboard::get_files(owner).ok().flatten()
+                rf_win::clipboard::get_files(owner).ok().flatten()
             } else {
                 None
             };
@@ -769,7 +769,7 @@ impl FolderView {
                 MenuOutcome::Custom(MENU_PASTE) => {
                     if let Some((paths, kind)) = clip {
                         crate::status_center::transfer(cx, kind, paths, paste_dir_ui.clone());
-                    } else if rf_platform::vfiles::clipboard_has() {
+                    } else if rf_win::vfiles::clipboard_has() {
                         crate::status_center::paste_virtual(cx, paste_dir_ui.clone(), |_, _| {});
                     }
                 }
@@ -783,7 +783,7 @@ impl FolderView {
                 MenuOutcome::Custom(MENU_TERMINAL) => {
                     let d = target_dir.clone();
                     std::thread::spawn(move || {
-                        let _ = rf_platform::shell::open_terminal(&d);
+                        let _ = rf_win::shell::open_terminal(&d);
                     });
                 }
                 MenuOutcome::Custom(MENU_NEW_TAB) => {
@@ -857,8 +857,8 @@ pub(crate) fn drag_paths_out(items: Vec<PathBuf>) {
         unsafe {
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
         }
-        rf_platform::sta::run(move |owner| {
-            if let Err(e) = rf_platform::dnd::drag_out(owner, ui_thread, &items) {
+        rf_win::sta::run(move |owner| {
+            if let Err(e) = rf_win::dnd::drag_out(owner, ui_thread, &items) {
                 log::warn!("drag: {e:#}");
             }
         });
@@ -869,11 +869,11 @@ impl FolderView {
     /// Files dropped onto `dest` (a folder row or the current folder background).
     pub fn drop_into(&mut self, dest: PathBuf, paths: &ExternalPaths, cx: &mut Context<Self>) {
         let sources: Vec<PathBuf> = paths.paths().to_vec();
-        if sources.is_empty() || rf_platform::dnd::is_invalid_drop(&sources, &dest) {
+        if sources.is_empty() || rf_win::dnd::is_invalid_drop(&sources, &dest) {
             return;
         }
-        let (ctrl, shift) = (rf_platform::input::ctrl_down(), rf_platform::input::shift_down());
-        let kind = rf_platform::dnd::default_transfer(&sources, &dest, ctrl, shift);
+        let (ctrl, shift) = (rf_win::input::ctrl_down(), rf_win::input::shift_down());
+        let kind = rf_win::dnd::default_transfer(&sources, &dest, ctrl, shift);
         crate::status_center::transfer(cx, kind, sources, dest);
     }
 
@@ -889,9 +889,9 @@ impl FolderView {
             })
             .collect();
         let (tx, rx) = oneshot::channel::<Option<u32>>();
-        rf_platform::sta::run(move |owner| {
-            let pt = rf_platform::input::cursor_pos();
-            let _ = tx.send(rf_platform::ctxmenu::show_simple(owner, pt, &items));
+        rf_win::sta::run(move |owner| {
+            let pt = rf_win::input::cursor_pos();
+            let _ = tx.send(rf_win::ctxmenu::show_simple(owner, pt, &items));
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Some(id)) = rx.await {
@@ -940,7 +940,7 @@ impl FolderView {
         std::thread::spawn(move || {
             let mut failed = None;
             for f in &files {
-                if let Err(e) = rf_platform::openrules::open_in(&started, f) {
+                if let Err(e) = rf_win::openrules::open_in(&started, f) {
                     log::warn!("open with {started:?}: {e:#}");
                     failed = Some(format!("{e:#}"));
                     break;
@@ -967,8 +967,8 @@ impl FolderView {
 
     pub fn open_with(&self) {
         if let Some(p) = self.selection_paths().into_iter().next() {
-            rf_platform::sta::run(move |_| {
-                let _ = rf_platform::shell::open_with(&p);
+            rf_win::sta::run(move |_| {
+                let _ = rf_win::shell::open_with(&p);
             });
         }
     }

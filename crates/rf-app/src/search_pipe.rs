@@ -172,13 +172,13 @@ pub fn next_id() -> u64 {
 
 /// The name of the pipe the main app serves for this protocol (a test copy with its own instance name has its own).
 pub fn app_name() -> String {
-    format!("{}-search", rf_platform::single_instance::instance_name())
+    format!("{}-search", rf_win::single_instance::instance_name())
 }
 
 /// Asks the running main rustyfiles for files. False when none answers on its pipe (there is no main app, or one too old to know
 /// this: the caller says so in the list instead). Blocks for a pipe write at most: a worker thread.
 pub fn ask(r: &Request) -> bool {
-    rf_platform::single_instance::send_to(&app_name(), &encode_request(r))
+    rf_win::single_instance::send_to(&app_name(), &encode_request(r))
 }
 
 /// Whether a main app is running (its pipe answers). Sends a request with an empty query, which the main app swallows without
@@ -197,7 +197,7 @@ pub const START_MSG: &str = "\u{1}no-window";
 
 /// Starts serving the search pipe; its lines go to `tx` (the app's message queue, which `route_ipc` reads on the UI thread).
 pub fn serve(tx: futures::channel::mpsc::UnboundedSender<String>) {
-    rf_platform::single_instance::serve_app(&app_name(), move |m| {
+    rf_win::single_instance::serve_app(&app_name(), move |m| {
         let _ = tx.unbounded_send(m);
     });
 }
@@ -307,7 +307,7 @@ pub fn handle_request(msg: &str, index_on: bool) -> bool {
                 .collect();
             let line = encode_reply(&Reply { id: req.id, index, hits });
             #[cfg(windows)]
-            if !rf_platform::single_instance::send_to(crate::dock::control::APP, &line) {
+            if !rf_win::single_instance::send_to(crate::dock::control::APP, &line) {
                 log::debug!("dock search: the dock is gone, the answer for {} is dropped", req.id);
             }
             #[cfg(not(windows))]
@@ -429,8 +429,8 @@ mod tests {
     fn the_search_pipe_is_not_the_instance_pipe_so_an_older_main_app_never_sees_a_request() {
         let name = app_name();
         assert!(name.ends_with("-search"));
-        assert_ne!(name, rf_platform::single_instance::instance_name());
-        assert!(name.starts_with(&rf_platform::single_instance::instance_name()));
+        assert_ne!(name, rf_win::single_instance::instance_name());
+        assert!(name.starts_with(&rf_win::single_instance::instance_name()));
     }
 
     #[test]
@@ -454,22 +454,22 @@ mod tests {
         let (to_dock, dock_rx) = std::sync::mpsc::channel::<String>();
         let to_main = std::sync::Mutex::new(to_main);
         let to_dock = std::sync::Mutex::new(to_dock);
-        rf_platform::single_instance::serve_app(&main_app, move |m| {
+        rf_win::single_instance::serve_app(&main_app, move |m| {
             let _ = to_main.lock().unwrap().send(m);
         });
-        rf_platform::single_instance::serve_app(&dock_app, move |m| {
+        rf_win::single_instance::serve_app(&dock_app, move |m| {
             let _ = to_dock.lock().unwrap().send(m);
         });
         let t = std::time::Instant::now();
         let r = req(9, "çalışma notları");
-        while !rf_platform::single_instance::send_to(&main_app, &encode_request(&r)) {
+        while !rf_win::single_instance::send_to(&main_app, &encode_request(&r)) {
             assert!(t.elapsed().as_secs() < 5, "the main pipe never came up");
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let got = main_rx.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
         assert_eq!(decode_request(&got), Some(r));
         let reply = Reply { id: 9, index: Index::Ready, hits: vec![Hit { score: 700, dir: true, path: r"C:\Çalışma".into() }] };
-        while !rf_platform::single_instance::send_to(&dock_app, &encode_reply(&reply)) {
+        while !rf_win::single_instance::send_to(&dock_app, &encode_reply(&reply)) {
             assert!(t.elapsed().as_secs() < 5, "the dock pipe never came up");
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
@@ -477,9 +477,9 @@ mod tests {
         assert_eq!(decode_reply(&got), Some(reply));
         // the pipes are up now: a second round trip is the cost a keystroke pays
         let t2 = std::time::Instant::now();
-        assert!(rf_platform::single_instance::send_to(&main_app, &encode_request(&req(10, "x"))));
+        assert!(rf_win::single_instance::send_to(&main_app, &encode_request(&req(10, "x"))));
         main_rx.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
-        assert!(rf_platform::single_instance::send_to(&dock_app, &encode_reply(&Reply { id: 10, index: Index::Off, hits: vec![] })));
+        assert!(rf_win::single_instance::send_to(&dock_app, &encode_reply(&Reply { id: 10, index: Index::Off, hits: vec![] })));
         dock_rx.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
         eprintln!("request + reply over two pipes, warm: {:?} (first trip incl. server start-up: {:?})", t2.elapsed(), t.elapsed());
     }

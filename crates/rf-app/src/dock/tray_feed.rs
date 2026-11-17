@@ -1,5 +1,5 @@
 //! The real source behind `tray_source.rs`: the running tray host's model, as the dock's tray strip wants it (shell plan increment D3,
-//! joined to D2). The host (`rf_platform::trayhost`, started by `shell::trayhost` only while the setting `shell_tray_host` is on) keeps
+//! joined to D2). The host (`rf_win::trayhost`, started by `shell::trayhost` only while the setting `shell_tray_host` is on) keeps
 //! icons with BGRA pictures, a window handle and a file NAME for the owner; the strip wants RGBA pictures, a tip it can print, an
 //! identity the order file can remember across runs, and a hint when anything changed. This file is that translation and nothing else.
 //!
@@ -17,7 +17,7 @@
 //!
 //! IDENTITY. An icon is known to the order file by its GUID when it gave a usable one, else by its owner program's full path and the
 //! id it chose ([`StableId`]). The host keeps only the program's file name, so the path is looked up from the owner's process
-//! (`rf_platform::tasklist::process_exe_path`, on the pump, once per process and cached). If it cannot be read the file name stands in
+//! (`rf_win::tasklist::process_exe_path`, on the pump, once per process and cached). If it cannot be read the file name stands in
 //! (`exe:mail.exe|3`, still told apart by id), and only when that is empty too does the identity fall back to `exe:|3`.
 //!
 //! KEYS. The strip is handed an opaque key per icon. The host numbers its icons from 1 at every start, so the key is the host's number
@@ -39,14 +39,14 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
-use rf_platform::dock::layout::Rect;
-use rf_platform::dock::tray_order::StableId;
-use rf_platform::dock::tray_strip::ClickKind;
-use rf_platform::dock::tray_tip as rules;
-use rf_platform::tray_wire::click::{ClickOptions, HostEvent};
-use rf_platform::tray_wire::{self as wire, IconKey as WireKey, Point};
-use rf_platform::trayhost::own_icons::{self, OwnButtons, Owner};
-use rf_platform::trayhost::{ClickOutcome, ClickRequest, IconId, OwnerRef, Snapshot, TrayEvent, TrayView};
+use rf_win::dock::layout::Rect;
+use rf_win::dock::tray_order::StableId;
+use rf_win::dock::tray_strip::ClickKind;
+use rf_win::dock::tray_tip as rules;
+use rf_win::tray_wire::click::{ClickOptions, HostEvent};
+use rf_win::tray_wire::{self as wire, IconKey as WireKey, Point};
+use rf_win::trayhost::own_icons::{self, OwnButtons, Owner};
+use rf_win::trayhost::{ClickOutcome, ClickRequest, IconId, OwnerRef, Snapshot, TrayEvent, TrayView};
 
 use super::tray_source::{Bitmap, IconKey, Subscription, TrayClick, TrayIcon, TraySnapshot};
 
@@ -83,7 +83,7 @@ impl HostPort for TrayView {
     }
 }
 
-/// Where an owner process's program lives. Real: `rf_platform::tasklist::process_exe_path`. Called on the pump thread only.
+/// Where an owner process's program lives. Real: `rf_win::tasklist::process_exe_path`. Called on the pump thread only.
 pub trait PathResolver: Send + 'static {
     fn exe_path(&mut self, pid: u32) -> Option<String>;
 }
@@ -92,14 +92,14 @@ struct RealPaths;
 
 impl PathResolver for RealPaths {
     fn exe_path(&mut self, pid: u32) -> Option<String> {
-        rf_platform::tasklist::process_exe_path(pid).map(|p| p.to_string_lossy().into_owned())
+        rf_win::tasklist::process_exe_path(pid).map(|p| p.to_string_lossy().into_owned())
     }
 }
 
 // ---------------------------------------------------------------- the translation (pure)
 
 /// The identity the order file remembers an icon by (see the file's head).
-pub fn stable_id(icon: &rf_platform::trayhost::TrayIcon, path: Option<&str>) -> StableId {
+pub fn stable_id(icon: &rf_win::trayhost::TrayIcon, path: Option<&str>) -> StableId {
     let exe = path.filter(|p| !p.trim().is_empty()).unwrap_or(icon.owner_exe.as_str());
     match icon.key {
         WireKey::Guid(g) => StableId::of(Some(&g.to_string()), exe, icon.uid),
@@ -184,7 +184,7 @@ struct PathEntry {
 
 /// The buttons of its own that the dock's right island draws (`right.rs`: `dock-network` and `dock-volume`, always; no battery or
 /// power button). A notification icon that is Windows' own indicator for one of these is left out of the strip (see
-/// `rf_platform::trayhost::own_icons`): the dock already shows it. If the right island ever hides one of its buttons or gets a battery,
+/// `rf_win::trayhost::own_icons`): the dock already shows it. If the right island ever hides one of its buttons or gets a battery,
 /// this is the one place to change (a test reads `right.rs` and fails when the two disagree).
 pub const OWN_BUTTONS: OwnButtons = OwnButtons { volume: true, network: true, power: false };
 
@@ -261,7 +261,7 @@ impl Converter {
         self.owners.clone()
     }
 
-    fn path_of(&mut self, icon: &rf_platform::trayhost::TrayIcon) -> Option<String> {
+    fn path_of(&mut self, icon: &rf_win::trayhost::TrayIcon) -> Option<String> {
         // (a GUID icon is told apart by its GUID: its path is not asked for; an owner of unknown process has nothing to ask)
         if matches!(icon.key, WireKey::Guid(g) if StableId::from_guid(&g.to_string()).is_some()) {
             return None;
@@ -271,7 +271,7 @@ impl Converter {
 
     /// The owner's program path, looked up once per process and cached (also for a GUID icon: the owner check of a system indicator
     /// asks for it).
-    fn owner_path(&mut self, icon: &rf_platform::trayhost::TrayIcon) -> Option<String> {
+    fn owner_path(&mut self, icon: &rf_win::trayhost::TrayIcon) -> Option<String> {
         if icon.owner_pid == 0 {
             return None;
         }
@@ -294,8 +294,8 @@ impl Converter {
     }
 
     /// Whether the dock already shows this icon as a button of its own (a Windows indicator whose button is there): see
-    /// `rf_platform::trayhost::own_icons`. Only the three indicator GUIDs ever cost a process lookup.
-    fn duplicates_own_button(&mut self, ic: &rf_platform::trayhost::TrayIcon) -> bool {
+    /// `rf_win::trayhost::own_icons`. Only the three indicator GUIDs ever cost a process lookup.
+    fn duplicates_own_button(&mut self, ic: &rf_win::trayhost::TrayIcon) -> bool {
         let WireKey::Guid(guid) = ic.key else { return false };
         if !own_icons::needs_owner_check(Some(&guid)) {
             return false;
@@ -663,8 +663,8 @@ pub(super) fn report_icon_rects(rects: &[(IconKey, Rect)]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_platform::trayhost::testkit::{FakeHost, IconSpec};
-    use rf_platform::tray_wire::WireGuid;
+    use rf_win::trayhost::testkit::{FakeHost, IconSpec};
+    use rf_win::tray_wire::WireGuid;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// Paths from a table; counts how often it was asked.
@@ -1105,7 +1105,7 @@ mod tests {
         let feed = Feed::new();
         let host = FakeHost::new(false);
         let mut s = spec(0x40, 7, 50, "a.exe", "a");
-        s.version = rf_platform::tray_wire::IconVersion::V4;
+        s.version = rf_win::tray_wire::IconVersion::V4;
         host.add(&s);
         let (_sub, rx) = counter(&feed);
         let _att = attach_fake(&feed, &host, table(&[]).0);

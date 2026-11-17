@@ -1,11 +1,11 @@
 //! What the bell's panel says and measures, as pure functions (`notif_view.rs` puts them on the screen): the panel's height for what
 //! it shows, the words for the age of a notification and for a missing access, and how the keyboard cursor walks along the list.
-//! The data side (grouping, order, the three-line clamp, the age, the difference between two polls) is `rf_platform::toasts`.
+//! The data side (grouping, order, the three-line clamp, the age, the difference between two polls) is `rf_win::toasts`.
 //!
 //! The words are passed a translator (`Words`), as in `cc_model.rs`, so a test can ask for both languages; every Turkish text used
 //! here has its English pair in `i18n_en` (a test checks that).
 
-use rf_platform::toasts::{Access, Ago, Group, Toast};
+use rf_win::toasts::{Access, Ago, Group, Toast};
 
 use super::cc_model::Words;
 
@@ -113,7 +113,7 @@ pub fn child_index(groups: &[Group], toasts: &[Toast], id: u32) -> Option<usize>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rf_platform::toasts::group;
+    use rf_win::toasts::group;
 
     fn tr_tr(s: &'static str) -> &'static str {
         s

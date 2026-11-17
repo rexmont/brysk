@@ -1,11 +1,11 @@
 //! The shell host while it runs: what happens when the shell window comes or goes (Explorer closed, crashed, restarted, replaced).
 //!
-//! `rf_platform::dock::system` watches (one `GetShellWindow()` per 2 s tick, and the `TaskbarCreated` broadcast; see
-//! `rf_platform::shellhost::watch`) and sends `SystemEvent::ShellChanged`. [`on_shell_changed`] logs it and tells the parts that care:
+//! `rf_win::dock::system` watches (one `GetShellWindow()` per 2 s tick, and the `TaskbarCreated` broadcast; see
+//! `rf_win::shellhost::watch`) and sends `SystemEvent::ShellChanged`. [`on_shell_changed`] logs it and tells the parts that care:
 //!
 //! | part | what it does |
 //! |---|---|
-//! | the dock's band | needs no telling: `rf_platform::dock::system` handles `TaskbarCreated` itself (registers the band again, `band.rs`) |
+//! | the dock's band | needs no telling: `rf_win::dock::system` handles `TaskbarCreated` itself (registers the band again, `band.rs`) |
 //! | the desktop cover | places its windows again at once (bottom of the z-order without a shell desktop, directly above it with one) and reads the wallpaper by the route that fits: [`super::cover::shell_changed`] |
 //! | the media and volume keys | [`sync_keys`]: a hidden shell-hook window exists only while nobody owns the shell window |
 //! | the work area | [`sync_work_area`]: only with `RUSTYFILES_SET_WORKAREA=1`, only with no shell, never beside Explorer |
@@ -20,12 +20,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use gpui_kit::App;
-use rf_platform::dock::layout::Rect;
-use rf_platform::shellhost::ShellMode;
-use rf_platform::shellhost::appcmd::{Shell, shell_now};
-use rf_platform::shellhost::minimized::{self, MetricsApi, MinimizedKeeper, SystemMetrics};
-use rf_platform::shellhost::shellhook::ShellHook;
-use rf_platform::shellhost::workarea::{Done, ShellState, SystemSetter, SystemShell, WorkAreaKeeper};
+use rf_win::dock::layout::Rect;
+use rf_win::shellhost::ShellMode;
+use rf_win::shellhost::appcmd::{Shell, shell_now};
+use rf_win::shellhost::minimized::{self, MetricsApi, MinimizedKeeper, SystemMetrics};
+use rf_win::shellhost::shellhook::ShellHook;
+use rf_win::shellhost::workarea::{Done, ShellState, SystemSetter, SystemShell, WorkAreaKeeper};
 
 use crate::settings::Settings;
 
@@ -129,7 +129,7 @@ pub fn stop(cx: &mut App) {
         let mut g = WORK.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(k) = g.as_mut()
             && k.active()
-            && let Some(m) = rf_platform::dock::primary_monitor()
+            && let Some(m) = rf_win::dock::primary_monitor()
         {
             let done = k.apply(&SystemShell, &mut SystemSetter, None, m.rect, m.work);
             log::info!("work area: on stop {done:?}");
@@ -138,7 +138,7 @@ pub fn stop(cx: &mut App) {
     if !done {
         log::warn!("shell host: the hook and the work area were still being given back after {} s; the host goes on", STOP_WAIT.as_secs());
     }
-    rf_platform::dock::system::set_own_band(None);
+    rf_win::dock::system::set_own_band(None);
 }
 
 /// Starts or ends the shell-hook window by whether nobody owns the shell window NOW. On a worker thread: the window is made on a thread
@@ -168,7 +168,7 @@ fn sync_keys() {
 }
 
 /// With NO window owning the shell window, tells Windows to hide minimized windows (a shell does that; without one they show as small
-/// title bars at the bottom left). With a shell there it does nothing, and lets go of what it did (see `rf_platform::shellhost::minimized`
+/// title bars at the bottom left). With a shell there it does nothing, and lets go of what it did (see `rf_win::shellhost::minimized`
 /// for why Explorer's own value is never overwritten). On a worker thread: it is a system call, not for the interface thread.
 fn sync_minimized() {
     if minimized::left_alone(std::env::var(minimized::ENV_KEEP).ok().as_deref()) {
@@ -210,9 +210,9 @@ fn band_thickness(cx: &App) -> Option<i32> {
     if !s.dock_reserve {
         return None;
     }
-    let m = rf_platform::dock::primary_monitor()?;
-    let unit = rf_platform::dock::size::unit(m.scale(), s.dock_size.factor());
-    Some(rf_platform::dock::layout::reserved_thickness(unit))
+    let m = rf_win::dock::primary_monitor()?;
+    let unit = rf_win::dock::size::unit(m.scale(), s.dock_size.factor());
+    Some(rf_win::dock::layout::reserved_thickness(unit))
 }
 
 /// Sets (or gives back) the work area itself, when it is asked for and nobody owns the shell window. A worker thread: the call
@@ -223,18 +223,18 @@ fn sync_work_area(cx: &App) {
     }
     let thickness = band_thickness(cx);
     let spawned = std::thread::Builder::new().name("rf-workarea-sync".into()).spawn(move || {
-        let Some(m) = rf_platform::dock::primary_monitor() else { return };
+        let Some(m) = rf_win::dock::primary_monitor() else { return };
         let mut g = WORK.lock().unwrap_or_else(|p| p.into_inner());
         let k = g.get_or_insert_with(WorkAreaKeeper::new);
         // the band is told to the dock's placement BEFORE the work area shrinks, so that the islands are not worked out from the
         // shrunken area (they float inside the band)
         if let Some(t) = thickness {
-            rf_platform::dock::system::set_own_band(Some(Rect { top: m.rect.bottom - t, ..m.rect }));
+            rf_win::dock::system::set_own_band(Some(Rect { top: m.rect.bottom - t, ..m.rect }));
         }
         match k.apply(&SystemShell, &mut SystemSetter, thickness, m.rect, m.work) {
             Done::Nothing => {
                 if !k.active() {
-                    rf_platform::dock::system::set_own_band(None);
+                    rf_win::dock::system::set_own_band(None);
                 }
             }
             done => log::info!("work area: {done:?}"),
@@ -277,9 +277,9 @@ mod tests {
     }
 
     /// A shell look the test sets, and a system that holds one value and counts the writes.
-    struct FakeState(std::cell::Cell<rf_platform::shellhost::appcmd::Shell>);
+    struct FakeState(std::cell::Cell<rf_win::shellhost::appcmd::Shell>);
     impl ShellState for FakeState {
-        fn shell(&self) -> rf_platform::shellhost::appcmd::Shell {
+        fn shell(&self) -> rf_win::shellhost::appcmd::Shell {
             self.0.get()
         }
     }
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn the_hosts_minimized_windows_wiring_hides_with_no_shell_leaves_a_shell_alone_and_puts_the_old_value_back_on_stop() {
-        use rf_platform::shellhost::appcmd::Shell;
+        use rf_win::shellhost::appcmd::Shell;
         let before = minimized::Metrics { width: 160, horz_gap: 4, vert_gap: 4, arrange: 0 };
         let state = FakeState(std::cell::Cell::new(Shell::Nobody));
         let mut api = FakeMetrics { now: before, writes: 0 };

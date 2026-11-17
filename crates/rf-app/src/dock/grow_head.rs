@@ -20,8 +20,8 @@
 //! The header's lengths are the panel's own logical px (the footer it replaces drew them at these sizes); the field's are dock units times
 //! the dock's size, exactly as the island's own lengths are (`plan.rs`, `left.rs`).
 
-use rf_platform::dock::layout::Rect;
-use rf_platform::dock::startpage as page;
+use rf_win::dock::layout::Rect;
+use rf_win::dock::startpage as page;
 
 use super::plan;
 
@@ -168,10 +168,10 @@ mod tests {
         assert_eq!(weather_alpha(1.0), 0.0);
         assert!(weather_alpha(0.1) > 0.4 && weather_alpha(0.1) < 0.6);
     }
-    use rf_platform::dock::grow::{self, Corner, Spec};
-    use rf_platform::dock::layout::{self, Widths};
-    use rf_platform::dock::panel::{self, Side};
-    use rf_platform::dock::size::{self, DockSize};
+    use rf_win::dock::grow::{self, Corner, Spec};
+    use rf_win::dock::layout::{self, Widths};
+    use rf_win::dock::panel::{self, Side};
+    use rf_win::dock::size::{self, DockSize};
 
     /// The island, the panel's own rectangle and the grown glass of the Start panel for a 2560 x 1440 monitor at this scale and dock
     /// size, built the way the dock builds them (the panel gives up its own bottom row, as `panel.rs` places it).

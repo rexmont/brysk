@@ -10,7 +10,7 @@ use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui_kit::*;
 use rf_core::Entry;
-use rf_platform::thumbs::{Bgra, Kind, Request, Response, ThumbPool, folder_has_own_icon, has_unique_icon};
+use rf_win::thumbs::{Bgra, Kind, Request, Response, ThumbPool, folder_has_own_icon, has_unique_icon};
 
 enum Slot {
     Pending,

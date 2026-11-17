@@ -10,7 +10,7 @@
 //! | no monitor to put the dock on / no island could be opened (`dock::host::run`) | an error line without "exits" | [`Exit::NoMonitor`], [`Exit::NoIsland`] |
 //! | a `stop` on the pipe (the main app's switch, an update, an outside caller) | "dock: stopped" without the cause | [`Exit::StopMessage`] |
 //! | every island window closed for another reason (`on_window_closed`) | "dock: stopped" without the cause | [`Exit::IslandsClosed`] |
-//! | the session ends (`WM_ENDSESSION`) | nothing | [`Exit::SessionEnding`] (written by `rf_platform::dock::system`) |
+//! | the session ends (`WM_ENDSESSION`) | nothing | [`Exit::SessionEnding`] (written by `rf_win::dock::system`) |
 //! | a panic (the release build aborts after the hook) | `crash.log` only | the same line in the log: [`on_panic`] |
 //! | the application loop returns for a reason none of the rows above wrote (`lib.rs`, after `run`) | nothing | [`Exit::RunReturned`], written by [`after_run`] only when no other line was |
 //!

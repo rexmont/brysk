@@ -1,7 +1,7 @@
 //! Hiding Explorer's taskbar while the dock runs (shell plan E1), the host's side of the setting `shell_hide_taskbar` (off by default;
 //! one switch on the dock's Settings page).
 //!
-//! The work is in `rf_platform::taskbar_hide` (a thread of its own, so that nothing waits for Explorer on the interface thread) and, under
+//! The work is in `rf_win::taskbar_hide` (a thread of its own, so that nothing waits for Explorer on the interface thread) and, under
 //! it, `rf_shellguard` (the rules, tested against a pretend desktop; the guard program). This file only follows the setting:
 //!
 //! * the setting on (at the host's start, or when a changed settings file is read): the thread starts, the guard is started and
@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gpui_kit::*;
-use rf_platform::taskbar_hide::{self, Config, TaskbarHider};
+use rf_win::taskbar_hide::{self, Config, TaskbarHider};
 
 use crate::dock::parts::{self, Part};
 use crate::settings::Settings;
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn the_stale_check_starts_the_worker_only_for_a_state_file_that_holds_a_record() {
-        // the decision itself is `rf_platform::taskbar_hide::stale_record_present` (tested there against files); here it is checked that
+        // the decision itself is `rf_win::taskbar_hide::stale_record_present` (tested there against files); here it is checked that
         // the wiring uses it, and does so on a thread of its own and before anything is started
         let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shell/taskbar_hide.rs")).unwrap().replace("\r\n", "\n");
         let body = &text[text.find("fn stale_check()").unwrap()..];

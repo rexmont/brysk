@@ -555,6 +555,7 @@ pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
         crate::quick_search::toggle(cx);
         return true;
     }
+    #[cfg(windows)]
     crate::shell::desktop::open::mark("main: the line to open a place arrived");
     let (loc, select) = parse_launch(&msg);
     let list = cx.try_global::<OpenWorkspaces>().map(|g| g.0.clone()).unwrap_or_default();
@@ -573,12 +574,14 @@ pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
             })
             .is_ok();
         if ok {
+            #[cfg(windows)]
             crate::shell::desktop::open::mark("main: the place is open in a new tab and the window asked to come forward");
             return true;
         }
     }
     *START_SELECT.lock().unwrap() = select;
     let made = crate::open_main_window_made(Some(loc), None, None, cx);
+    #[cfg(windows)]
     crate::shell::desktop::open::mark("main: a new window was made for the place");
     made
 }
@@ -2289,7 +2292,7 @@ impl Workspace {
             let p2 = path.clone();
             rf_platform::sta::run(move |owner| {
                 let pt = rf_platform::input::cursor_pos();
-                if let Err(e) = rf_platform::ctxmenu::show_for_one(owner, &p2, (pt.x, pt.y), true, &[]) {
+                if let Err(e) = rf_platform::ctxmenu::show_for_one(owner, &p2, pt, true, &[]) {
                     log::warn!("sidebar menu: {e:#}");
                 }
             });

@@ -19,6 +19,7 @@ pub enum UndoOp {
     /// "Flatten folder" on `dir`.
     Flattened { dir: PathBuf, rec: crate::ops::Flattened },
     /// One run of the folder organizer (all its moves, renames and recycled files).
+    #[cfg(windows)]
     Organized { rec: crate::organizer::Record },
 }
 
@@ -45,6 +46,7 @@ fn label(op: &UndoOp) -> &'static str {
         UndoOp::Transferred { kind: Transfer::Move, .. } => t!("Taşıma"),
         UndoOp::Recycled { .. } => t!("Silme"),
         UndoOp::Flattened { .. } => t!("Klasörü düzleştirme"),
+        #[cfg(windows)]
         UndoOp::Organized { .. } => t!("Düzenleme"),
     }
 }
@@ -101,7 +103,10 @@ pub fn forget_organized(token: u64) -> bool {
     // (one lock for the search and the removal: a push from another thread cannot slip in between)
     let op = {
         let mut s = STACK.lock();
+        #[cfg(windows)]
         let at = s.iter().rposition(|op| matches!(op, UndoOp::Organized { rec } if rec.token == token));
+        #[cfg(not(windows))]
+        let at: Option<usize> = None;
         at.map(|i| s.remove(i))
     };
     match op {
@@ -158,6 +163,7 @@ fn undo_op(op: UndoOp, cx: &mut App) {
             let name = rf_core::history::display_name(&dir);
             crate::status_center::start(cx, format!("{} {name}", t!("Geri alınıyor: düzleştirme →")), move |_| crate::ops::unflatten(&rec));
         }
+        #[cfg(windows)]
         UndoOp::Organized { rec } => crate::organizer::undo_run(rec, None, cx),
     }
 }
@@ -193,6 +199,7 @@ pub fn redo(cx: &mut App) {
             let name = rf_core::history::display_name(&dir);
             crate::status_center::start(cx, format!("{} {name}", t!("Yineleniyor: düzleştirme →")), move |_| crate::ops::reflatten(&rec));
         }
+        #[cfg(windows)]
         UndoOp::Organized { rec } => crate::organizer::redo_run(rec, cx),
     }
 }

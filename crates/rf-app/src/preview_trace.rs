@@ -75,18 +75,20 @@ pub fn process_facts(what: &str) {
         return;
     }
     #[cfg(windows)]
-    use windows::Win32::System::Threading::{
-        GetCurrentProcess, GetPriorityClass, GetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE, ProcessPowerThrottling,
-    };
-    unsafe {
-        let me = GetCurrentProcess();
-        let class = GetPriorityClass(me);
-        let mut st = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: 0, StateMask: 0 };
-        let ok = GetProcessInformation(me, ProcessPowerThrottling, &mut st as *mut _ as *mut std::ffi::c_void, std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32).is_ok();
-        mark(&format!(
-            "{what}: process priority class 0x{class:x} (0x20 normal, 0x4000 below normal, 0x40 idle), power throttling control 0x{:x} state 0x{:x} (asked ok: {ok})",
-            st.ControlMask, st.StateMask
-        ));
+    {
+        use windows::Win32::System::Threading::{
+            GetCurrentProcess, GetPriorityClass, GetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE, ProcessPowerThrottling,
+        };
+        unsafe {
+            let me = GetCurrentProcess();
+            let class = GetPriorityClass(me);
+            let mut st = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: 0, StateMask: 0 };
+            let ok = GetProcessInformation(me, ProcessPowerThrottling, &mut st as *mut _ as *mut std::ffi::c_void, std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32).is_ok();
+            mark(&format!(
+                "{what}: process priority class 0x{class:x} (0x20 normal, 0x4000 below normal, 0x40 idle), power throttling control 0x{:x} state 0x{:x} (asked ok: {ok})",
+                st.ControlMask, st.StateMask
+            ));
+        }
     }
 }
 

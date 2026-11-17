@@ -839,6 +839,7 @@ impl Default for Settings {
             dock_start_recommended: true,
             // on: the user asked for the Start panel to grow out of the island; the switch on the Dock page turns it off
             dock_start_grow: true,
+            #[cfg(windows)]
             dock_size: Default::default(),
             dock_all_monitors: true,
             dock_apps_where: DockAppsWhere::All,

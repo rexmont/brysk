@@ -95,6 +95,20 @@ impl ShellBin {
     }
 }
 
+impl rf_core::recycle_bin::BinBackend for ShellBin {
+    fn list_keys(&self) -> anyhow::Result<Vec<String>> {
+        Ok(list()?.into_iter().map(|i| i.parsing_path).collect())
+    }
+
+    fn delete_keys(&self, keys: &[String]) -> anyhow::Result<()> {
+        for k in keys {
+            let p = PathBuf::from(k);
+            let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+        }
+        Ok(())
+    }
+}
+
 /// Empties the Trash. `confirm` is kept for the signature: the caller asks first.
 pub fn empty(_confirm: bool) -> anyhow::Result<()> {
     let Some(dir) = trash_dir() else { return Ok(()) };

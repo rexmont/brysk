@@ -169,6 +169,28 @@ impl DiskTree {
         self.nodes[i as usize].files
     }
 
+    /// Child ids, biggest first (the treemap order).
+    pub fn sorted_children(&self, i: u32, m: Metric) -> Vec<u32> {
+        let mut v: Vec<u32> = self.children(i).collect();
+        v.sort_unstable_by(|&a, &b| self.weight(b, m).cmp(&self.weight(a, m)).then_with(|| self.name(a).cmp(self.name(b))));
+        v
+    }
+
+    /// The full path of entry `i`.
+    pub fn path(&self, i: u32) -> PathBuf {
+        let mut names = Vec::new();
+        let mut cur = i;
+        while let Some(p) = self.parent(cur) {
+            names.push(self.name(cur));
+            cur = p;
+        }
+        let mut path = self.root.clone();
+        for n in names.iter().rev() {
+            path.push(n);
+        }
+        path
+    }
+
     pub fn children(&self, i: u32) -> std::ops::Range<u32> {
         match self.nodes[i as usize].children.split_first() {
             Some((first, _)) => *first..(*first + self.nodes[i as usize].children.len() as u32),

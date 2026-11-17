@@ -250,7 +250,7 @@ pub struct MediaView {
     rd_fallback: Option<Kind>,
     rd_opening: bool,
     rd_rect: Option<[i32; 4]>,
-    rd_state: Option<rustdecoder::window::WindowState>,
+    rd_state: Option<rd_video::WindowState>,
     /// The video's own window reported a double click: the next render toggles fullscreen (it
     /// has the window).
     want_fullscreen: bool,
@@ -419,7 +419,7 @@ impl MediaView {
                 let Some(rd) = v.rd.as_ref() else { return false };
                 let st = rd.state();
                 let events = rd.take_events();
-                let coarse = |s: &rustdecoder::window::WindowState| ((s.position * 10.0) as i64, s.playing, s.ended, (s.duration * 10.0) as i64);
+                let coarse = |s: &rd_video::WindowState| ((s.position * 10.0) as i64, s.playing, s.ended, (s.duration * 10.0) as i64);
                 if v.rd_state.as_ref().is_none_or(|o| coarse(o) != coarse(&st)) {
                     cx.notify();
                 }
@@ -438,20 +438,20 @@ impl MediaView {
                         // the popup swallows the pointer, so what the viewer's own root does for the
                         // other routes (click plays, double click is fullscreen, the wheel is the
                         // volume, moving shows the controls) is done here from the popup's events
-                        rustdecoder::window::WindowEvent::Click => v.toggle_play(cx),
+                        rd_video::WindowEvent::Click => v.toggle_play(cx),
                         // the second half of a double click: its first click's toggle is taken back
-                        rustdecoder::window::WindowEvent::DoubleClick => {
+                        rd_video::WindowEvent::DoubleClick => {
                             v.toggle_play(cx);
                             v.want_fullscreen = true;
                             cx.notify();
                         }
-                        rustdecoder::window::WindowEvent::Wheel(d) => {
+                        rd_video::WindowEvent::Wheel(d) => {
                             v.set_volume(v.volume + 0.04 * d as f32 / 120.0, cx);
                             v.show_controls(cx);
                         }
-                        rustdecoder::window::WindowEvent::MouseMove => v.show_controls(cx),
-                        rustdecoder::window::WindowEvent::Leave => v.arm_hide(cx),
-                        rustdecoder::window::WindowEvent::Closed => {}
+                        rd_video::WindowEvent::MouseMove => v.show_controls(cx),
+                        rd_video::WindowEvent::Leave => v.arm_hide(cx),
+                        rd_video::WindowEvent::Closed => {}
                     }
                 }
                 true

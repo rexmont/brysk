@@ -13,6 +13,9 @@ pub mod markdown;
 pub mod pdf;
 #[cfg(windows)]
 pub mod rd_video;
+#[cfg(not(windows))]
+#[path = "rd_video_mac.rs"]
+pub mod rd_video;
 pub mod text;
 pub mod video;
 pub mod zoom;

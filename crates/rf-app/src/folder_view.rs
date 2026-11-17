@@ -18,6 +18,41 @@ use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_core::entry::Filter;
+
+/// Attribute bits for a directory entry (`MetadataExt` on Windows; the dot rule and the
+/// directory bit on macOS).
+fn meta_attrs(m: &std::fs::Metadata, name: &str) -> u32 {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        let _ = name;
+        m.file_attributes()
+    }
+    #[cfg(not(windows))]
+    {
+        let mut a = 0u32;
+        if m.is_dir() {
+            a |= rf_core::entry::attrs::DIRECTORY;
+        }
+        if name.starts_with('.') {
+            a |= rf_core::entry::attrs::HIDDEN | rf_core::entry::attrs::SYSTEM;
+        }
+        a
+    }
+}
+
+fn meta_size(m: &std::fs::Metadata) -> u64 {
+    m.len()
+}
+
+fn meta_modified_ms(m: &std::fs::Metadata) -> i64 {
+    m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+fn meta_created_ms(m: &std::fs::Metadata) -> i64 {
+    m.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
 use rf_core::{Entry, History, Location, SortDir, SortKey, SortSpec, format};
 
 use crate::actions::*;

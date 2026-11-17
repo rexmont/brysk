@@ -8,6 +8,7 @@ use std::path::Path;
 
 use rustdecoder::mp4::Codec;
 use rustdecoder::window::{Placement, VideoWindow, WindowOptions, WindowState};
+pub use rustdecoder::window::WindowEvent;
 
 /// The route is on only when `RUSTYFILES_RUSTDECODER=1`.
 pub fn enabled() -> bool {

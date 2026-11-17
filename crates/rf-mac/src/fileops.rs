@@ -193,3 +193,16 @@ pub fn remove_recursive(src: &Path) -> anyhow::Result<()> {
     }
     Ok(())
 }
+/// A new folder in `dir` ("New folder", "New folder (2)").
+pub fn new_folder(dir: &Path, name: &str) -> anyhow::Result<PathBuf> {
+    let p = unique_name(dir, name, "");
+    std::fs::create_dir(&p)?;
+    Ok(p)
+}
+
+/// A new empty text file in `dir`.
+pub fn new_text_file(dir: &Path, name: &str) -> anyhow::Result<PathBuf> {
+    let p = unique_name(dir, name, "");
+    std::fs::write(&p, b"")?;
+    Ok(p)
+}

@@ -201,8 +201,14 @@ fn build_page(page: Page, p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyEle
         Page::Look => look(p, s, cx),
         Page::Dev => dev(p, s, cx),
         Page::Advanced => advanced(p, s, cx),
+        #[cfg(windows)]
         Page::Speed => crate::bench_view::page(p, cx),
+        #[cfg(not(windows))]
+        Page::Speed => not_on_mac(p),
+        #[cfg(windows)]
         Page::Organizer => crate::organizer::page::page(p, cx),
+        #[cfg(not(windows))]
+        Page::Organizer => not_on_mac(p),
         Page::About => about(p, cx),
     }
 }
@@ -811,6 +817,7 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     v.push(section(p, t!("Kaydırma")));
     v.push(card(p, L::ChevronsUpDown, t!("Akıcı kaydırma"), None, sw("smooth", p, s.smooth_scroll, |s, v| s.smooth_scroll = v)));
     v.extend(quick_search_cards(p, s, cx));
+    #[cfg(windows)]
     v.extend(crate::snip::settings_cards(p, s));
     v
 }
@@ -3002,7 +3009,7 @@ fn name_index_status() -> String {
                 rf_platform::indexer::State::Building => format!("{r} {}", t!("hazırlanıyor…")),
                 rf_platform::indexer::State::Failed => format!("{r} {}", t!("dizinlenemedi")),
                 rf_platform::indexer::State::Ready => {
-                    t!("{root} {n} öğe, {mb} MB").replace("{root}", &r).replace("{n}", &crate::bench_view::count(live as u64)).replace("{mb}", &(mem >> 20).to_string())
+                    t!("{root} {n} öğe, {mb} MB").replace("{root}", &r).replace("{n}", &(live as u64).to_string()).replace("{mb}", &(mem >> 20).to_string())
                 }
             }
         })
@@ -3064,11 +3071,16 @@ fn index_exclusions(p: &Palette, s: &Settings) -> AnyElement {
                         ))),
                 )
                 .child(button("idx-excl-add", p, t!("Klasör ekle…"), |window, cx| {
-                    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-                    let owner = match HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
-                        Ok(RawWindowHandle::Win32(h)) => windows::Win32::Foundation::HWND(h.hwnd.get() as *mut _),
-                        _ => windows::Win32::Foundation::HWND::default(),
+                    #[cfg(windows)]
+                    let owner = {
+                        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                        match HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
+                            Ok(RawWindowHandle::Win32(h)) => windows::Win32::Foundation::HWND(h.hwnd.get() as *mut _),
+                            _ => windows::Win32::Foundation::HWND::default(),
+                        }
                     };
+                    #[cfg(not(windows))]
+                    let owner = 0isize;
                     if let Some(dir) = rf_platform::dialogs::pick(owner, t!("Dizine alınmayacak klasör"), rf_platform::dialogs::Pick::Folder) {
                         let d = dir.to_string_lossy().trim_end_matches('\\').to_string();
                         settings::update(cx, |s| {

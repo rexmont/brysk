@@ -31,6 +31,9 @@ mod git_ui;
 mod prompt;
 #[cfg(windows)]
 mod prop_chooser;
+#[cfg(not(windows))]
+#[path = "prop_chooser_mac.rs"]
+mod prop_chooser;
 mod hash_panel;
 mod i18n;
 mod i18n_en;
@@ -51,7 +54,13 @@ mod open_rules_page;
 mod ops;
 #[cfg(windows)]
 mod organizer;
+#[cfg(not(windows))]
+#[path = "organizer_mac.rs"]
+mod organizer;
 #[cfg(windows)]
+mod picker;
+#[cfg(not(windows))]
+#[path = "picker_mac.rs"]
 mod picker;
 mod nav_touch;
 mod ui_stall;
@@ -80,6 +89,9 @@ mod undo;
 mod preview;
 mod preview_trace;
 #[cfg(windows)]
+mod properties_view;
+#[cfg(not(windows))]
+#[path = "properties_view_mac.rs"]
 mod properties_view;
 mod quick_search;
 mod run_names;
@@ -131,6 +143,7 @@ pub(crate) fn install_panic_log() {
             }
         }
         // (the shell host's process also says it in the log, where the other exit reasons are)
+        #[cfg(windows)]
         shell::exits::on_panic(info);
         prev(info);
     }));
@@ -319,6 +332,7 @@ pub(crate) fn restart(cx: &mut App) {
     let pid = std::process::id().to_string();
     std::thread::spawn(move || {
         rf_platform::single_instance::send_to(&look::ipc::app_name(), &look::ipc::Msg::Quit.encode());
+        #[cfg(windows)]
         dock::control::stop_for_update();
         // (no folder: the new process opens the last session; its working directory is never the installation folder)
         let dir = std::env::temp_dir();
@@ -396,6 +410,7 @@ pub fn main() {
     // or of anything this process starts (`rf_platform::ownfolder`). Before everything else, so that every child inherits the way out.
     rf_platform::ownfolder::leave();
     // `--shell-probe`: what the shell host finds, windowless and read-only, before anything else is done (see shell::probe)
+    #[cfg(windows)]
     if std::env::args().nth(1).as_deref() == Some(shell::probe::ARG) {
         std::process::exit(shell::probe::run());
     }
@@ -415,6 +430,7 @@ pub fn main() {
         .init();
     start_mark("logging");
     // a copy of this exe showing the update window while the installed one is replaced
+    #[cfg(windows)]
     if std::env::args().nth(1).as_deref() == Some(update_splash::ARG) {
         update_splash::run();
         return;
@@ -433,18 +449,30 @@ pub fn main() {
     let pick = (std::env::args().nth(1).as_deref() == Some("--pick")).then(|| std::env::args().nth(2)).flatten();
     // `--bar-preview`: our taskbar, as an ordinary window (see taskbar_preview)
     // `--desktop-preview`: our desktop, as an ordinary window (see shell::desktop); treated like the bar preview everywhere below
+    #[cfg(windows)]
     let desktop_preview = std::env::args().nth(1).as_deref() == Some(shell::desktop::args::ARG);
+    #[cfg(not(windows))]
+    let desktop_preview = false;
     // `--switcher-preview`: our window switcher, shown once (see shell::switcher); also treated like the bar preview below
+    #[cfg(windows)]
     let switcher_preview = std::env::args().nth(1).as_deref() == Some(shell::switcher::ARG);
+    #[cfg(not(windows))]
+    let switcher_preview = false;
     let bar_preview = desktop_preview || switcher_preview || std::env::args().nth(1).as_deref() == Some("--bar-preview");
     // `--quick-search`: the quick search window, as its hotkey opens it (a shortcut of the
     // user's own can run this)
     let quick_search = std::env::args().nth(1).as_deref() == Some(quick_search::LAUNCH_ARG);
     // `--dock`: the dock (see dock/), a process of its own that lives beside the main rustyfiles. `--shell` is the same process under
     // its new name, the shell host (see shell/): the one with the desktop cover, the shell mode and the probe.
+    #[cfg(windows)]
     let dock = shell::is_host_arg(std::env::args().nth(1).as_deref());
+    #[cfg(not(windows))]
+    let dock = false;
     // `--snip`: our own screen snip and nothing else (see snip/): no window of the app, no forwarding to a running copy
+    #[cfg(windows)]
     let snip_only = snip::is_arg(std::env::args().nth(1).as_deref());
+    #[cfg(not(windows))]
+    let snip_only = false;
     // `--no-window`: the main app with no window, started by the dock so that its search has the file index (see search_pipe)
     let no_window = std::env::args().nth(1).as_deref() == Some(search_pipe::START_ARG);
     if bar_preview || dock {
@@ -454,6 +482,7 @@ pub fn main() {
         // before the settings are loaded: the dock owns no tray icon, no name index and no hotkey
         background::DOCK_PROCESS.store(true, std::sync::atomic::Ordering::Relaxed);
         // which mode it runs in: found by looking at the shell window (read-only); only logged for now
+        #[cfg(windows)]
         shell::note_host_start(&std::env::args().skip(1).collect::<Vec<_>>());
     }
     let arg = std::env::args().nth(1).map(|a| a.trim().trim_matches('"').to_string()).filter(|a| !a.is_empty());
@@ -582,7 +611,10 @@ pub fn main() {
             let (tx, rx) = std::sync::mpsc::channel();
             let dir = dir.clone();
             std::thread::spawn(move || {
+                #[cfg(windows)]
                 let _ = tx.send(rf_platform::shell_window::wait_for_select(&dir, SHELL_SELECT_WAIT));
+                #[cfg(not(windows))]
+                let _ = (&dir, &tx);
             });
             Some(rx)
         }
@@ -613,7 +645,9 @@ pub fn main() {
     // RUSTYFILES_MULTI_INSTANCE=1 skips forwarding (automated tests run several copies).
     let multi = std::env::var_os("RUSTYFILES_MULTI_INSTANCE").is_some() || bar_preview || dock || snip_only;
     // the dock is a single instance of its own group: a second `--dock` greets the first and ends; the guard lives to the end
+    #[cfg(windows)]
     let dock_instance = if dock {
+        #[cfg(windows)]
         match dock::acquire() {
             Some(held) => Some(held),
             None => {
@@ -622,9 +656,13 @@ pub fn main() {
                 return;
             }
         }
+        #[cfg(not(windows))]
+        None
     } else {
         None
     };
+    #[cfg(not(windows))]
+    let dock_instance: Option<((), ())> = None;
     let (_dock_guard, mut dock_messages) = match dock_instance {
         Some((guard, rx)) => (Some(guard), Some(rx)),
         None => (None, None),
@@ -716,20 +754,25 @@ pub fn main() {
         match pick.clone() {
             // started only to answer a dialog: no main window
             Some(pipe) => picker::begin(pipe, cx),
+            #[cfg(windows)]
             None if desktop_preview => {
                 let args: Vec<String> = std::env::args().skip(1).collect();
                 shell::desktop::open_preview(shell::desktop::args::parse(&args, std::env::var(shell::desktop::args::ENV_DIR).ok().as_deref()), cx)
             }
             // (when no window could be made the process would stay with nothing on the screen and no tray icon: it ends here)
+            #[cfg(windows)]
             None if switcher_preview => {
                 if !shell::switcher::open_preview(cx) {
                     cx.quit();
                 }
             }
+            #[cfg(windows)]
             None if bar_preview => taskbar_preview::open(cx),
             // the dock: three islands, no main window
+            #[cfg(windows)]
             None if dock => dock::run(dock_messages.take(), cx),
             // the screen snip alone: it ends by itself when it is over
+            #[cfg(windows)]
             None if snip_only => snip::run_standalone(cx),
             // started for the quick search only: no main window (it quits when that closes,
             // unless running in the background)
@@ -761,8 +804,10 @@ pub fn main() {
         // the dock, when the setting is on (a separate process, started off the UI thread; it keeps running without us)
         // (not for a picker or the quick search started on their own, not for a test copy)
         if pick.is_none() && !quick_search && !multi {
+            #[cfg(windows)]
             dock::control::start_if_wanted(cx.global::<settings::Settings>());
             // Win+E for the default file manager while no dock takes it (issue 44: Windows' newer Win+E skips the registry)
+            #[cfg(windows)]
             shell::keylayer::watch_main(cx);
         }
         // updates from GitHub Releases (installed copies only)
@@ -831,5 +876,6 @@ pub fn main() {
     });
     rf_platform::handover::trace("main: event loop ended");
     // (the host's process says why it ended when no earlier line did)
+    #[cfg(windows)]
     shell::exits::after_run();
 }

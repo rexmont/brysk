@@ -20,11 +20,10 @@ pub fn handler_for(_path: &Path) -> Option<HandlerId> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaEvent {
-    Opened,
-    Played,
-    Paused,
-    Ended,
-    Failed,
+    /// Playback was started or paused (by the app or by a click on the picture).
+    Playing(bool),
+    /// The picture was double-clicked.
+    DoubleClick,
 }
 
 pub fn set_media_events(_f: impl Fn(MediaEvent) + Send + 'static) {}
@@ -47,7 +46,7 @@ pub fn media_toggle() -> Option<bool> {
 
 pub fn media_seek(_fraction: f64) {}
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct MediaState {
     pub playing: bool,
     pub position: f64,

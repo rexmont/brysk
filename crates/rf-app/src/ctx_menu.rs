@@ -58,17 +58,14 @@ fn icon(l: L) -> MenuIcon {
 }
 
 fn cursor() -> (i32, i32) {
-    let mut pt = POINT::default();
-    unsafe {
-        let _ = GetCursorPos(&mut pt);
-    }
-    (pt.x, pt.y)
+    rf_platform::input::cursor_pos()
 }
 
 impl FolderView {
     /// Opens our context menu for the selection (or the folder background) at the mouse.
     pub fn show_context_menu(&mut self, background: bool, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.location(), rf_core::history::Location::Shell { .. }) {
+            #[cfg(windows)]
             if shift_down() {
                 self.show_shell_folder_menu(background, cx);
             } else {

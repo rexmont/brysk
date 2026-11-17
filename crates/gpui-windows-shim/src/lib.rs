@@ -46,7 +46,7 @@ pub mod hybrid {
     pub fn set_fast_start(_on: bool) {}
 
     /// How long the GPU device took to come up, if it has been measured.
-    pub fn gpu_device_ms() -> Option<u64> {
+    pub fn gpu_device_ms() -> Option<u32> {
         None
     }
 
@@ -79,5 +79,18 @@ pub mod hybrid {
     /// What draws the window, as the status bar badge shows it.
     pub fn current_backend_label() -> &'static str {
         "GPU"
+    }
+
+    /// The renderer's live counters (Windows: GPU/CPU load from the hybrid engine).
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct HybridSnapshot {
+        pub gpu_percent: Option<f32>,
+        pub cpu_percent: Option<f32>,
+        pub last_frame_ms: f32,
+    }
+
+    /// No hybrid renderer on macOS: the counters are unknown.
+    pub fn load_snapshot() -> HybridSnapshot {
+        HybridSnapshot::default()
     }
 }

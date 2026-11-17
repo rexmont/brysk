@@ -3,6 +3,7 @@
 //! The same names keep the About/Settings/Status Center code unchanged.
 
 pub const APP_ID: &str = "rustyfiles";
+pub const REPO: &str = "https://github.com/gelenmedya/rustyfiles";
 pub const DONATE: &str = "https://www.buymeacoffee.com/ozerguzel";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,3 +51,15 @@ pub fn spawn_checks(_cx: &mut gpui_kit::App, _changed: impl Fn(&mut gpui_kit::Ap
 pub fn restart_to_update() {}
 
 pub fn count_start(_cx: &mut gpui_kit::App) {}
+
+pub fn star_due(_s: &crate::settings::Settings) -> bool {
+    false
+}
+
+pub fn donate_due(_s: &crate::settings::Settings) -> bool {
+    false
+}
+
+pub fn donate_answered(s: &mut crate::settings::Settings, _donated: bool) {
+    s.donate_never = true;
+}

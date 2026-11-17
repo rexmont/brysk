@@ -63,8 +63,7 @@ pub mod engine_guard {
         Copy,
         Move,
         RestoreFromBin,
-        PurgeFromBin,
-        Other,
+        DeleteFromBin,
     }
 
     impl Op {
@@ -76,8 +75,7 @@ pub mod engine_guard {
                 Op::Copy => "copying",
                 Op::Move => "moving",
                 Op::RestoreFromBin => "restoring from the Trash",
-                Op::PurgeFromBin => "emptying the Trash",
-                Op::Other => "the operation",
+                Op::DeleteFromBin => "deleting from the Trash",
             }
         }
     }
@@ -153,11 +151,11 @@ pub mod runcmd {
 
     pub type ExecError = (u32, String);
 
-    fn is_program_file(p: &Path) -> bool {
+    pub fn is_program_file(p: &Path) -> bool {
         std::fs::symlink_metadata(p).map(|m| !m.is_dir()).unwrap_or(false)
     }
 
-    fn search_dirs() -> Vec<PathBuf> {
+    pub fn search_dirs() -> Vec<PathBuf> {
         let mut out = vec![
             PathBuf::from("/usr/local/bin"),
             PathBuf::from("/opt/homebrew/bin"),
@@ -304,7 +302,9 @@ pub mod docs {
         None
     }
 
-    pub fn read(_path: &Path, _kind: Kind, _tr: &dyn Fn(&str) -> String) -> Result<Doc> {
+    pub type Tr<'a> = &'a dyn Fn(&'static str) -> String;
+
+    pub fn read(_path: &Path, _kind: Kind, _tr: Tr) -> Result<Doc> {
         anyhow::bail!("document previews come with the Quick Look milestone")
     }
 }
@@ -672,6 +672,9 @@ pub mod dock {
             pub fn height(&self) -> i32 {
                 self.bottom - self.top
             }
+            pub fn contains(&self, x: i32, y: i32) -> bool {
+                x >= self.left && x < self.right && y >= self.top && y < self.bottom
+            }
         }
 
         pub const DOCK_PADDING: i32 = 8;
@@ -961,6 +964,12 @@ pub mod apppkg {
         pub name: Option<String>,
         pub id: Option<String>,
         pub version: Option<String>,
+        pub publisher: Option<String>,
+        pub arch: Vec<String>,
+        pub min_os: Option<String>,
+        pub permissions: u32,
+        pub description: Option<String>,
+        pub icon_png: Option<Vec<u8>>,
     }
 
     /// Package formats: Windows has MSIX; Android/iOS packages open like archives.
@@ -968,11 +977,11 @@ pub mod apppkg {
         None
     }
 
-    pub fn info(_path: &Path) -> Option<AppInfo> {
+    pub fn info(_path: &Path) -> Option<(Kind, AppInfo)> {
         None
     }
 
-    pub fn icon(_path: &Path) -> Option<crate::thumbs::Bgra> {
+    pub fn icon(_bytes: &[u8], _max: u32) -> Option<crate::thumbs::Bgra> {
         None
     }
 }
@@ -980,7 +989,7 @@ pub mod apppkg {
 pub mod editors {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Editor {
-        pub name: String,
+        pub name: &'static str,
         pub exe: std::path::PathBuf,
     }
 
@@ -988,8 +997,8 @@ pub mod editors {
         Vec::new()
     }
 
-    pub fn name_of(_exe: &std::path::Path) -> Option<String> {
-        None
+    pub fn name_of<'a>(editors: &'a [Editor], exe: &std::path::Path) -> Option<&'a str> {
+        editors.iter().find(|e| e.exe == exe).map(|e| e.name)
     }
 
     pub fn peek() -> (Vec<Editor>, bool) {
@@ -1269,6 +1278,10 @@ pub mod nameindex {
     /// walk in `search` answers, so no exclusion list is kept.
     pub fn set_excluded(_dirs: &[PathBuf]) {}
 
+    pub fn default_excluded_names() -> &'static [&'static str] {
+        &["node_modules", ".git", "target", "Library", ".Trash", ".cache"]
+    }
+
     pub fn status() -> Vec<(PathBuf, u8, usize)> {
         Vec::new()
     }
@@ -1280,4 +1293,167 @@ pub mod nameindex {
     pub fn search(_pattern: &str, _under: &Path, _include_hidden: bool, _max: usize) -> Option<Vec<PathBuf>> {
         None
     }
+}
+
+pub mod hotkey {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum HotkeyError {
+        Invalid,
+        Taken,
+    }
+
+    /// Global shortcuts need a Carbon hot key (which needs no special permission); until that
+    /// lands, registering one says it is unavailable rather than pretending it works.
+    pub fn set(_keys: Option<&str>) -> Result<(), HotkeyError> {
+        Err(HotkeyError::Taken)
+    }
+
+    pub fn set_handler(_f: impl Fn() + Send + 'static) {}
+}
+
+pub mod dialog_reg {
+    pub const CLASSES: &str = "";
+    pub const DLL_NAME: &str = "rustyfiles_dialog.dylib";
+
+    pub fn is_enabled(_classes_root: &str) -> bool {
+        false
+    }
+
+    pub fn point_to(_dll: &str, _classes_root: &str) -> bool {
+        false
+    }
+
+    pub fn enable(_dll: &str, _classes_root: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    pub fn disable(_classes_root: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+pub mod default_fm {
+    pub const APP_NAME: &str = "rustyfiles";
+    pub const CLASSES: &str = "";
+
+    /// macOS does not let an app become the Finder; the share of folder-opening goes through
+    /// LaunchServices handlers, which come with the packaging milestone.
+    pub fn is_enabled(_classes_root: &str) -> bool {
+        false
+    }
+
+    pub fn enable(_exe: &str, _classes_root: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    pub fn disable(_classes_root: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    pub fn heal(_current: &str, _classes_root: &str) -> bool {
+        false
+    }
+
+    pub fn add_archives(_exe: &str, _classes_root: &str) -> bool {
+        false
+    }
+
+    pub fn forwarded_recently(_arg: &str) -> bool {
+        false
+    }
+
+    pub fn note_forward(_arg: &str) {}
+}
+
+pub mod vfiles {
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::AtomicBool;
+
+    pub struct Progress<'a> {
+        pub bytes: (u64, u64),
+        pub files: (usize, usize),
+        pub current: Option<&'a str>,
+    }
+
+    #[derive(Debug, Default)]
+    pub struct Pasted {
+        pub arrived: Vec<PathBuf>,
+        pub failed: usize,
+        pub first_error: Option<String>,
+        pub cancelled: bool,
+    }
+
+    /// Promised/virtual files on the pasteboard (NSFilePromiseReceiver) come with the Finder
+    /// drag-and-drop milestone; ordinary file URLs are `clipboard`.
+    pub fn clipboard_has() -> bool {
+        false
+    }
+
+    pub fn paste_clipboard(_dest: &Path, _progress: &mut dyn FnMut(Progress), _cancel: &AtomicBool) -> anyhow::Result<Pasted> {
+        anyhow::bail!("promised files are not pasted yet on macOS")
+    }
+}
+
+pub mod share {
+    use std::path::PathBuf;
+
+    /// The items a share sheet would offer.
+    pub struct Prepared {
+        pub paths: Vec<PathBuf>,
+    }
+
+    /// macOS shares with `NSSharingServicePicker`; that arrives with the AppKit integration.
+    pub fn prepare(paths: &[PathBuf]) -> anyhow::Result<Prepared> {
+        Ok(Prepared { paths: paths.to_vec() })
+    }
+
+    pub fn show(_hwnd: isize, items: Prepared, _title: &str) -> anyhow::Result<()> {
+        let _ = items.paths;
+        anyhow::bail!("the share sheet comes with the AppKit integration")
+    }
+}
+
+pub mod runfind {
+    pub use crate::stubs::runcmd::{Found, find, is_program_file, search_dirs};
+}
+
+pub mod jumplist {
+    use std::path::{Path, PathBuf};
+
+    pub const NEW_WINDOW_ARG: &str = "--new-window";
+
+    /// (category name, items: (label, path)).
+    pub type Category = (String, Vec<(String, PathBuf)>);
+
+    /// The Dock's menu is the macOS counterpart; it is written by the packaging milestone.
+    pub fn set(_exe: &Path, _tasks: &[(&str, &str)], _categories: &[Category]) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    pub fn busy(_hresult: u32) -> bool {
+        false
+    }
+}
+
+pub mod recycle_settings {
+    use rf_core::recycle_bin::{BinSettings, BinSettingsStore, Changes};
+
+    /// macOS keeps no per-volume Trash size policy; the dialog says so instead of writing
+    /// Windows registry keys.
+    pub struct SystemBinSettings;
+
+    impl BinSettingsStore for SystemBinSettings {
+        fn read(&self) -> anyhow::Result<BinSettings> {
+            Ok(BinSettings { volumes: Vec::new(), confirm_delete: true, confirm_locked: true })
+        }
+
+        fn write(&self, _changes: &Changes) -> anyhow::Result<()> {
+            anyhow::bail!("Trash settings are not written on macOS")
+        }
+    }
+}
+
+pub mod removal {
+    /// "Safely remove" is a Windows shell notification; macOS unmounts volumes itself.
+    pub fn start(_on_request: impl Fn(char, std::sync::mpsc::Sender<()>) + Send + 'static) {}
 }

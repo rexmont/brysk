@@ -306,9 +306,12 @@ pub fn handle_request(msg: &str, index_on: bool) -> bool {
                 })
                 .collect();
             let line = encode_reply(&Reply { id: req.id, index, hits });
+            #[cfg(windows)]
             if !rf_platform::single_instance::send_to(crate::dock::control::APP, &line) {
                 log::debug!("dock search: the dock is gone, the answer for {} is dropped", req.id);
             }
+            #[cfg(not(windows))]
+            let _ = line;
         })
         .ok();
     true

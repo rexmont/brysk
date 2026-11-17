@@ -177,6 +177,7 @@ impl FolderView {
     pub(crate) fn shell_read_only(&self, cx: &mut Context<Self>) -> bool {
         let shell = matches!(self.location(), rf_core::Location::Shell { .. });
         if shell {
+            #[cfg(windows)]
             crate::shell_view::read_only_notice(cx);
         }
         shell
@@ -185,7 +186,10 @@ impl FolderView {
     pub fn copy_to_clipboard(&mut self, kind: Transfer, _window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.location(), rf_core::Location::Shell { .. }) {
             // items of a phone: copied out with the shell's engine; cut becomes copy
+            #[cfg(windows)]
             crate::shell_view::copy_items(cx, self.selection_shell());
+            #[cfg(not(windows))]
+            let _ = cx;
             return;
         }
         let paths = self.selection_paths();
@@ -739,16 +743,13 @@ impl FolderView {
         let paste_dir_ui = dir.clone();
         let (tx, rx) = oneshot::channel::<(MenuOutcome, Option<(Vec<PathBuf>, Transfer)>)>();
         // Read Shift here: the shell thread has its own input state.
-        let extended = unsafe { GetKeyState(VK_SHIFT.0 as i32) < 0 };
+        let extended = rf_platform::input::shift_down();
         rf_platform::sta::run(move |owner| {
-            let mut pt = POINT::default();
-            unsafe {
-                let _ = GetCursorPos(&mut pt);
-            }
+            let pt = rf_platform::input::cursor_pos();
             let r = if background {
-                rf_platform::ctxmenu::show_for_background(owner, &dir, (pt.x, pt.y), extended, &extra)
+                rf_platform::ctxmenu::show_for_background(owner, &dir, pt, extended, &extra)
             } else {
-                rf_platform::ctxmenu::show_for_items(owner, &items, (pt.x, pt.y), extended, &extra)
+                rf_platform::ctxmenu::show_for_items(owner, &items, pt, extended, &extra)
             };
             let r = r.unwrap_or_else(|e| {
                 log::warn!("context menu: {e:#}");
@@ -889,11 +890,8 @@ impl FolderView {
             .collect();
         let (tx, rx) = oneshot::channel::<Option<u32>>();
         rf_platform::sta::run(move |owner| {
-            let mut pt = POINT::default();
-            unsafe {
-                let _ = GetCursorPos(&mut pt);
-            }
-            let _ = tx.send(rf_platform::ctxmenu::show_simple(owner, (pt.x, pt.y), &items));
+            let pt = rf_platform::input::cursor_pos();
+            let _ = tx.send(rf_platform::ctxmenu::show_simple(owner, pt, &items));
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Some(id)) = rx.await {
@@ -924,7 +922,10 @@ impl FolderView {
         if paths.is_empty() {
             paths.extend(self.current_dir());
         }
+        #[cfg(windows)]
         crate::properties_view::open(paths, self.images.clone(), cx);
+        #[cfg(not(windows))]
+        let _ = (paths, &self.images, cx);
     }
 
     /// Opens the selected files with one of the user's own programs for their type (a row of "Open with"; Settings > File types).

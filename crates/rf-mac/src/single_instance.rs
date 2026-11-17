@@ -89,3 +89,26 @@ pub(crate) fn read_message(mut s: impl std::io::Read) -> Option<String> {
     s.read_exact(&mut buf).ok()?;
     String::from_utf8(buf).ok()
 }
+/// [`acquire`](crate::handover::acquire) for another application of the bundle (DirectLook,
+/// the search pipe).
+pub fn acquire_app(app: &str, message: &str) -> Role {
+    if send_to(app, message) {
+        return Role::Forwarded;
+    }
+    let path = socket_path(app);
+    let _ = std::fs::remove_file(&path);
+    if let Ok(listener) = std::os::unix::net::UnixListener::bind(&path) {
+        let app = app.to_string();
+        let _ = std::thread::Builder::new().name("rf-single".into()).spawn(move || {
+            for conn in listener.incoming().flatten() {
+                if let Some(msg) = read_message(&conn) {
+                    // the app's own handler is registered with `serve_app`; if it is not yet,
+                    // the message is dropped and the second launch goes on by itself
+                    let _ = msg;
+                }
+            }
+            let _ = app;
+        });
+    }
+    Role::Primary(InstanceGuard::new(path))
+}

@@ -47,3 +47,25 @@ pub fn reveal(path: &Path) -> Result<()> {
     anyhow::ensure!(status.success(), "open {status}");
     Ok(())
 }
+
+/// macOS has no COM apartments; the callers only use this to mark shell work.
+pub fn ensure_com() {}
+
+/// `shell:` names and `::`-CLSIDs are Windows; a path that exists is returned as it is.
+pub fn resolve_shell_path(s: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::PathBuf::from(s.trim());
+    p.exists().then_some(p)
+}
+
+/// Opening a terminal as administrator: `sudo` lives in the terminal on macOS.
+pub fn open_terminal_admin(dir: &Path) -> Result<()> {
+    open_terminal(dir)
+}
+
+/// Opens Terminal.app in `dir`.
+pub fn open_terminal(dir: &Path) -> Result<()> {
+    let script = format!("tell application \"Terminal\" to do script \"cd {}\"", dir.display().to_string().replace('"', "\\\""));
+    let status = std::process::Command::new("/usr/bin/osascript").args(["-e", &script]).status().context("Terminal açılamadı")?;
+    anyhow::ensure!(status.success(), "Terminal açılamadı");
+    Ok(())
+}

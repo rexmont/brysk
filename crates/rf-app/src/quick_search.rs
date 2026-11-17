@@ -146,6 +146,7 @@ pub fn init(cx: &mut App) {
                 std::thread::sleep(Duration::from_secs(8));
                 let _ = apps();
                 // (and Windows' settings catalogue: the first search then has its rows)
+                #[cfg(windows)]
                 crate::settings_rows::warm();
             })
             .ok();
@@ -784,6 +785,7 @@ pub(crate) fn search_local(query: &str, engine: WebSearch, with_bookmarks: bool)
     a.sort_by_key(|i| std::cmp::Reverse(i.score));
     items.extend(a.into_iter().take(MAX_APPS));
     // Windows' settings and tools, from Windows' own catalogue (read in the background the first time: no rows until it is there)
+    #[cfg(windows)]
     items.extend(crate::settings_rows::find(&q, &lift));
     // bookmarks
     if with_bookmarks {
@@ -1147,9 +1149,12 @@ impl QuickSearch {
             (Target::Setting { launch: what, .. }, _) => {
                 let what = what.clone();
                 launch(move || {
+                    #[cfg(windows)]
                     if let Err(e) = crate::settings_rows::open(&what) {
                         log::warn!("quick search: a settings page could not be opened: {e:#}");
                     }
+                    #[cfg(not(windows))]
+                    let _ = what;
                 });
             }
         }

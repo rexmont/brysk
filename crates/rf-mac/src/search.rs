@@ -28,6 +28,8 @@ pub struct SearchStats {
     pub dirs: usize,
     pub entries: usize,
     pub skipped: usize,
+    /// Results found (the app shows this count).
+    pub hits: usize,
 }
 
 struct Matcher {
@@ -133,5 +135,6 @@ pub fn search(q: &SearchQuery, cancelled: &dyn Fn() -> bool, on_batch: &mut dyn 
             on_batch(std::mem::take(&mut batch));
         }
     }
+    stats.hits = hits;
     Ok(stats)
 }

@@ -1233,7 +1233,7 @@ pub mod nameindex {
 
 pub mod dialog_reg {
     pub const CLASSES: &str = "";
-    pub const DLL_NAME: &str = "Brysk_dialog.dylib";
+    pub const DLL_NAME: &str = "brysk_dialog.dylib";
 
     pub fn is_enabled(_classes_root: &str) -> bool {
         false

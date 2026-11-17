@@ -183,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn messages_to_Brysk() {
+    fn messages_to_brysk() {
         for m in [ToApp::LookClosed, ToApp::OpenSettings, ToApp::Step(true), ToApp::Step(false)] {
             assert_eq!(ToApp::decode(&m.encode()), Some(m));
         }

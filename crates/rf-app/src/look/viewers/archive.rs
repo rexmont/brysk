@@ -50,7 +50,7 @@ impl Viewer for ArchiveViewer {
             label: t!("Brysk'ta aç").into(),
             action: Rc::new(move |_, cx: &mut App| {
                 crate::look::LookManager::close(cx);
-                open_in_Brysk(path.clone());
+                open_in_brysk(path.clone());
             }),
         }]
     }
@@ -61,7 +61,7 @@ impl Viewer for ArchiveViewer {
 
 /// Brysk'a gidecek ileti ve (çalışmıyorsa) başlatma argümanı: klasör gibi gezilebilen arşiv
 /// kendisi açılır, ötekiler (.gz gibi) klasöründe seçili gösterilir.
-pub fn Brysk_launch(path: &Path) -> (String, String) {
+pub fn brysk_launch(path: &Path) -> (String, String) {
     let p = path.display().to_string();
     if crate::archive_view::is_browsable(path) {
         (p.clone(), p)
@@ -70,9 +70,9 @@ pub fn Brysk_launch(path: &Path) -> (String, String) {
     }
 }
 
-fn open_in_Brysk(path: PathBuf) {
+fn open_in_brysk(path: PathBuf) {
     std::thread::spawn(move || {
-        let (msg, arg) = Brysk_launch(&path);
+        let (msg, arg) = brysk_launch(&path);
         rf_win::look::win::allow_any_foreground();
         if rf_win::single_instance::send_to(&rf_win::single_instance::instance_name(), &msg) {
             return;
@@ -385,14 +385,14 @@ impl Render for ArchiveView {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_tree, rows, Brysk_launch};
+    use super::{build_tree, rows, brysk_launch};
 
     #[test]
-    fn archives_open_in_Brysk_as_folder_or_selected() {
+    fn archives_open_in_brysk_as_folder_or_selected() {
         let zip = std::path::Path::new(r"C:\a b\x.zip");
-        assert_eq!(Brysk_launch(zip), (r"C:\a b\x.zip".to_string(), r"C:\a b\x.zip".to_string()));
+        assert_eq!(brysk_launch(zip), (r"C:\a b\x.zip".to_string(), r"C:\a b\x.zip".to_string()));
         let gz = std::path::Path::new(r"C:\a\log.gz");
-        let (msg, arg) = Brysk_launch(gz);
+        let (msg, arg) = brysk_launch(gz);
         assert_eq!(msg, format!("{}C:\\a\\log.gz", crate::workspace::SELECT_PREFIX));
         assert_eq!(arg, r"/select,C:\a\log.gz");
         // ileti Brysk tarafında doğru çözülür

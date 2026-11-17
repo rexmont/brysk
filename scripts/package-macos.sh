@@ -41,7 +41,7 @@ codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents
 codesign --force --options runtime --timestamp --sign "$IDENTITY" \
     --entitlements packaging/macos/Brysk.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
-echo "signed: $(codesign -dv "$APP" 2>&1 | grep 'Authority=' | head -1)"
+echo "signed: $(codesign -dvv "$APP" 2>&1 | grep '^Authority=' | head -1)"
 
 STAGING="$(mktemp -d "$PWD/dist/.package.XXXXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT

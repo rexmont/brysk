@@ -5,6 +5,10 @@
 > Build and run: `./scripts/build-macos.sh && open target/Brysk.app`, or `cargo mac`.
 > The port plan and status are in [`docs/port-macos.md`](docs/port-macos.md); upstream sync in
 > [`docs/upstream.md`](docs/upstream.md). The rest of this README describes the original app.
+>
+> Release build (universal, Developer ID, notarised DMG):
+> `BRYSK_DEVELOPER_ID='Developer ID Application: …' BRYSK_NOTARY_PROFILE=brysk-notary scripts/package-macos.sh`
+> → `dist/Brysk-<version>.dmg`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">

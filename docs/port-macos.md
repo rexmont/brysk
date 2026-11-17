@@ -223,7 +223,10 @@ Done:
   real Unix-socket single-instance/launch hand-over, the Trash backend, the global quick-search
   hotkey (Carbon `RegisterEventHotKey`, Alt+Space registers successfully), and
   `rf_win::input` (Quartz cursor/modifiers) are in.
-* `scripts/build-macos.sh` builds `target/Brysk.app` (Info.plist with the TCC usage
+* `scripts/package-macos.sh` builds a universal (arm64 + x86_64) release, signs the nested
+  DirectLook helper and the app with the Developer ID identity (hardened runtime + timestamp),
+  creates a DMG, notarises it with the `notarytool` keychain profile and staples it —
+  `dist/Brysk-<version>.dmg`. `scripts/build-macos.sh` builds `target/Brysk.app` (Info.plist with the TCC usage
   texts, ad-hoc signature) with DirectLook as a **nested agent app** under
   `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices
   registered the helper as `com.rexmont.brysk`, and `open Brysk.app` then activated the
@@ -253,9 +256,8 @@ Next (visible gaps, in order):
 * Finder tags are read and written (the `_kMDItemUserTags` attribute): toggling a tag in
   Brysk writes it to Finder, and Finder tags on selected items are imported when a tag
   menu opens. First launch explains the macOS folder/TCC prompts; About and a generated
-  `.icns` (from the project's SVG) are in the bundle. Universal build
-  (`UNIVERSAL=1`) and `scripts/notarize-macos.sh` are ready; notarisation needs the
-  Developer ID credentials.
+  `.icns` (from the project's SVG) are in the bundle. Universal build (`UNIVERSAL=1`) and `scripts/package-macos.sh` are ready; release
+  packaging needs the Developer ID identity and the notarytool keychain profile.
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions
   written that way are read correctly) — the cause of "folder not found" on every tab.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).

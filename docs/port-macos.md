@@ -198,7 +198,7 @@ macOS behavior (review 2), corrected in the module implementations:
 * SMB: `statfs` lists mounted shares only; browsing servers needs NetFS/`NSNetServiceBrowser`.
 * Process age: `proc_pidinfo(PROC_PIDTBSDINFO)`, not `NSProcessInfo`.
 
-## 7. Status (branch `macos-port`, commit 5baa6c6)
+## 7. Status (branch `macos-port`)
 
 Done:
 
@@ -215,15 +215,28 @@ Done:
   (dock geometry, status bar, taskbar progress, shell namespaces, property system, preview
   host, PDF, DirectLook hooks).
 * Plan reviewed by two expert agents; corrections above.
+* **`rf-app` compiles, links and launches**: `cargo build -p rf-app --bin rustyfiles` on
+  macOS 26 arm64; the process creates its 1280×800 window in ~290 ms (start-up trace:
+  "first render at 259 ms", "window opened at 287 ms"), opens a folder given on the command
+  line, writes `settings.toml`, and stays running.
+* Native `NSOpenPanel`/`NSSavePanel` pickers (dispatched to the main queue), a real Unix-socket
+  single-instance/launch hand-over, the Trash backend, and `rf-platform::input`
+  (Quartz cursor/modifiers) are in.
+* `cargo test -p rf-mac`: 32 pass; 6 fail — all Windows-fixture tests that came in with the
+  included modules (`design` ZIPs, `git` path states, a watch timing test), not macOS code.
 
-Not done (the remaining compile surface, in rough order):
+Next (visible gaps, in order):
 
-* ~100 errors left in `rf-app`: DirectLook video path (`rustdecoder::window`), `vfiles`,
-  `hotkey`, `dialog_reg`, `settings_view` dock/snip/bench cards, `ops` shell_view, organizer
-  and properties call sites, a few `look/window` helpers. `rf-mac` itself builds.
-* Native file pickers (NSOpenPanel/NSSavePanel), Quick Look thumbnails/preview, PDFKit parser,
-  AVFoundation playback, NSStatusItem menu bar, Finder selection hook, launch agent,
-  `.app` bundling/notarization, CI matrix, and the `rf-core` Unix path-model pass.
+* Screenshot-verified theme pass (the shell has no Screen Recording permission, so the UI has
+  only been verified through the window server: owner `rustyfiles`, 1280×800, layer 0).
+* Finder/Quick Look icons and thumbnails for non-image files (NSWorkspace/QLThumbnailGenerator);
+  today only images get a picture and the rest use the app's own icon set.
+* DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
+* NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
+  Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).
+* `.app` bundling (with the nested `DirectLook.app`), signing/notarization, CI matrix.
+* `rf-core` Unix path-model pass (drive letters, `C:\`, Recycle Bin assumptions) and the
+  macOS copies of the shared tests.
 
 * Is the "typed stub + dependency alias" approach right, versus `cfg`-gating `rf-app` modules?
 * gpui-pre Apple vs upstream `gpui` (same 0.3.11 snapshot) — which is less risk?

@@ -110,10 +110,14 @@ impl ToApp {
     }
 }
 
-/// directlook.exe: bu programın yanında.
+/// directlook(.exe): bu programın yanında.
 pub fn exe() -> Option<PathBuf> {
     let me = std::env::current_exe().ok()?;
-    let p = me.with_file_name("directlook.exe");
+    #[cfg(windows)]
+    let name = "directlook.exe";
+    #[cfg(not(windows))]
+    let name = "directlook";
+    let p = me.with_file_name(name);
     p.exists().then_some(p)
 }
 
@@ -129,7 +133,7 @@ pub fn send(msg: Msg, start: bool) {
             return;
         }
         let Some(exe) = exe() else {
-            log::warn!("directlook.exe bulunamadı");
+            log::warn!("directlook bulunamadı");
             return;
         };
         let mut cmd = std::process::Command::new(exe);

@@ -35,5 +35,6 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSFileManager", "NSFileCoordinator", "NSItemProvider", "NSProgress", "NSOperation", "NSDate", "NSError", "NSData", "NSValue", "NSThread"] }
 objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSImage", "NSBitmapImageRep", "NSScreen", "NSApplication", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSOpenPanel", "NSSavePanel", "NSAlert", "NSEvent", "NSWindow", "NSResponder", "NSGraphicsContext", "NSColor", "NSFont", "NSView"] }
 block2 = "0.6"
+dispatch2 = "0.3"
 core-foundation = "0.10"
 core-graphics = "0.24"

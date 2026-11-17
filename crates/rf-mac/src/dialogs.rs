@@ -1,10 +1,13 @@
 //! File and folder pickers, the macOS half of `rf-win::dialogs`.
 //!
-//! The panels are AppKit's (`NSOpenPanel` / `NSSavePanel`), which must run on the main thread;
-//! the caller already runs them on its shell thread (`sta::run`). "Start with the system" is a
-//! Windows login-item concept; macOS uses a Launch Agent, which ships with the packaging work.
+//! AppKit's `NSOpenPanel`/`NSSavePanel` must run on the main thread; the callers run their
+//! pickers on a worker (the Windows shell thread), so the panel is dispatched to the main
+//! queue and the caller waits for its answer.
 
 use std::path::{Path, PathBuf};
+
+use objc2_app_kit::{NSModalResponseOK, NSOpenPanel, NSSavePanel};
+use objc2_foundation::{MainThreadMarker, NSString};
 
 use crate::HWND;
 
@@ -19,11 +22,44 @@ pub enum Pick<'a> {
 
 /// Shows the panel; `None` when cancelled. The AppKit panel is application-modal, so the owner
 /// handle is not needed.
-pub fn pick(owner: HWND, title: &str, kind: Pick<'_>) -> Option<PathBuf> {
-    let _ = (owner, title, kind);
-    // The native panels are part of the next milestone (they need the AppKit main thread);
-    // the app's own address bar and folder lists are fully usable without them.
-    None
+pub fn pick(_owner: HWND, title: &str, kind: Pick<'_>) -> Option<PathBuf> {
+    let (tx, rx) = std::sync::mpsc::channel::<Option<PathBuf>>();
+    let title = title.to_string();
+    let (save, folder, default_name) = match &kind {
+        Pick::File { .. } => (false, false, String::new()),
+        Pick::Folder => (false, true, String::new()),
+        Pick::Save { default_name, .. } => (true, false, (*default_name).to_string()),
+    };
+    objc2::rc::autoreleasepool(|_| {
+        dispatch2::DispatchQueue::main().exec_async(move || {
+            let Some(mtm) = MainThreadMarker::new() else {
+                let _ = tx.send(None);
+                return;
+            };
+            let answer = {
+                let title = NSString::from_str(&title);
+                if save {
+                    let panel = NSSavePanel::new(mtm);
+                    panel.setTitle(Some(&title));
+                    if !default_name.is_empty() {
+                        panel.setNameFieldStringValue(&NSString::from_str(&default_name));
+                    }
+                    panel.setCanCreateDirectories(true);
+                    (panel.runModal() == NSModalResponseOK).then(|| panel.URL()).flatten()
+                } else {
+                    let panel = NSOpenPanel::new(mtm);
+                    panel.setTitle(Some(&title));
+                    panel.setCanChooseFiles(!folder);
+                    panel.setCanChooseDirectories(folder);
+                    panel.setAllowsMultipleSelection(false);
+                    (panel.runModal() == NSModalResponseOK).then(|| panel.URL()).flatten()
+                }
+            };
+            let path = answer.and_then(|u| u.path().map(|p| PathBuf::from(p.to_string())));
+            let _ = tx.send(path);
+        });
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(600)).ok().flatten()
 }
 
 /// Whether the app starts with the system (a Launch Agent on macOS).

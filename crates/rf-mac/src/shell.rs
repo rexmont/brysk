@@ -12,10 +12,12 @@ pub fn open(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// "Open with…": the Finder's application chooser is Apple Events work; until then this opens
-/// the file with the default application.
+/// "Open with…": choose an application (`/Applications`) and open the file with it.
 pub fn open_with(path: &Path) -> Result<()> {
-    open(path)
+    let Some(app) = crate::dialogs::pick_application("Birlikte aç") else { return Ok(()) };
+    let status = std::process::Command::new("/usr/bin/open").arg("-a").arg(&app).arg(path).status().context("open başlatılamadı")?;
+    anyhow::ensure!(status.success(), "open {status}");
+    Ok(())
 }
 
 /// Opens `path` with the application at `app` (a `.app` bundle).

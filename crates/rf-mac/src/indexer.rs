@@ -108,6 +108,64 @@ impl Index {
     }
 }
 
+impl Index {
+    /// Writes every path to the cache (length-prefixed bytes: a file name may contain anything).
+    fn save(&self, path: &Path) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut buf: Vec<u8> = Vec::with_capacity(self.recs.len() * 64);
+        buf.extend_from_slice(b"RFIX1");
+        buf.extend_from_slice(&(self.recs.len() as u32).to_le_bytes());
+        for (i, r) in self.recs.iter().enumerate() {
+            let _ = i;
+            let p = self.path(i as u32);
+            let bytes = p.to_string_lossy();
+            let b = bytes.as_bytes();
+            let n = b.len().min(u16::MAX as usize);
+            buf.extend_from_slice(&(n as u16).to_le_bytes());
+            buf.extend_from_slice(&b[..n]);
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, &buf)?;
+        std::fs::rename(&tmp, path)
+    }
+
+    fn load(path: &Path) -> Option<Index> {
+        let buf = std::fs::read(path).ok()?;
+        if buf.len() < 9 || &buf[..5] != b"RFIX1" {
+            return None;
+        }
+        let n = u32::from_le_bytes(buf[5..9].try_into().ok()?) as usize;
+        let mut index = Index { dirs: Vec::new(), recs: Vec::with_capacity(n), by_name: HashMap::new() };
+        let mut dir_ids: HashMap<PathBuf, u32> = HashMap::new();
+        let mut at = 9;
+        for _ in 0..n {
+            if at + 2 > buf.len() {
+                return None;
+            }
+            let len = u16::from_le_bytes(buf[at..at + 2].try_into().ok()?) as usize;
+            at += 2;
+            if at + len > buf.len() {
+                return None;
+            }
+            let text = String::from_utf8_lossy(&buf[at..at + len]).into_owned();
+            at += len;
+            let p = PathBuf::from(&text);
+            let Some(parent) = p.parent() else { continue };
+            let dir_id = *dir_ids.entry(parent.to_path_buf()).or_insert_with(|| {
+                index.dirs.push(Arc::from(parent));
+                (index.dirs.len() - 1) as u32
+            });
+            if let Some(name) = p.file_name() {
+                index.add(dir_id, &name.to_string_lossy());
+            }
+        }
+        Some(index)
+    }
+}
+
 fn glob_match(spec: &[char], name: &[char]) -> bool {
     if spec.is_empty() {
         return name.is_empty();
@@ -124,6 +182,8 @@ struct Slot {
     /// How many folder levels below the root are indexed (Applications: one; the home folder:
     /// everything). A folder at the limit is listed, its inside is not.
     depth: usize,
+    /// The file the index is remembered in (`<dir>/index-<root hash>.bin`).
+    cache: PathBuf,
     state: AtomicU8,
     count: AtomicU64,
     mem: AtomicU64,
@@ -200,18 +260,17 @@ fn is_excluded(name: &str) -> bool {
     e.iter().any(|x| x.eq_ignore_ascii_case(name))
 }
 
-fn walk(slot: &Slot) {
+fn build(slot: &Slot) -> Option<Index> {
     let start = Instant::now();
     let Ok(rd) = std::fs::read_dir(&slot.root) else {
         slot.state.store(State::Failed as u8, Ordering::Relaxed);
-        return;
+        return None;
     };
-    let mut index = slot.index.write().unwrap();
-    *index = Index::new(&slot.root);
+    let mut index = Index::new(&slot.root);
     let mut stack = vec![(rd, 0u32, 0usize)];
     while let Some((rd, dir_id, depth)) = stack.pop() {
         if slot.cancel.load(Ordering::Relaxed) {
-            return;
+            return None;
         }
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
@@ -230,17 +289,24 @@ fn walk(slot: &Slot) {
                 }
             }
         }
-        if start.elapsed() > Duration::from_millis(500) {
-            let n = index.recs.len() as u64;
-            slot.count.store(n, Ordering::Relaxed);
-            slot.mem.store(n * 64, Ordering::Relaxed);
-        }
     }
     let n = index.recs.len() as u64;
     slot.count.store(n, Ordering::Relaxed);
     slot.mem.store(n * 64, Ordering::Relaxed);
-    slot.state.store(State::Ready as u8, Ordering::Release);
     log::info!("index: {} ready, {n} names in {:?}", slot.root.display(), start.elapsed());
+    Some(index)
+}
+
+/// Puts a freshly built index in place and remembers it for the next start.
+fn install(slot: &Slot, index: Index) {
+    let n = index.recs.len() as u64;
+    if let Err(e) = index.save(&slot.cache) {
+        log::warn!("index: cannot save {}: {e}", slot.cache.display());
+    }
+    *slot.index.write().unwrap() = index;
+    slot.count.store(n, Ordering::Relaxed);
+    slot.mem.store(n * 64, Ordering::Relaxed);
+    slot.state.store(State::Ready as u8, Ordering::Release);
 }
 
 /// Re-reads one directory of a slot (a change arrived for it).
@@ -278,9 +344,15 @@ pub fn start(roots: Vec<PathBuf>, _dir: PathBuf) {
         // same spelling so a changed parent matches the walk's folders.
         let root = std::fs::canonicalize(&root).unwrap_or(root);
         let depth = if root == Path::new("/Applications") { 1 } else { usize::MAX };
+        let mut hash: u32 = 0x811c_9dc5;
+        for b in root.to_string_lossy().bytes() {
+            hash = (hash ^ u32::from(b)).wrapping_mul(0x0100_0193);
+        }
+        let cache = _dir.join(format!("index-{hash:08x}.bin"));
         let slot = Arc::new(Slot {
             root: root.clone(),
             depth,
+            cache,
             state: AtomicU8::new(State::Building as u8),
             count: AtomicU64::new(0),
             mem: AtomicU64::new(0),
@@ -290,10 +362,22 @@ pub fn start(roots: Vec<PathBuf>, _dir: PathBuf) {
         });
         slots.push(slot.clone());
 
-        // The walk.
+        // Last run's index is usable at once; the walk refreshes it behind the user's back.
         {
             let slot = slot.clone();
-            let _ = std::thread::Builder::new().name("rf-index".into()).spawn(move || walk(&slot));
+            let _ = std::thread::Builder::new().name("rf-index".into()).spawn(move || {
+                if let Some(old) = Index::load(&slot.cache) {
+                    let n = old.recs.len() as u64;
+                    *slot.index.write().unwrap() = old;
+                    slot.count.store(n, Ordering::Relaxed);
+                    slot.mem.store(n * 64, Ordering::Relaxed);
+                    slot.state.store(State::Ready as u8, Ordering::Release);
+                    log::info!("index: {} loaded from cache, {n} names", slot.root.display());
+                }
+                if let Some(fresh) = build(&slot) {
+                    install(&slot, fresh);
+                }
+            });
         }
 
         // FSEvents: changed names are updated one at a time; a rescan rebuilds the root.
@@ -340,7 +424,9 @@ pub fn start(roots: Vec<PathBuf>, _dir: PathBuf) {
                     return;
                 }
                 if rescan || paths.is_empty() {
-                    walk(&slot);
+                    if let Some(fresh) = build(&slot) {
+                        install(&slot, fresh);
+                    }
                 } else {
                     let mut dirs: Vec<PathBuf> = Vec::new();
                     for p in paths {

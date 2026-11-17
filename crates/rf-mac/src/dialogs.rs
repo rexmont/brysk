@@ -67,6 +67,39 @@ pub fn pick(_owner: HWND, title: &str, kind: Pick<'_>) -> Option<PathBuf> {
     rx.recv_timeout(std::time::Duration::from_secs(600)).ok().flatten()
 }
 
+/// "Open With…": an application chooser starting in `/Applications`. Returns the `.app`.
+pub fn pick_application(title: &str) -> Option<PathBuf> {
+    let (tx, rx) = std::sync::mpsc::channel::<Option<PathBuf>>();
+    let title = title.to_string();
+    objc2::rc::autoreleasepool(|_| {
+        let job = move || {
+            let Some(mtm) = MainThreadMarker::new() else {
+                let _ = tx.send(None);
+                return;
+            };
+            let panel = NSOpenPanel::new(mtm);
+            panel.setTitle(Some(&NSString::from_str(&title)));
+            panel.setCanChooseFiles(true);
+            panel.setCanChooseDirectories(false);
+            panel.setAllowsMultipleSelection(false);
+            let apps = objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str("/Applications"));
+            panel.setDirectoryURL(Some(&apps));
+            let app_type = NSString::from_str("app");
+            let types = objc2_foundation::NSArray::from_slice(&[&*app_type]);
+            panel.setAllowedFileTypes(Some(&types));
+            let answer = (panel.runModal() == NSModalResponseOK).then(|| panel.URL()).flatten();
+            let path = answer.and_then(|u| u.path().map(|p| PathBuf::from(p.to_string())));
+            let _ = tx.send(path);
+        };
+        if MainThreadMarker::new().is_some() {
+            job();
+        } else {
+            dispatch2::DispatchQueue::main().exec_async(job);
+        }
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(600)).ok().flatten()
+}
+
 /// Whether the app starts with the system (a Launch Agent on macOS).
 pub fn starts_with_windows() -> bool {
     false

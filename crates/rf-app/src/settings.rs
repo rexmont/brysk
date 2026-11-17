@@ -1460,6 +1460,10 @@ fn sync_name_index(on: bool, excluded: &[String]) {
         std::thread::spawn(rf_win::indexer::stop);
         return;
     }
+    // macOS: the index is loaded from its cache in about a second, so it can start early.
+    #[cfg(target_os = "macos")]
+    let delay = if was == 0 { 2 } else { 0 };
+    #[cfg(not(target_os = "macos"))]
     let delay = if was == 0 { 5 } else { 0 };
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(delay));

@@ -31,7 +31,7 @@ pub fn pick(_owner: HWND, title: &str, kind: Pick<'_>) -> Option<PathBuf> {
         Pick::Save { default_name, .. } => (true, false, (*default_name).to_string()),
     };
     objc2::rc::autoreleasepool(|_| {
-        dispatch2::DispatchQueue::main().exec_async(move || {
+        let job = move || {
             let Some(mtm) = MainThreadMarker::new() else {
                 let _ = tx.send(None);
                 return;
@@ -57,7 +57,12 @@ pub fn pick(_owner: HWND, title: &str, kind: Pick<'_>) -> Option<PathBuf> {
             };
             let path = answer.and_then(|u| u.path().map(|p| PathBuf::from(p.to_string())));
             let _ = tx.send(path);
-        });
+        };
+        if objc2_foundation::MainThreadMarker::new().is_some() {
+            job();
+        } else {
+            dispatch2::DispatchQueue::main().exec_async(job);
+        }
     });
     rx.recv_timeout(std::time::Duration::from_secs(600)).ok().flatten()
 }

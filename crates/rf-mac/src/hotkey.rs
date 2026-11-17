@@ -131,6 +131,11 @@ fn key_code(name: &str) -> Option<u32> {
 }
 
 fn with_main<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    // Already on the main thread (the usual case at start-up): run it here. Dispatching to the
+    // main queue and waiting would wait on ourselves until the timeout.
+    if objc2_foundation::MainThreadMarker::new().is_some() {
+        return Some(job());
+    }
     let (tx, rx) = std::sync::mpsc::channel();
     dispatch2::DispatchQueue::main().exec_async(move || {
         let _ = tx.send(job());

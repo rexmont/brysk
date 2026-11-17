@@ -149,13 +149,9 @@ fn undo_op(op: UndoOp, cx: &mut App) {
         UndoOp::Recycled { pairs } => {
             let n = pairs.len();
             crate::status_center::start(cx, format!("{} {}", t!("Geri dönüşüm kutusundan geri yükleniyor:"), crate::i18n::items(n)), move |_| {
-                let wanted: Vec<String> = pairs.iter().map(|(_, bin)| bin.to_string_lossy().to_lowercase()).collect();
-                let items: Vec<_> = rf_win::recycle::list()?
-                    .into_iter()
-                    .filter(|it| wanted.contains(&it.parsing_path.to_lowercase()))
-                    .collect();
-                anyhow::ensure!(!items.is_empty(), t!("öğeler geri dönüşüm kutusunda bulunamadı"));
-                rf_win::recycle::restore(&items)?;
+                // Directly by path: the Finder's Trash cannot be listed without Full Disk
+                // Access, but a known path can be moved back.
+                rf_win::recycle::restore_pairs(&pairs)?;
                 Ok(true)
             });
         }

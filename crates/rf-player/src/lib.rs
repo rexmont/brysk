@@ -2,6 +2,8 @@
 
 mod audio_out;
 mod clock;
+#[cfg(target_os = "macos")]
+mod coreaudio;
 mod convert;
 mod player;
 #[cfg(windows)]

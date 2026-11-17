@@ -163,12 +163,13 @@ pub fn delete_tracked(paths: &[PathBuf], permanent: bool, tracker: Arc<Tracker>)
         if tracker.cancel.load(Ordering::Relaxed) {
             return Ok(false);
         }
-        if permanent {
+        let bin = if permanent {
             crate::fastdelete::delete_permanent(std::slice::from_ref(p), tracker.clone(), 1)?;
+            PathBuf::new()
         } else {
-            crate::recycle::trash(p)?;
-        }
-        tracker.results.lock().unwrap().push((p.clone(), PathBuf::new()));
+            crate::recycle::trash(p)?
+        };
+        tracker.results.lock().unwrap().push((p.clone(), bin));
     }
     Ok(true)
 }

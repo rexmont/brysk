@@ -86,9 +86,15 @@ impl AudioSink for NullSink {
 #[cfg(windows)]
 pub use wasapi::wasapi_sink;
 
-/// No system audio output yet on macOS: DirectLook falls back to [`NullSink`] (silent, clocked)
-/// until the CoreAudio sink is written. See docs/port-macos.md, milestone M3.
-#[cfg(not(windows))]
+/// The default system audio output. Windows: WASAPI; macOS: Core Audio (see `coreaudio.rs`;
+/// the function keeps its Windows-era name because the player asks for it on both).
+#[cfg(target_os = "macos")]
+pub fn wasapi_sink() -> anyhow::Result<Box<dyn AudioSink>> {
+    crate::coreaudio::sink()
+}
+
+/// Other platforms have no audio output yet: the caller falls back to [`NullSink`].
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn wasapi_sink() -> anyhow::Result<Box<dyn AudioSink>> {
     anyhow::bail!("no system audio output on this platform yet")
 }

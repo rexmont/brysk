@@ -4316,6 +4316,10 @@ impl Render for Workspace {
             // (issue 46: "Clicking on map network drive crashes and closes the explorer window").
             .on_action(cx.listener(|_, _: &RestartApp, _, cx| crate::restart(cx)))
             .on_action(cx.listener(|_, _: &Quit, _, cx| crate::quit_when_idle(cx)))
+            .on_action(cx.listener(|this, _: &About, window, cx| {
+                crate::settings_view::open_page(crate::settings_view::Page::About, cx);
+                this.navigate(Location::Settings, window, cx)
+            }))
             .on_action(cx.listener(|this, _: &SaveSession, window, cx| this.save_named_session(window, cx)))
             .on_action(cx.listener(|_, _: &MapNetworkDrive, window, _| {
                 let owner = Self::hwnd(window).unwrap_or(0);

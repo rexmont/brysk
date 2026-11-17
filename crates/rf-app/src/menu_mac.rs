@@ -9,6 +9,8 @@ use crate::actions::*;
 /// Installs the menu bar (once, after the actions are bound).
 pub fn install(cx: &mut App) {
     let app = Menu::new("rustyfiles").items([
+        MenuItem::action("About rustyfiles", About),
+        MenuItem::separator(),
         MenuItem::action("Settings…", GoSettings),
         MenuItem::separator(),
         MenuItem::os_submenu("Services", SystemMenuType::Services),

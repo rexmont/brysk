@@ -265,6 +265,18 @@ pub fn open_main_window_made(
     true
 }
 
+/// The first launch on macOS: macOS will ask for folder access on its own; this says what the
+/// prompts are and where the one optional switch (Full Disk Access, for the Finder's Trash) is.
+#[cfg(target_os = "macos")]
+fn mac_onboarding(cx: &mut App) {
+    use crate::prompt::{Button, Kind};
+    let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
+    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time rustyfiles opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give rustyfiles Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).";
+    let _ = w.update(cx, |_, window, cx| {
+        crate::prompt::show("Welcome to rustyfiles", Some(message.to_string()), None, vec![Button::new("Continue", Kind::Primary, |_, _, _| Ok(()))], window, cx);
+    });
+}
+
 /// Quits now, or once running copy/move/delete operations finish (closing the window must not
 /// cut a copy in half). A window opened meanwhile (second launch) cancels the quit.
 pub(crate) fn quit_when_idle(cx: &mut App) {
@@ -421,6 +433,12 @@ pub fn main() {
     // the id Velopack gives the Start menu / taskbar shortcuts: a pin survives updates
     rf_win::window::set_app_id(installer::APP_ID);
     install_panic_log();
+    if std::env::var_os("RUSTYFILES_WINDOW_DUMP").is_some() {
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            rf_win::window::dump_windows();
+        });
+    }
     // developer probe for the thumbnail pipeline (`RUSTYFILES_THUMB_PROBE=<file>`)
     if let Some(probe) = std::env::var_os("RUSTYFILES_THUMB_PROBE") {
         std::thread::spawn(move || {
@@ -800,6 +818,7 @@ pub fn main() {
             // started by the dock for its file search: no window, no tray icon; it ends by itself when nobody searches for a while
             None if no_window => search_pipe::watch_idle(cx),
             None => {
+                let first_run = cx.global::<settings::Settings>().first_start_ms == 0;
                 installer::count_start(cx);
                 donate::refresh();
                 start_mark("opening the window");
@@ -808,6 +827,15 @@ pub fn main() {
                 fast_start::remember(cx);
                 // a copy or move cut off last time: ask to carry it on
                 status_center::offer_resume(cx);
+                #[cfg(target_os = "macos")]
+                if first_run && pick.is_none() {
+                    crate::settings::update(cx, |s| s.first_start_ms = chrono::Utc::now().timestamp_millis());
+                    cx.spawn(async move |cx| {
+                        cx.background_executor().timer(std::time::Duration::from_millis(400)).await;
+                        cx.update(mac_onboarding);
+                    })
+                    .detach();
+                }
             }
         }
         if snip_only {

@@ -64,6 +64,8 @@ fn cursor() -> (i32, i32) {
 impl FolderView {
     /// Opens our context menu for the selection (or the folder background) at the mouse.
     pub fn show_context_menu(&mut self, background: bool, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(target_os = "macos")]
+        crate::tags::import_finder(cx, &self.selection_paths());
         if matches!(self.location(), rf_core::history::Location::Shell { .. }) {
             #[cfg(windows)]
             if shift_down() {

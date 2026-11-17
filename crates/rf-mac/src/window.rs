@@ -80,3 +80,29 @@ pub fn exists(_hwnd: HWND) -> bool {
 pub fn foreground() -> HWND {
     0
 }
+/// Developer aid: prints every NSWindow (frame, visibility, alpha, class) to stderr.
+pub fn dump_windows() {
+    dispatch2::DispatchQueue::main().exec_async(|| {
+        use objc2::runtime::AnyObject;
+        let Some(mtm) = objc2_foundation::MainThreadMarker::new() else { return };
+        let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+        let windows = app.windows();
+        eprintln!("windows: {}", windows.len());
+        for w in windows.iter() {
+            let frame = w.frame();
+            eprintln!(
+                "  title={:?} frame=({:.0},{:.0},{:.0},{:.0}) visible={} alpha={:.2} level={}",
+                
+                w.title().to_string(),
+                frame.origin.x,
+                frame.origin.y,
+                frame.size.width,
+                frame.size.height,
+                w.isVisible(),
+                w.alphaValue(),
+                w.level(),
+            );
+            let _: &AnyObject = &w;
+        }
+    });
+}

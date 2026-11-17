@@ -51,6 +51,7 @@ pub mod shell;
 pub mod single_instance;
 pub mod sta;
 pub mod thumbs;
+pub mod tags;
 pub mod tray;
 pub mod window;
 

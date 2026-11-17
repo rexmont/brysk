@@ -879,6 +879,7 @@ impl FolderView {
 
     /// Second popup listing tags (● = every selected item has it); picking toggles the tag.
     pub fn tag_menu(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        crate::tags::import_finder(cx, &paths);
         let store = &cx.global::<crate::tags::Tags>().0;
         let items: Vec<ExtraItem> = store
             .defs

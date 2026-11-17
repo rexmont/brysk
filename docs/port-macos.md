@@ -249,7 +249,11 @@ Next (visible gaps, in order):
 * Share sheet (`NSSharingServicePicker`), PDFKit pages, Quick Look thumbnails, file
   conflicts/verification, Finder Trash with an own origin journal (restore and undo put items
   back under their original name and folder), Open With chooser, a persistent name index
-  (cache loads in ~1.7 s for 480k names), and a real menu bar are in. Universal build
+  (cache loads in ~1.7 s for 480k names), and a real menu bar are in.
+* Finder tags are read and written (the `_kMDItemUserTags` attribute): toggling a tag in
+  rustyfiles writes it to Finder, and Finder tags on selected items are imported when a tag
+  menu opens. First launch explains the macOS folder/TCC prompts; About and a generated
+  `.icns` (from the project's SVG) are in the bundle. Universal build
   (`UNIVERSAL=1`) and `scripts/notarize-macos.sh` are ready; notarisation needs the
   Developer ID credentials.
 * Unix path cleaner fixed (`/Users/...` is no longer turned into `\Users\...`; old sessions

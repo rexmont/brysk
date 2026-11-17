@@ -35,17 +35,21 @@ Two structural facts make the port much cheaper than a rewrite:
 ## 2. Architecture: substitute the platform layer, do not fork the app
 
 ```
-            rf-app (unchanged source)
-               │                  │
-     gpui_kit/gpui-pre     rf_win::*  (name kept)
-               │                  │
-      [windows] gpui-pre-windows   [windows] crates/rf-win  (untouched)
-      [macos]   gpui-pre (apple)   [macos]   crates/rf-mac  (package = "rf-mac", lib name rf_win)
+            rf-app
+               │                    │
+     gpui_kit/gpui-pre      rf_platform::<module>
+               │                    │
+      [windows] gpui-pre-windows    [windows] crates/rf-win
+      [macos]   gpui-pre (apple)    [macos]   crates/rf-mac
 ```
 
-* `crates/rf-mac/Cargo.toml` sets `[lib] name = "rf_win"`; `rf-app` depends on
-  `rf-win = { package = "rf-mac", path = "../rf-mac" }` under `cfg(target_os = "macos")`.
-  Every `rf_win::…` call site keeps resolving; no mass edit of `rf-app`.
+* `crates/rf-platform` is a one-line facade: `pub use rf_win::*` on Windows,
+  `pub use rf_mac::*` on macOS. The 1,657 `rf_win::` call sites in `rf-app` were renamed
+  mechanically to `rf_platform::` (no behavior change).
+* **Why not a dependency alias:** Cargo rejects the same dependency key pointing at two
+  packages from two target tables ("different source paths depending on the build target"),
+  and two crates with one lib name collide. Distinct package names behind a facade are the
+  supported form.
 * **Reuse by path, not by copy.** Portable `rf-win` modules are included verbatim:
   `#[path = "../../rf-win/src/git.rs"] pub mod git;` (git, ftp, hash, encoding, design, elf, pe,
   datefmt, openrules, tree_watch, diskusage, foldersize, …), with small `cfg` shims where they
@@ -56,10 +60,16 @@ Two structural facts make the port much cheaper than a rewrite:
   with bodies that no-op/return empty. This keeps all 106k lines of `rf-app` compiling
   untouched, so the Explorer UI, tabs, columns, preview pane, settings pages and command palette
   all come up on day one; features are switched on one module at a time.
-* **Renderer:** on macOS use `gpui-pre` from crates.io (drop the `[patch.crates-io]` Windows
-  fork); add a tiny `crates/gpui-windows-shim` (lib name `gpui_windows`) exporting the four
-  symbols `rf-app` uses, as no-ops. Window chrome (`TitleBar`, `open_window`) already comes from
-  gpui-kit.
+* **Renderer:** keep the workspace `[patch.crates-io]` (patches are global); only the
+  `gpui-pre-windows` dependency is Windows-gated. macOS uses `gpui-pre`'s Apple backend
+  (verified: `gpui-kit` + `gpui-pre-macos` build on macOS 26 / Rust 1.100). A tiny
+  `crates/gpui-windows-shim` exports `hybrid`, `dnd_hint`, `KEEP_ACTIVE_LOOK`,
+  `SMOOTH_SCROLL` (and `hybrid::load_snapshot`) as no-ops.
+* **Windows-only UI is gated, not stubbed:** `dock`, `shell` (shell host, desktop, switcher),
+  `snip`, `bench`, Velopack `installer`, `properties_view`, `organizer`, `prop_chooser`,
+  `picker` are `cfg(windows)` in `rf-app`. Stubbing the 24k-line dock platform layer was the
+  wrong trade (review 1): those features are macOS non-goals. Everything Explorer-shaped —
+  tabs, panes, columns, preview, settings — stays compiled.
 * **Keep the look.** `theme.rs`, `workspace.rs`, `folder_view.rs`, icons and layout stay
   byte-identical. Mica/HyperGlass become: solid/vibrancy under-window (NSVisualEffectView via
   gpui window background) with the same colors; Segoe UI falls back to the system UI font with a
@@ -119,8 +129,8 @@ permissions (Full Disk Access prompt when a folder is protected).
 signing + notarization, app icon, first-run onboarding, crash log path, update check (manual
 download link first).
 
-Total: ~10–14 weeks for one developer who knows the codebase; the risky items are M1's
-`getattrlistbulk`/gpui-apple and M3's video.
+Total after review: **20–28 weeks** for one developer (the first draft said 10–14; both
+reviewers rejected that). 14–18 only if quick search/indexing and full video are cut.
 
 ## 5. Risks and mitigations
 
@@ -143,7 +153,77 @@ Total: ~10–14 weeks for one developer who knows the codebase; the risky items 
 8. **Text metrics/fonts** — Segoe UI absent; bundle a metric-compatible fallback or tune
    gpui-kit font stack so the Explorer chrome does not reflow.
 
-## 6. Decisions for review
+## 6. Review corrections (both reviews incorporated)
+
+Architecture (review 1):
+
+* facade, not alias (above); `cargo check -p rf-app --bin rustyfiles` is the M0 gate, not
+  `-p rustyfiles`.
+* `rf-app` is not untouched: ~100 direct `windows::`/`std::os::windows` uses remain and are
+  being replaced one by one (cursor/modifiers via `rf_platform::input`, `CommandExt` and
+  `MetadataExt` behind `cfg`, a real `flock` settings lock).
+* `rf-core` compiles on Unix but is not portable yet: drive letters, `C:\`, `$Recycle.Bin`
+  and Windows attribute bits are in `Location`, history, navtree and 1,000+ tests.
+* Only `hash`, `design`, `elf`, `git` (after a `CommandExt` shim) are reusable verbatim;
+  `ftp`, `encoding`, `datefmt`, `diskusage`, `foldersize`, `search`, `organize` need ports.
+
+macOS behavior (review 2), corrected in the module implementations:
+
+* Trash: `trashItemAtURL:` gives no Finder "Put Back" record; Trash is per volume
+  (`~/.Trash`, `/Volumes/*/.Trashes/<uid>`), network shares often have none.
+* Copies: `clonefile` only same-APFS; use `copyfile(COPYFILE_ALL|COPYFILE_CLONE)` with
+  fallback and a chunked path for pause/limit; `RENAME_SWAP` is for swapping, not replace.
+* `getattrlistbulk` is not APFS-specific and fails on SMB/NFS: keep a `read_dir` correctness
+  path, add the bulk path later with per-entry fallback.
+* Search/index: FSEvents via `notify` (debounce in caller); persisted event ids need
+  `FSEventStreamCreateRelativeToDevice`; network mounts need `PollWatcher`; Spotlight is an
+  accelerator only.
+* `preview_host` is rich preview (QuickLookUI/PDFKit/AVFoundation), not thumbnails;
+  `QLThumbnailGenerator` is the thumbnail path, `NSWorkspace.icon(forFile:)` the icon path.
+* Hotkeys: Carbon `RegisterEventHotKey` needs no Accessibility permission; event taps do.
+* Pasteboard: multiple `NSPasteboardTypeFileURL` items (no promised files through gpui's DnD).
+* TCC: Desktop/Documents/Downloads/removable/network prompts; Full Disk Access cannot be
+  requested programmatically. **Decision: no App Sandbox**, Developer ID + hardened runtime +
+  notarization.
+* Packaging: DirectLook must be a nested `.app` with its own bundle id and be signed before
+  the outer app; notarize with `notarytool`, universal binary.
+* Case sensitivity is per volume; APFS is normalization-insensitive, HFS+ stores NFD; compare
+  with `CFStringCompare`, not `to_lowercase`.
+* Metadata: xattrs, resource forks, ACLs, FinderInfo, tags (`com.apple.metadata:_kMDItemUserTags`),
+  quarantine all matter; `std::fs::copy` loses them.
+* iCloud/File Provider dataless files: `SF_DATALESS`, logical vs allocated size, never
+  auto-download for a thumbnail.
+* Hide `.DS_Store`, `._*`, `Icon\r`, `.Trashes`, `.Spotlight-V100`; filter
+  `MNT_DONTBROWSE` volumes.
+* SMB: `statfs` lists mounted shares only; browsing servers needs NetFS/`NSNetServiceBrowser`.
+* Process age: `proc_pidinfo(PROC_PIDTBSDINFO)`, not `NSProcessInfo`.
+
+## 7. Status (branch `macos-port`, commit 5baa6c6)
+
+Done:
+
+* `rf-platform` facade and the mechanical rename; Cargo target wiring.
+* `rf-mac` compiles: known folders, `/Volumes` + `statfs` drives, `read_dir` listing with
+  symlink/hidden/cloud bits, recursive copy/move/rename/unique names (APFS `clonefile`),
+  folder sizes, walk-based deep search, `~/.Trash` list/empty/restore, file info + xattrs +
+  quarantine, NSPasteboard file clipboard, accent/appearance, localized folder labels,
+  codepage decoding via iconv, DOS time conversion, `notify` directory watches (included from
+  `rf-win`), single instance + launch hand-over over a Unix socket, open/reveal via
+  `NSWorkspace`/`open`, a first `input` module (Quartz cursor/modifiers).
+* `rf-archive`, `rf-player`, `rustdecoder` build on macOS (Windows code gated; mac fallbacks).
+* Windows shell-replacement UI gated; typed stubs for the platform services still called
+  (dock geometry, status bar, taskbar progress, shell namespaces, property system, preview
+  host, PDF, DirectLook hooks).
+* Plan reviewed by two expert agents; corrections above.
+
+Not done (the remaining compile surface, in rough order):
+
+* ~100 errors left in `rf-app`: DirectLook video path (`rustdecoder::window`), `vfiles`,
+  `hotkey`, `dialog_reg`, `settings_view` dock/snip/bench cards, `ops` shell_view, organizer
+  and properties call sites, a few `look/window` helpers. `rf-mac` itself builds.
+* Native file pickers (NSOpenPanel/NSSavePanel), Quick Look thumbnails/preview, PDFKit parser,
+  AVFoundation playback, NSStatusItem menu bar, Finder selection hook, launch agent,
+  `.app` bundling/notarization, CI matrix, and the `rf-core` Unix path-model pass.
 
 * Is the "typed stub + dependency alias" approach right, versus `cfg`-gating `rf-app` modules?
 * gpui-pre Apple vs upstream `gpui` (same 0.3.11 snapshot) — which is less risk?

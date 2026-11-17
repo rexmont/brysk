@@ -58,7 +58,8 @@ impl RenameSpec {
 pub enum RenameError {
     #[error("Ad boş olamaz")]
     Empty,
-    #[error("Geçersiz karakter: < > : \" / \\ | ? * veya denetim karakteri")]
+    #[cfg_attr(windows, error("Geçersiz karakter: < > : \" / \\ | ? * veya denetim karakteri"))]
+    #[cfg_attr(not(windows), error("Geçersiz karakter: / veya denetim karakteri"))]
     InvalidChars,
     #[error("Ad nokta veya boşlukla bitemez")]
     TrailingDotSpace,
@@ -142,20 +143,36 @@ const RESERVED: [&str; 22] = [
     "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
-/// Validates a single file name against Windows rules.
+/// Validates a single file name against the platform's rules.
+///
+/// Windows has its reserved characters and device names; APFS accepts those, and only `/` and
+/// NUL (plus the control characters a name cannot carry) are impossible. The Windows rules are
+/// kept behind the platform check so the shared app does not reject `a?b.txt`, `a|b` or `CON`
+/// on macOS.
 pub fn validate(name: &str) -> Result<(), RenameError> {
     if name.trim().is_empty() {
         return Err(RenameError::Empty);
     }
-    if name.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || (c as u32) < 32) {
-        return Err(RenameError::InvalidChars);
+    #[cfg(windows)]
+    {
+        if name.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || (c as u32) < 32) {
+            return Err(RenameError::InvalidChars);
+        }
+        if name.ends_with('.') || name.ends_with(' ') {
+            return Err(RenameError::TrailingDotSpace);
+        }
+        let base = name.split('.').next().unwrap_or("").trim_end().to_uppercase();
+        if RESERVED.contains(&base.as_str()) {
+            return Err(RenameError::Reserved);
+        }
     }
-    if name.ends_with('.') || name.ends_with(' ') {
-        return Err(RenameError::TrailingDotSpace);
-    }
-    let base = name.split('.').next().unwrap_or("").trim_end().to_uppercase();
-    if RESERVED.contains(&base.as_str()) {
-        return Err(RenameError::Reserved);
+    #[cfg(not(windows))]
+    {
+        // APFS/HFS: only `/` is the path separator. NUL and the control characters are not
+        // representable; `:` is legal on disk (Finder draws it as `/`) and is accepted.
+        if name.chars().any(|c| c == '/' || c == '\0' || ((c as u32) < 32)) {
+            return Err(RenameError::InvalidChars);
+        }
     }
     if name.chars().count() > 255 {
         return Err(RenameError::TooLong);
@@ -367,12 +384,23 @@ mod tests {
         // case-insensitive duplicate: "a" -> "B" collides with existing batch target "b"
         let r = compute(&items(&["a", "b"]), &fr("a", "B", false, false));
         assert_eq!(r[0], Err(RenameError::Duplicate));
-        assert_eq!(compute(&items(&["a.txt"]), &pat("x:y", 1, 1))[0], Err(RenameError::InvalidChars));
-        assert_eq!(compute(&items(&["a"]), &pat("con", 1, 1))[0], Err(RenameError::Reserved));
-        assert_eq!(validate("NUL.txt"), Err(RenameError::Reserved));
-        assert_eq!(validate("console"), Ok(()));
+        #[cfg(windows)]
+        {
+            assert_eq!(compute(&items(&["a.txt"]), &pat("x:y", 1, 1))[0], Err(RenameError::InvalidChars));
+            assert_eq!(compute(&items(&["a"]), &pat("con", 1, 1))[0], Err(RenameError::Reserved));
+            assert_eq!(validate("NUL.txt"), Err(RenameError::Reserved));
+            assert_eq!(validate("console"), Ok(()));
+            assert_eq!(validate("a."), Err(RenameError::TrailingDotSpace));
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(compute(&items(&["a.txt"]), &pat("x/y", 1, 1))[0], Err(RenameError::InvalidChars));
+            assert_eq!(compute(&items(&["a"]), &pat("con", 1, 1))[0], Ok("con".to_string()));
+            assert_eq!(validate("NUL.txt"), Ok(()));
+            assert_eq!(validate("a."), Ok(()));
+            assert_eq!(validate("a:b?c*"), Ok(()));
+        }
         assert_eq!(compute(&items(&["a"]), &pat("", 1, 1))[0], Err(RenameError::Empty));
-        assert_eq!(validate("a."), Err(RenameError::TrailingDotSpace));
         let mut s = pat("keep", 1, 1);
         s.existing = vec!["KEEP".into()];
         assert_eq!(compute(&items(&["a"]), &s)[0], Err(RenameError::Exists));

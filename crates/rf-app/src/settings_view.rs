@@ -2376,13 +2376,11 @@ fn tag_name_dialog(existing: Option<(u32, String)>, window: &mut Window, cx: &mu
 
 fn dev(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     // The editors that are installed (`rf_win::editors`): each is a button that chooses it, and "automatic" is the first of them.
-    // The look for them asks the disk and the registry, so it runs on another thread and the page is drawn again when the list
-    // is another one; while the page is open it is repeated now and then (an editor installed meanwhile shows up). macOS has no
-    // such registry list (`rf-mac` finds none), so there is nothing to look for there: the automatic choice is the `code` launcher.
-    #[cfg(windows)]
+    // Looking for them asks the disk (the registry on Windows, /Applications here), so it runs on another thread and the page is
+    // drawn again when the list is another one; while the page is open it is repeated now and then (an editor installed meanwhile
+    // shows up). "Automatic" uses the first one, or `code` on the PATH when none is installed.
     static LOOKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let (editors, fresh) = rf_win::editors::peek();
-    #[cfg(windows)]
     if !fresh && !LOOKING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         cx.spawn(async move |cx| {
             let changed = cx.background_executor().spawn(async { rf_win::editors::refresh() }).await;
@@ -2393,10 +2391,6 @@ fn dev(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         })
         .detach();
     }
-    #[cfg(not(windows))]
-    let _ = fresh;
-    #[cfg(not(windows))]
-    let _ = cx;
     let ide_label = if s.ide_path.is_empty() {
         match editors.first() {
             Some(editor) => format!("{}: {}", t!("Otomatik"), editor.name),

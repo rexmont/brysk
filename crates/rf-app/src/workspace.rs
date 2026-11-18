@@ -3658,8 +3658,12 @@ pub fn open_in_ide(dir: PathBuf, ide: String) {
         #[cfg(target_os = "macos")]
         let r = {
             // A .app is a bundle, not an executable: `open -a` starts it (and brings it forward).
-            // "automatic" means the `code` command on the PATH.
-            let program = if ide.is_empty() { "code".to_string() } else { ide.clone() };
+            // "automatic" takes the first editor installed in /Applications, else `code` on the PATH.
+            let program = if ide.is_empty() {
+                rf_win::editors::installed().first().map(|e| e.exe.display().to_string()).unwrap_or_else(|| "code".to_string())
+            } else {
+                ide.clone()
+            };
             if program.ends_with(".app") {
                 std::process::Command::new("/usr/bin/open").args(["-a", &program]).arg(&dir).spawn()
             } else {

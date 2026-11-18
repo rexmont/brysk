@@ -958,26 +958,91 @@ pub mod apppkg {
 }
 
 pub mod editors {
+    //! The code editors installed on this Mac, for Settings → Developer tools and the status
+    //! bar's "Open in editor". An editor is an application bundle; the usual places are checked.
+
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Editor {
         pub name: &'static str,
-        pub exe: std::path::PathBuf,
+        pub exe: PathBuf,
     }
 
-    pub fn installed() -> Vec<Editor> {
-        Vec::new()
+    struct Known {
+        name: &'static str,
+        app: &'static str,
     }
 
-    pub fn name_of<'a>(editors: &'a [Editor], exe: &std::path::Path) -> Option<&'a str> {
-        editors.iter().find(|e| e.exe == exe).map(|e| e.name)
+    /// In the order "automatic" takes them when several are installed.
+    const KNOWN: &[Known] = &[
+        Known { name: "VS Code", app: "Visual Studio Code.app" },
+        Known { name: "VS Code Insiders", app: "Visual Studio Code - Insiders.app" },
+        Known { name: "Cursor", app: "Cursor.app" },
+        Known { name: "Windsurf", app: "Windsurf.app" },
+        Known { name: "Antigravity", app: "Antigravity.app" },
+        Known { name: "Kiro", app: "Kiro.app" },
+        Known { name: "VSCodium", app: "VSCodium.app" },
+        Known { name: "Trae", app: "Trae.app" },
+        Known { name: "Zed", app: "Zed.app" },
+        Known { name: "Sublime Text", app: "Sublime Text.app" },
+        Known { name: "Nova", app: "Nova.app" },
+        Known { name: "BBEdit", app: "BBEdit.app" },
+    ];
+
+    const FRESH: Duration = Duration::from_secs(15);
+
+    struct State {
+        list: Vec<Editor>,
+        at: Option<Instant>,
     }
 
+    static STATE: Mutex<State> = Mutex::new(State { list: Vec::new(), at: None });
+
+    fn state() -> std::sync::MutexGuard<'static, State> {
+        STATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn detect() -> Vec<Editor> {
+        let mut roots = vec![PathBuf::from("/Applications")];
+        if let Some(home) = dirs::home_dir() {
+            roots.push(home.join("Applications"));
+        }
+        KNOWN
+            .iter()
+            .filter_map(|k| roots.iter().map(|r| r.join(k.app)).find(|p| p.is_dir()).map(|exe| Editor { name: k.name, exe }))
+            .collect()
+    }
+
+    /// The list as it was last found, and whether that was a moment ago. Never blocks.
     pub fn peek() -> (Vec<Editor>, bool) {
-        (Vec::new(), false)
+        let s = state();
+        (s.list.clone(), s.at.is_some_and(|t| t.elapsed() < FRESH))
     }
 
+    /// Looks for the editors and keeps the list; says whether it is another list than before. Blocking.
     pub fn refresh() -> bool {
-        false
+        let list = detect();
+        let mut s = state();
+        let changed = s.list != list;
+        *s = State { list, at: Some(Instant::now()) };
+        changed
+    }
+
+    /// The installed editors, looked for now unless that was done a moment ago. Blocking.
+    pub fn installed() -> Vec<Editor> {
+        let (list, fresh) = peek();
+        if fresh {
+            return list;
+        }
+        refresh();
+        peek().0
+    }
+
+    pub fn name_of<'a>(editors: &'a [Editor], exe: &Path) -> Option<&'a str> {
+        editors.iter().find(|e| e.exe == exe).map(|e| e.name)
     }
 }
 

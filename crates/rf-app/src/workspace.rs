@@ -1905,7 +1905,9 @@ impl Workspace {
         }
         let pick = self.addr_sel.unwrap_or(0);
         if let Some(p) = self.addr_suggest.get(pick).cloned() {
-            let text = format!("{}\\", p.to_string_lossy().trim_end_matches('\\'));
+            // The separator is the platform's: `\` in Explorer's address bar, `/` on macOS.
+            let sep = if cfg!(windows) { '\\' } else { '/' };
+            let text = format!("{}{sep}", p.to_string_lossy().trim_end_matches(|c| c == '/' || c == '\\'));
             self.address.update(cx, |s, cx| s.set_value(text.clone(), window, cx));
             self.update_suggestions(text, cx);
         }

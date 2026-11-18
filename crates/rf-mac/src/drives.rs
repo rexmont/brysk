@@ -33,22 +33,16 @@ pub struct Drive {
 
 impl Drive {
     pub fn display_name(&self) -> String {
-        let label = if self.label.is_empty() {
-            match self.kind {
-                DriveKind::Removable => "USB Sürücü",
-                DriveKind::Network => "Ağ Sürücüsü",
-                DriveKind::Optical => "DVD Sürücü",
-                _ => "Yerel Disk",
-            }
-            .to_string()
-        } else {
-            self.label.clone()
-        };
-        if self.root == Path::new("/") {
-            format!("{label} (Macintosh HD)")
-        } else {
-            format!("{label} ({})", self.root.display())
+        if !self.label.is_empty() {
+            return self.label.clone();
         }
+        if self.root == Path::new("/") {
+            return "Macintosh HD".into();
+        }
+        self.root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Disk".into())
     }
 
     pub fn used_fraction(&self) -> f32 {
@@ -81,7 +75,20 @@ pub fn policy_hidden() -> u32 {
     0
 }
 pub fn drive_mask() -> u32 {
-    0
+    // macOS has no letter mask; the sidebar watcher only needs a value that changes when a
+    // volume comes or goes. A hash of the mount names under /Volumes does that without a stat.
+    let mut h = 0x811C_9DC5u32;
+    if let Ok(rd) = std::fs::read_dir("/Volumes") {
+        let mut names: Vec<String> = rd.flatten().filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        for name in names {
+            for b in name.bytes() {
+                h = (h ^ b as u32).wrapping_mul(0x0100_0193);
+            }
+            h = (h ^ b'/' as u32).wrapping_mul(0x0100_0193);
+        }
+    }
+    h
 }
 
 // ---------------------------------------------------------------- enumeration

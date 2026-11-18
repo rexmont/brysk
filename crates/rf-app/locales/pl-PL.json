@@ -1669,7 +1669,7 @@
  "1982d5ea": "Wymaga",
  "f206f204": "Wyszukiwanie plików jest wyłączone: włącz indeks nazw w Ustawieniach",
  "e184b257": "Szukaj aplikacji, plików lub w sieci",
- "011d3815": "Aplikacje",
+ "011d3815": "Programy",
  "d0cc3219": "Zakładki",
  "72645431": "Sieć",
  "6d020bc6": "szukaj w sieci",
@@ -1935,5 +1935,9 @@
  "16622163": "Otwórz na monitorze",
  "db7893e9": "Dopasuj do ekranu",
  "7540225a": "Kompaktowy obszar powiadomień",
- "ae626bdb": "Ikony obszaru powiadomień prawej wyspy są ułożone bliżej siebie; w tym samym miejscu mieści się więcej ikon."
+ "ae626bdb": "Ikony obszaru powiadomień prawej wyspy są ułożone bliżej siebie; w tym samym miejscu mieści się więcej ikon.",
+ "f788f9ef": "Pokaż zawartość pakietu",
+ "5f91b742": "Pakiet",
+ "6938d23d": "Pakiety",
+ "059c0f6d": "Pokaż w Finderze"
 }

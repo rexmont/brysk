@@ -1669,7 +1669,7 @@
  "1982d5ea": "Needs",
  "f206f204": "File search is off: turn on the name index in Settings",
  "e184b257": "Search apps, files or the web",
- "011d3815": "Apps",
+ "011d3815": "Applications",
  "d0cc3219": "Bookmarks",
  "72645431": "Web",
  "6d020bc6": "search the web",
@@ -1935,5 +1935,9 @@
  "16622163": "Open on monitor",
  "db7893e9": "Fit to screen",
  "7540225a": "Compact tray",
- "ae626bdb": "The tray icons of the right island stand closer together; more icons fit in the same room."
+ "ae626bdb": "The tray icons of the right island stand closer together; more icons fit in the same room.",
+ "f788f9ef": "Show Package Contents",
+ "5f91b742": "Package",
+ "6938d23d": "Packages",
+ "059c0f6d": "Show in Finder"
 }

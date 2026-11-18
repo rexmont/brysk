@@ -1456,7 +1456,7 @@ impl Workspace {
                     let mut v = Vec::new();
                     let _ = rf_win::list_dir(d, 4096, &|| false, &mut |b| {
                         for e in b {
-                            if e.is_dir() && !e.is_hidden() {
+                            if e.is_dir() && !e.is_package() && !e.is_hidden() {
                                 v.push((e.name.to_string(), d.join(&*e.name)));
                             }
                         }
@@ -1906,8 +1906,14 @@ impl Workspace {
         let pick = self.addr_sel.unwrap_or(0);
         if let Some(p) = self.addr_suggest.get(pick).cloned() {
             // The separator is the platform's: `\` in Explorer's address bar, `/` on macOS.
+            // An app bundle completes to itself: a slash would ask to browse its inside.
+            let package = p.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy()));
             let sep = if cfg!(windows) { '\\' } else { '/' };
-            let text = format!("{}{sep}", p.to_string_lossy().trim_end_matches(|c| c == '/' || c == '\\'));
+            let text = if package {
+                p.to_string_lossy().into_owned()
+            } else {
+                format!("{}{sep}", p.to_string_lossy().trim_end_matches(|c| c == '/' || c == '\\'))
+            };
             self.address.update(cx, |s, cx| s.set_value(text.clone(), window, cx));
             self.update_suggestions(text, cx);
         }
@@ -2357,7 +2363,9 @@ impl Workspace {
 
     /// The sidebar's folder menu at `at`; `classic`: Windows' own menu (extended verbs) instead of ours.
     fn sidebar_menu_at(&mut self, path: PathBuf, classic: bool, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        use crate::fluent_menu::{Item, Menu, MenuIcon, Sub};
+        use crate::fluent_menu::{Item, Menu, MenuIcon};
+        #[cfg(windows)]
+        use crate::fluent_menu::Sub;
         if classic {
             // the classic Explorer menu, extended verbs included
             let p2 = path.clone();
@@ -2413,12 +2421,13 @@ impl Workspace {
             }))
             .hint("Alt+Enter"),
             Item::Separator,
+            #[cfg(windows)]
             Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: MenuIcon::Lucide(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } },
         ];
         // a drive can be taken off the lists of places (it comes back from Settings > Files and folders)
         let mut items = items;
         if let Some(letter) = crate::settings_view::drive_letter(&path) {
-            let at = items.len() - 2;
+            let at = items.iter().rposition(|it| matches!(it, Item::Separator)).unwrap_or(items.len());
             items.insert(
                 at,
                 Item::action(t!("Bu sürücüyü gizle"), MenuIcon::Lucide(L::EyeOff), move |_, cx| crate::settings::update(cx, move |s| crate::settings_view::set_drive_hidden(s, letter, true))),
@@ -2546,7 +2555,12 @@ impl Workspace {
     /// Folders dropped on the sidebar's pin area get pinned (files are ignored, as in Explorer).
     fn pin_dropped(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
         self.sidebar_ext_drag = false;
-        let dirs: Vec<PathBuf> = paths.paths().iter().filter(|p| p.is_dir()).cloned().collect();
+        let dirs: Vec<PathBuf> = paths
+            .paths()
+            .iter()
+            .filter(|p| p.is_dir() && !p.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy())))
+            .cloned()
+            .collect();
         if dirs.is_empty() {
             return;
         }
@@ -3470,6 +3484,19 @@ impl Workspace {
             if loading {
                 left = left.child(t!("Yükleniyor…"));
                 busy = true;
+            }
+            // Finder's status bar ends with the room left on the volume.
+            #[cfg(target_os = "macos")]
+            if let Some(dir) = tab.location().path()
+                && let Some(d) = self
+                    .places
+                    .read(cx)
+                    .drives
+                    .iter()
+                    .filter(|d| dir.starts_with(&d.root))
+                    .max_by_key(|d| d.root.components().count())
+            {
+                left = left.child(format!("{}: {}", t!("Boş alan"), format::size(d.free)));
             }
             // values being read for a sort or grouping by a property column
             if let Some(s) = tab.prop_status() {
@@ -4437,7 +4464,11 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &GoHome, window, cx| this.navigate(Location::Home, window, cx)))
             .on_action(cx.listener(|this, _: &Refresh, _, cx| this.with_tab(cx, |v, cx| v.refresh(cx))))
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.with_tab(cx, |v, cx| v.toggle_hidden(cx))))
-            .on_action(cx.listener(|this, _: &NewTab, window, cx| this.open_tab(Location::Home, window, cx)))
+            .on_action(cx.listener(|this, _: &NewTab, window, cx| {
+                // Finder opens the new tab where the current one is, not at Home.
+                let loc = this.active_tab().read(cx).location().clone();
+                this.open_tab(loc, window, cx)
+            }))
             .on_action(cx.listener(|this, _: &NewWindow, window, cx| {
                 // New window at the current folder, offset from this one.
                 let loc = this.active_tab().read(cx).location().clone();

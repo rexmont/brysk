@@ -710,7 +710,7 @@ fn build(slot: &Slot) -> Option<Index> {
             }
             index.add(dir_id, &name, &mut scratch);
             let Ok(ft) = e.file_type() else { continue };
-            if ft.is_dir() && !ft.is_symlink() && !skip_inside(&name) && depth < slot.depth {
+            if ft.is_dir() && !ft.is_symlink() && !skip_inside(&name) && !rf_core::is_package_name(&name) && depth < slot.depth {
                 if let Ok(sub) = std::fs::read_dir(e.path()) {
                     let id = index.dir_id(&e.path());
                     stack.push((sub, id, depth + 1));
@@ -764,7 +764,7 @@ fn index_dir(slot: &Slot, index: &mut Index, dir: &Path, depth: usize, scratch: 
         }
         index.add(dir_id, &name, scratch);
         let Ok(ft) = e.file_type() else { continue };
-        if ft.is_dir() && !skip_inside(&name) && depth < slot.depth {
+        if ft.is_dir() && !skip_inside(&name) && !rf_core::is_package_name(&name) && depth < slot.depth {
             index_dir(slot, index, &e.path(), depth + 1, scratch);
         }
     }
@@ -821,7 +821,7 @@ fn refresh_dir(slot: &Slot, dir: &Path) {
             continue;
         }
         index.add(dir_id, &name, &mut scratch);
-        if is_dir && !skip_inside(&name) && depth < slot.depth {
+        if is_dir && !skip_inside(&name) && !rf_core::is_package_name(&name) && depth < slot.depth {
             index_dir(slot, &mut index, &dir.join(&name), depth + 1, &mut scratch);
         }
     }

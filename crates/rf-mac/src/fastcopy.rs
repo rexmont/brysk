@@ -179,6 +179,11 @@ fn keep_both(dst: &Path, is_dir: bool, reserved: &HashSet<PathBuf>) -> PathBuf {
     crate::fileops::duplicate_name_avoiding(parent, &name, is_dir, reserved)
 }
 
+/// A macOS package (.app, .bundle, .framework…): one item, never merged with another.
+fn package_at(p: &Path) -> bool {
+    p.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy()))
+}
+
 /// Walks one source and gives every entry a destination that does not overwrite anything:
 /// folders with the same name merge, everything else keeps both.
 fn plan_walk(
@@ -199,8 +204,10 @@ fn plan_walk(
         return Err(std::io::Error::other(format!("{}: bu tür özel dosyalar kopyalanamaz", src.display())));
     }
     // A folder pair merges; a file (or a symlink) in the way makes the folder a "copy".
-    let merge = is_real_dir(dst) && !reserved.contains(dst);
-    let dst = if merge || !(exists(dst) || reserved.contains(dst)) { dst.to_path_buf() } else { keep_both(dst, true, reserved) };
+    // A package is an item, not a folder pair: two apps never merge.
+    let package = package_at(src);
+    let merge = is_real_dir(dst) && !reserved.contains(dst) && !package;
+    let dst = if merge || !(exists(dst) || reserved.contains(dst)) { dst.to_path_buf() } else { keep_both(dst, !package, reserved) };
     reserved.insert(dst.clone());
     dirs.push(dst.clone());
     for e in std::fs::read_dir(src)? {
@@ -219,6 +226,9 @@ fn top_target(src: &Path, dest_dir: &Path, kind: Transfer, reserved: &HashSet<Pa
     let name = src.file_name().ok_or_else(|| anyhow::anyhow!("ad yok: {}", src.display()))?;
     let desired = dest_dir.join(name);
     let src_dir = is_real_dir(src);
+    let src_package = package_at(src);
+    // a package keeps its suffix when it is renamed: "Safari copy.app", not "Safari.app copy"
+    let copy_is_dir = src_dir && !src_package;
     let dest_canon = dest_dir.canonicalize().with_context(|| format!("{} okunamadı", dest_dir.display()))?;
 
     // A folder inside itself would recurse forever (and for a move it would delete the copy).
@@ -237,15 +247,15 @@ fn top_target(src: &Path, dest_dir: &Path, kind: Transfer, reserved: &HashSet<Pa
             // Cut and paste in the same folder changes nothing.
             Transfer::Move => None,
             // Paste a copy next to the original: "name copy".
-            Transfer::Copy => Some(keep_both(&desired, src_dir, reserved)),
+            Transfer::Copy => Some(keep_both(&desired, copy_is_dir, reserved)),
         });
     }
 
     let taken = exists(&desired) || reserved.contains(&desired);
-    if !taken || (src_dir && is_real_dir(&desired)) {
+    if !taken || (src_dir && !src_package && is_real_dir(&desired)) {
         return Ok(Some(desired));
     }
-    Ok(Some(keep_both(&desired, src_dir, reserved)))
+    Ok(Some(keep_both(&desired, copy_is_dir, reserved)))
 }
 
 /// Removes the folders a move left behind, but only the empty ones: a file that appeared while
@@ -593,6 +603,24 @@ mod tests {
         std::fs::create_dir(&dest).unwrap();
         assert!(transfer(Transfer::Copy, std::slice::from_ref(&link), &dest, tracker()).unwrap());
         assert_eq!(std::fs::read_link(dest.join("gone")).unwrap(), PathBuf::from("/nonexistent/target"));
+    }
+
+    #[test]
+    fn an_app_bundle_is_one_item_never_merged_and_keeps_its_suffix_last() {
+        let d = scratch("app-bundle");
+        let src = d.join("Safari.app");
+        std::fs::create_dir_all(src.join("Contents/MacOS")).unwrap();
+        std::fs::write(src.join("Contents/MacOS/Safari"), b"new").unwrap();
+        // duplicating it in its own folder: "Safari copy.app"
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &d, tracker()).unwrap());
+        assert_eq!(read(&d.join("Safari copy.app/Contents/MacOS/Safari")), b"new");
+        // pasting it where another Safari.app is: keep both, do not merge into the existing app
+        let dest = d.join("dest");
+        std::fs::create_dir_all(dest.join("Safari.app/Contents/MacOS")).unwrap();
+        std::fs::write(dest.join("Safari.app/Contents/MacOS/Safari"), b"old").unwrap();
+        assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker()).unwrap());
+        assert_eq!(read(&dest.join("Safari.app/Contents/MacOS/Safari")), b"old");
+        assert_eq!(read(&dest.join("Safari copy.app/Contents/MacOS/Safari")), b"new");
     }
 
     #[test]

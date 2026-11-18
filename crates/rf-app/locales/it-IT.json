@@ -1669,7 +1669,7 @@
  "1982d5ea": "Richiede",
  "f206f204": "La ricerca di file è disattivata: attiva l'indice dei nomi in Impostazioni",
  "e184b257": "Cerca app, file o sul web",
- "011d3815": "App",
+ "011d3815": "Applicazioni",
  "d0cc3219": "Preferiti",
  "72645431": "Web",
  "6d020bc6": "cerca sul web",
@@ -1935,5 +1935,9 @@
  "16622163": "Apri sul monitor",
  "db7893e9": "Adatta allo schermo",
  "7540225a": "Area di notifica compatta",
- "ae626bdb": "Le icone dell'area di notifica dell'isola di destra sono più ravvicinate; nello stesso spazio entrano più icone."
+ "ae626bdb": "Le icone dell'area di notifica dell'isola di destra sono più ravvicinate; nello stesso spazio entrano più icone.",
+ "f788f9ef": "Mostra contenuto pacchetto",
+ "5f91b742": "Pacchetto",
+ "6938d23d": "Pacchetti",
+ "059c0f6d": "Mostra nel Finder"
 }

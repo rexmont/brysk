@@ -1669,7 +1669,7 @@
  "1982d5ea": "Behöver",
  "f206f204": "Filsökningen är av: slå på namnindexet i Inställningar",
  "e184b257": "Sök appar, filer eller webben",
- "011d3815": "Appar",
+ "011d3815": "Program",
  "d0cc3219": "Bokmärken",
  "72645431": "Webb",
  "6d020bc6": "sök på webben",
@@ -1935,5 +1935,9 @@
  "16622163": "Öppna på bildskärm",
  "db7893e9": "Anpassa till skärmen",
  "7540225a": "Kompakt meddelandefält",
- "ae626bdb": "Ikonerna i meddelandefältet på den högra ön står tätare; fler ikoner ryms på samma yta."
+ "ae626bdb": "Ikonerna i meddelandefältet på den högra ön står tätare; fler ikoner ryms på samma yta.",
+ "f788f9ef": "Visa paketinnehåll",
+ "5f91b742": "Paket",
+ "6938d23d": "Paket",
+ "059c0f6d": "Visa i Finder"
 }

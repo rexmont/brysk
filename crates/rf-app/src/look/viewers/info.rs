@@ -258,11 +258,18 @@ impl Render for InfoView {
             }
             lines.push(line(&p, t!("Boş"), format!("{} / {}", format::size(*free), format::size(*total))));
         } else if let Some((files, dirs, bytes, done)) = self.folder {
+            let package = self.entry.as_ref().is_some_and(|e| e.is_package());
             let more = if done { String::new() } else { format!(" — {}", t!("hesaplanıyor…")) };
             lines.push(line(&p, t!("Boyut"), format!("{}{more}", format::size(bytes))));
-            lines.push(line(&p, t!("İçerik"), format!("{files} {}, {dirs} {}", t!("dosya"), t!("klasör"))));
+            // an .app is one item: Finder's preview does not list how many files are inside it
+            if !package {
+                lines.push(line(&p, t!("İçerik"), format!("{files} {}, {dirs} {}", t!("dosya"), t!("klasör"))));
+            }
         } else if let Some(e) = self.entry.as_ref().filter(|e| !e.is_dir()) {
             lines.push(line(&p, t!("Boyut"), format::size(e.size)));
+        }
+        if let Some(e) = self.entry.as_ref().filter(|e| e.is_package()) {
+            lines.push(line(&p, t!("Tür"), crate::icons::type_label(e)));
         }
         if let Some(c) = &self.cert {
             lines.push(line(&p, t!("Verilen"), c.subject.clone()));

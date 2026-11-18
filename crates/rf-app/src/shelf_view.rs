@@ -134,6 +134,7 @@ impl Render for ShelfView {
                 let name = rf_core::history::display_name(path);
                 let parent = path.parent().map(rf_core::history::display_name).unwrap_or_default();
                 let is_dir_guess = path.extension().is_none();
+                let is_app = rf_core::is_package_name(&name);
                 let reveal = path.clone();
                 let remove = path.clone();
                 list = list.child(
@@ -153,9 +154,9 @@ impl Render for ShelfView {
                             }
                         }))
                         .child(
-                            Icon::new(if is_dir_guess { L::Folder } else { L::File })
+                            Icon::new(if is_app { L::AppWindow } else if is_dir_guess { L::Folder } else { L::File })
                                 .size(px(16.))
-                                .text_color(if is_dir_guess { p.accent } else { p.text_secondary }),
+                                .text_color(if is_app { p.text_secondary } else if is_dir_guess { p.accent } else { p.text_secondary }),
                         )
                         .child(
                             v_flex()

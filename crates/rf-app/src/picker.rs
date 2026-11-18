@@ -368,7 +368,13 @@ pub(crate) fn accept(ws: &mut Workspace, window: &mut Window, cx: &mut Context<W
         Mode::Folder => {
             let chosen = match sel.as_slice() {
                 [(p, true)] => Some(p.clone()),
-                _ => resolve(dir.as_deref(), &text).filter(|p| !text.is_empty() && p.is_dir()).or(dir),
+                _ => resolve(dir.as_deref(), &text)
+                    .filter(|p| {
+                        !text.is_empty()
+                            && p.is_dir()
+                            && !p.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy()))
+                    })
+                    .or(dir),
             };
             match chosen {
                 Some(p) => finish(ws, vec![p], window),
@@ -394,6 +400,10 @@ pub(crate) fn accept(ws: &mut Workspace, window: &mut Window, cx: &mut Context<W
             let targets: Vec<PathBuf> = names.iter().filter_map(|n| resolve(dir.as_deref(), n)).collect();
             if let [one] = targets.as_slice() {
                 if one.is_dir() {
+                    // an .app is a file to a dialog: Finder's Open panel picks it, it does not enter it
+                    if one.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy())) {
+                        return finish(ws, vec![one.clone()], window);
+                    }
                     return navigate(ws, one.clone(), window, cx);
                 }
             }

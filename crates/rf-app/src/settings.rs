@@ -426,6 +426,10 @@ pub struct Settings {
     pub saved_sessions: Vec<NamedSession>,
     /// User pins. `None` = the default known folders.
     pub pinned: Option<Vec<PathBuf>>,
+    /// The macOS Applications folder was put at the top of the user's own pins once. A later
+    /// removal is kept: the migration never puts it back.
+    #[serde(default)]
+    pub apps_pinned: bool,
     /// Folder aliases: `@name` in the address box (Files' folder aliases).
     pub folder_aliases: std::collections::BTreeMap<String, PathBuf>,
     /// The drives that are not listed (the sidebar, the Home page, the address bar's list of drives), as letters ("V"). A drive
@@ -739,6 +743,7 @@ impl Default for Settings {
             session_active: 0,
             saved_sessions: Vec::new(),
             pinned: None,
+            apps_pinned: false,
             folder_aliases: Default::default(),
             hidden_drives: Vec::new(),
             accent_color: String::new(),
@@ -1028,6 +1033,18 @@ impl Settings {
         #[cfg(target_os = "macos")]
         if !self.size_format_chosen {
             self.decimal_sizes = true;
+        }
+        // Finder keeps Applications at hand above Desktop. Files from before this marker get
+        // it at the top of their own pins; after that, removing it is the user's choice.
+        #[cfg(target_os = "macos")]
+        if !self.apps_pinned {
+            let apps = PathBuf::from("/Applications");
+            if let Some(list) = &mut self.pinned
+                && !list.contains(&apps)
+            {
+                list.insert(0, apps);
+            }
+            self.apps_pinned = true;
         }
         // "details" was the default before 0.3.3, so it says nothing about a choice: move it
         // once to "adaptive" (plain folders still open as details). Grid and columns stay.

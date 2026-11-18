@@ -353,6 +353,10 @@ fn button(id: &'static str, icon: L, label: &'static str, enabled: bool, p: &Pal
 /// for a real folder, otherwise the file's own kind (a zip is an archive, not a folder).
 fn row_category(it: &RecycleItem) -> crate::icons::Category {
     if it.is_dir {
+        // an app in the bin is still an application, not a folder
+        if rf_core::is_package_name(&it.name) {
+            return crate::icons::Category::Executable;
+        }
         return crate::icons::Category::Folder;
     }
     let ext = it.name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();

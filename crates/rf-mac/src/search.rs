@@ -205,7 +205,7 @@ pub fn search(q: &SearchQuery, cancelled: &dyn Fn() -> bool, on_batch: &mut dyn 
             let p = e.path();
             let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
             let is_link = e.file_type().map(|t| t.is_symlink()).unwrap_or(false);
-            if is_dir && !is_link {
+            if is_dir && !is_link && !rf_core::is_package_name(&name) {
                 stack.push(p.clone());
             }
             if matcher.hit(&name, &mut folded, &mut chars)

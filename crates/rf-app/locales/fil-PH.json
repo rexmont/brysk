@@ -1669,7 +1669,7 @@
  "1982d5ea": "Kailangan",
  "f206f204": "Naka-off ang paghahanap ng file: i-on ang name index sa Settings",
  "e184b257": "Maghanap ng app, file o web",
- "011d3815": "Mga app",
+ "011d3815": "Mga Application",
  "d0cc3219": "Mga bookmark",
  "72645431": "Web",
  "6d020bc6": "maghanap sa web",
@@ -1935,5 +1935,9 @@
  "16622163": "Buksan sa monitor",
  "db7893e9": "Iakma sa screen",
  "7540225a": "Compact na tray",
- "ae626bdb": "Mas magkakalapit ang mga icon ng tray sa kanang isla; mas maraming icon ang magkakasya sa parehong espasyo."
+ "ae626bdb": "Mas magkakalapit ang mga icon ng tray sa kanang isla; mas maraming icon ang magkakasya sa parehong espasyo.",
+ "f788f9ef": "Ipakita ang Nilalaman ng Package",
+ "5f91b742": "Package",
+ "6938d23d": "Mga Package",
+ "059c0f6d": "Ipakita sa Finder"
 }

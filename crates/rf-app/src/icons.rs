@@ -22,6 +22,9 @@ pub enum Category {
 }
 
 pub fn category(e: &Entry) -> Category {
+    if e.is_app_bundle() {
+        return Category::Executable;
+    }
     if e.is_dir() {
         return Category::Folder;
     }
@@ -80,6 +83,12 @@ pub fn icon_for(cat: Category) -> L {
 }
 
 pub fn type_label(e: &Entry) -> String {
+    if e.is_app_bundle() {
+        return t!("Uygulama").into();
+    }
+    if e.is_package() {
+        return t!("Paket").into();
+    }
     type_label_of(e.is_dir(), &e.ext)
 }
 

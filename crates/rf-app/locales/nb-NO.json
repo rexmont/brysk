@@ -1669,7 +1669,7 @@
  "1982d5ea": "Krever",
  "f206f204": "Filsøk er av: slå på navneindeksen i Innstillinger",
  "e184b257": "Søk etter apper, filer eller på nettet",
- "011d3815": "Apper",
+ "011d3815": "Programmer",
  "d0cc3219": "Bokmerker",
  "72645431": "Nett",
  "6d020bc6": "søk på nettet",
@@ -1935,5 +1935,9 @@
  "16622163": "Åpne på skjerm",
  "db7893e9": "Tilpass til skjermen",
  "7540225a": "Kompakt varslingsområde",
- "ae626bdb": "Ikonene i varslingsområdet på den høyre øya står tettere sammen; flere ikoner får plass på samme område."
+ "ae626bdb": "Ikonene i varslingsområdet på den høyre øya står tettere sammen; flere ikoner får plass på samme område.",
+ "f788f9ef": "Vis pakkeinnhold",
+ "5f91b742": "Pakke",
+ "6938d23d": "Pakker",
+ "059c0f6d": "Vis i Finder"
 }

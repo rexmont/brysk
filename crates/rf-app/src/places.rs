@@ -8,16 +8,33 @@ use rf_win::{Drive, DriveKind, KnownFolder};
 
 /// Drive display name with the generic fallback labels translated ("Yerel Disk (C:)").
 pub fn drive_name(d: &Drive) -> String {
-    if d.label.is_empty() {
-        let kind = match d.kind {
+    // macOS volumes have names of their own; the mount path and a fake letter are Explorer's.
+    #[cfg(target_os = "macos")]
+    {
+        if !d.label.is_empty() {
+            return d.label.clone();
+        }
+        return match d.kind {
             DriveKind::Removable => crate::t!("USB Sürücü"),
             DriveKind::Network => crate::t!("Ağ Sürücüsü"),
             DriveKind::Optical => crate::t!("DVD Sürücü"),
             _ => crate::t!("Yerel Disk"),
-        };
-        format!("{kind} ({}:)", d.letter)
-    } else {
-        d.display_name()
+        }
+        .to_string();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if d.label.is_empty() {
+            let kind = match d.kind {
+                DriveKind::Removable => crate::t!("USB Sürücü"),
+                DriveKind::Network => crate::t!("Ağ Sürücüsü"),
+                DriveKind::Optical => crate::t!("DVD Sürücü"),
+                _ => crate::t!("Yerel Disk"),
+            };
+            format!("{kind} ({}:)", d.letter)
+        } else {
+            d.display_name()
+        }
     }
 }
 
@@ -282,6 +299,8 @@ impl Places {
 
 pub fn known_icon(k: KnownFolder) -> L {
     match k {
+        #[cfg(target_os = "macos")]
+        KnownFolder::Applications => L::AppWindow,
         KnownFolder::Desktop => L::Monitor,
         KnownFolder::Downloads => L::Download,
         KnownFolder::Documents => L::FileText,

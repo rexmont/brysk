@@ -1669,7 +1669,7 @@
  "1982d5ea": "Nepieciešams",
  "f206f204": "Failu meklēšana ir izslēgta: iespējojiet nosaukumu indeksu iestatījumos",
  "e184b257": "Meklēt lietotnes, failus vai tīmeklī",
- "011d3815": "Lietotnes",
+ "011d3815": "Programmas",
  "d0cc3219": "Grāmatzīmes",
  "72645431": "Tīmeklis",
  "6d020bc6": "meklēt tīmeklī",
@@ -1935,5 +1935,9 @@
  "16622163": "Atvērt monitorā",
  "db7893e9": "Piemērot ekrānam",
  "7540225a": "Kompakts paziņojumu apgabals",
- "ae626bdb": "Labās salas paziņojumu apgabala ikonas atrodas tuvāk viena otrai; tajā pašā vietā ietilpst vairāk ikonu."
+ "ae626bdb": "Labās salas paziņojumu apgabala ikonas atrodas tuvāk viena otrai; tajā pašā vietā ietilpst vairāk ikonu.",
+ "f788f9ef": "Rādīt pakotnes saturu",
+ "5f91b742": "Pakotne",
+ "6938d23d": "Pakotnes",
+ "059c0f6d": "Rādīt Finder"
 }

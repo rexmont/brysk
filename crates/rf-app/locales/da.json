@@ -1669,7 +1669,7 @@
  "1982d5ea": "Kræver",
  "f206f204": "Filsøgning er slået fra: slå navneindekset til under Indstillinger",
  "e184b257": "Søg efter apps, filer eller på nettet",
- "011d3815": "Apps",
+ "011d3815": "Programmer",
  "d0cc3219": "Bogmærker",
  "72645431": "Web",
  "6d020bc6": "søg på nettet",
@@ -1935,5 +1935,9 @@
  "16622163": "Åbn på skærm",
  "db7893e9": "Tilpas til skærm",
  "7540225a": "Kompakt meddelelsesområde",
- "ae626bdb": "Ikonerne i meddelelsesområdet på den højre ø står tættere sammen; der er plads til flere ikoner på samme område."
+ "ae626bdb": "Ikonerne i meddelelsesområdet på den højre ø står tættere sammen; der er plads til flere ikoner på samme område.",
+ "f788f9ef": "Vis pakkeindhold",
+ "5f91b742": "Pakke",
+ "6938d23d": "Pakker",
+ "059c0f6d": "Vis i Finder"
 }

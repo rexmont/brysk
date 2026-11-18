@@ -20,7 +20,7 @@ pub mod tags;
 pub mod transfer;
 pub mod treemap;
 
-pub use entry::{Entry, EntryKind, attrs};
+pub use entry::{Entry, EntryKind, attrs, is_package_name};
 pub use history::{History, Location};
 pub use sort::{SortDir, SortKey, SortSpec};
 

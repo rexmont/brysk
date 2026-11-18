@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KnownFolder {
+    Applications,
     Desktop,
     Downloads,
     Documents,
@@ -15,7 +16,8 @@ pub enum KnownFolder {
 }
 
 impl KnownFolder {
-    pub const PINNED_DEFAULTS: [KnownFolder; 6] = [
+    pub const PINNED_DEFAULTS: [KnownFolder; 7] = [
+        KnownFolder::Applications,
         KnownFolder::Desktop,
         KnownFolder::Downloads,
         KnownFolder::Documents,
@@ -31,6 +33,7 @@ impl KnownFolder {
     /// `crates/rf-app/src/i18n_en.rs` ("Desktop", "Downloads", ...).
     pub fn title(self) -> &'static str {
         match self {
+            KnownFolder::Applications => "Uygulamalar",
             KnownFolder::Desktop => "Masaüstü",
             KnownFolder::Downloads => "İndirilenler",
             KnownFolder::Documents => "Belgeler",
@@ -44,15 +47,15 @@ impl KnownFolder {
     /// The folder's path, without asking the disk. Use it for label matching on a drawing
     /// path: `path()` below stats every home folder (a cloud/offline home would block the UI).
     pub fn path_unchecked(self) -> Option<PathBuf> {
-        let home = dirs::home_dir()?;
         Some(match self {
-            KnownFolder::Desktop => home.join("Desktop"),
-            KnownFolder::Downloads => home.join("Downloads"),
-            KnownFolder::Documents => home.join("Documents"),
-            KnownFolder::Pictures => home.join("Pictures"),
-            KnownFolder::Music => home.join("Music"),
-            KnownFolder::Videos => home.join("Movies"),
-            KnownFolder::Profile => home,
+            KnownFolder::Applications => PathBuf::from("/Applications"),
+            KnownFolder::Desktop => dirs::home_dir()?.join("Desktop"),
+            KnownFolder::Downloads => dirs::home_dir()?.join("Downloads"),
+            KnownFolder::Documents => dirs::home_dir()?.join("Documents"),
+            KnownFolder::Pictures => dirs::home_dir()?.join("Pictures"),
+            KnownFolder::Music => dirs::home_dir()?.join("Music"),
+            KnownFolder::Videos => dirs::home_dir()?.join("Movies"),
+            KnownFolder::Profile => dirs::home_dir()?,
         })
     }
 
@@ -77,7 +80,7 @@ mod tests {
     #[test]
     fn every_known_folder_has_its_own_title_key() {
         use super::KnownFolder;
-        let all = [KnownFolder::Desktop, KnownFolder::Downloads, KnownFolder::Documents, KnownFolder::Pictures, KnownFolder::Music, KnownFolder::Videos, KnownFolder::Profile];
+        let all = [KnownFolder::Applications, KnownFolder::Desktop, KnownFolder::Downloads, KnownFolder::Documents, KnownFolder::Pictures, KnownFolder::Music, KnownFolder::Videos, KnownFolder::Profile];
         let mut seen = std::collections::HashSet::new();
         for k in all {
             assert!(!k.title().is_empty());

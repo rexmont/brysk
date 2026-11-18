@@ -10028,7 +10028,7 @@
   "id": "011d3815",
   "key": "Uygulamalar",
   "tr": "Uygulamalar",
-  "en": "Apps"
+  "en": "Applications"
  },
  {
   "id": "d0cc3219",
@@ -11638,5 +11638,29 @@
   "key": "Sağ adadaki tepsi simgeleri birbirine daha yakın durur; aynı yere daha çok simge sığar.",
   "tr": "Sağ adadaki tepsi simgeleri birbirine daha yakın durur; aynı yere daha çok simge sığar.",
   "en": "The tray icons of the right island stand closer together; more icons fit in the same room."
+ },
+ {
+  "id": "f788f9ef",
+  "key": "Paket İçeriğini Göster",
+  "tr": "Paket İçeriğini Göster",
+  "en": "Show Package Contents"
+ },
+ {
+  "id": "5f91b742",
+  "key": "Paket",
+  "tr": "Paket",
+  "en": "Package"
+ },
+ {
+  "id": "6938d23d",
+  "key": "Paketler",
+  "tr": "Paketler",
+  "en": "Packages"
+ },
+ {
+  "id": "059c0f6d",
+  "key": "Finder'da Göster",
+  "tr": "Finder'da Göster",
+  "en": "Show in Finder"
  }
 ]

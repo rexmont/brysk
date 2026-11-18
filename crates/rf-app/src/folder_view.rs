@@ -184,7 +184,17 @@ fn group_key(g: GroupBy, e: &Entry, now: chrono::DateTime<chrono::Local>) -> (u3
         GroupBy::Created => relative_day(e.created_ms, now),
         GroupBy::Year | GroupBy::Month | GroupBy::Day => calendar_key(g, e.modified_ms),
         GroupBy::Type => {
-            if e.is_dir() { (0, "Klasörler".into()) } else { (1, icons::type_label(e)) }
+            // string-table keys, translated where the header is drawn (`i18n::td`): the list
+            // is built off the UI thread, before the language of this frame is known.
+            if e.is_app_bundle() {
+                (0, "Uygulamalar".into())
+            } else if e.is_package() {
+                (0, "Paketler".into())
+            } else if e.is_dir() {
+                (0, "Klasörler".into())
+            } else {
+                (1, icons::type_label(e))
+            }
         }
         GroupBy::Modified => relative_day(e.modified_ms, now),
         GroupBy::Size => {
@@ -877,7 +887,7 @@ impl FolderView {
                         e.link,
                     ))
                     .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, _| this.name_hit = true)).child(crate::rtl::display_text(&e.name)))
-                    .when(is_dir, |d| d.child(Icon::new(L::ChevronRight).size(px(12.)).text_color(p.text_tertiary)))
+                    .when(is_dir && !e.is_package(), |d| d.child(Icon::new(L::ChevronRight).size(px(12.)).text_color(p.text_tertiary)))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, ev: &MouseDownEvent, window, cx| this.on_row_mouse_down(vi, ev, window, cx)),
@@ -903,7 +913,7 @@ impl FolderView {
             child = parent;
         }
         ancestors.reverse();
-        let next_dir = self.cursor_entry().filter(|&ei| self.entries[ei as usize].is_dir()).and_then(|ei| self.path_of(ei));
+        let next_dir = self.cursor_entry().filter(|&ei| self.entries[ei as usize].is_dir() && !self.entries[ei as usize].is_package()).and_then(|ei| self.path_of(ei));
         for (d, _) in &ancestors {
             self.ensure_column(d.clone(), cx);
         }
@@ -1202,6 +1212,16 @@ impl FolderView {
 
     pub(crate) fn selected_is_single_dir(&self) -> bool {
         self.selected.len() == 1 && self.selected.iter().all(|&i| self.entries[i as usize].is_dir())
+    }
+
+    /// One selected package (.app and friends): a folder the Finder treats as a single item.
+    pub(crate) fn selected_is_single_package(&self) -> bool {
+        self.selected.len() == 1 && self.selected.iter().all(|&i| self.entries[i as usize].is_package())
+    }
+
+    /// Every selected item is a package: the folder verbs (pin, shelf, terminal…) do not apply.
+    pub(crate) fn selected_all_packages(&self) -> bool {
+        !self.selected.is_empty() && self.selected.iter().all(|&i| self.entries[i as usize].is_package())
     }
 
     fn load_inner(&mut self, soft: bool, cx: &mut Context<Self>) {
@@ -2555,7 +2575,7 @@ impl FolderView {
                         MouseButton::Right,
                         cx.listener(move |this, _: &MouseDownEvent, window, cx| this.on_row_right_down(vi, window, cx)),
                     )
-                    .when(e.is_dir(), |d| {
+                    .when(e.is_dir() && !e.is_package(), |d| {
                         d.drag_over::<ExternalPaths>(move |s, _, _, _| s.bg(drop_bg).border_1().border_color(drop_border))
                             .on_drop(cx.listener(move |this, paths: &ExternalPaths, _, cx| {
                                 if let Some(dest) = this.drop_target_row(ei) {
@@ -2583,7 +2603,13 @@ impl FolderView {
         }
         window.focus(&self.focus, cx);
         let Some(&ei) = self.visible.get(vi) else { return };
-        let plain = !ev.modifiers.control && !ev.modifiers.shift;
+        // macOS: Control-click is a secondary click; Command toggles the selection
+        if cfg!(target_os = "macos") && ev.modifiers.control {
+            self.on_row_right_down(vi, window, cx);
+            return;
+        }
+        let toggle = if cfg!(target_os = "macos") { ev.modifiers.platform } else { ev.modifiers.control };
+        let plain = !toggle && !ev.modifiers.shift;
         // Settings → "Open items with a single click"
         let single = match cx.global::<crate::settings::Settings>().single_click {
             crate::settings::ClickPref::Never => false,
@@ -2609,7 +2635,7 @@ impl FolderView {
             let anchor = self.anchor.unwrap_or(vi);
             self.select_range(anchor, vi);
             self.anchor = Some(anchor);
-        } else if ev.modifiers.control {
+        } else if toggle {
             if !self.selected.remove(&ei) {
                 self.selected.insert(ei);
             }
@@ -2851,11 +2877,17 @@ impl FolderView {
         v.into_iter().filter_map(|i| self.path_of(i)).collect()
     }
 
-    /// The selection, each with whether it is a folder (no disk access).
+    /// The selection, each with whether it is a folder (no disk access). A macOS package is not a
+    /// folder here: a dialog picks an .app as a file, as Finder's Open panel does.
     pub fn selection_with_kind(&self) -> Vec<(PathBuf, bool)> {
         let mut v: Vec<u32> = self.selected.iter().copied().collect();
         v.sort_unstable();
-        v.into_iter().filter_map(|i| self.path_of(i).map(|p| (p, self.entries[i as usize].is_dir()))).collect()
+        v.into_iter()
+            .filter_map(|i| {
+                let e = &self.entries[i as usize];
+                self.path_of(i).map(|p| (p, e.is_dir() && !e.is_package()))
+            })
+            .collect()
     }
 
     pub fn item_count(&self) -> usize {
@@ -3177,6 +3209,13 @@ impl FolderView {
         }
         let Some(path) = self.path_of(ei) else { return };
         let e = &self.entries[ei as usize];
+        // A macOS package is one item: an application is launched (LaunchServices), any other
+        // package opens in its application. Its insides are reached with "Show Package Contents".
+        let package = e.is_package();
+        if package && !self.picking {
+            open_in_background(path, cx);
+            return;
+        }
         let browse = !e.is_dir()
             && cx.global::<crate::settings::Settings>().browse_archives
             && crate::archive_view::is_browsable(&path);
@@ -3201,14 +3240,19 @@ impl FolderView {
         if sel.len() == 1 {
             self.open_entry(sel[0], cx);
         } else if self.picking {
-            let files: Vec<PathBuf> = sel.iter().filter(|&&i| !self.entries[i as usize].is_dir()).filter_map(|&i| self.path_of(i)).collect();
+            let files: Vec<PathBuf> = sel
+                .iter()
+                .filter(|&&i| !self.entries[i as usize].is_dir() || self.entries[i as usize].is_package())
+                .filter_map(|&i| self.path_of(i))
+                .collect();
             if !files.is_empty() {
                 cx.emit(FolderEvent::Picked(files));
             }
         } else {
             let mut in_archive = Vec::new();
             for i in sel {
-                if !self.entries[i as usize].is_dir() {
+                // packages are single items too: several selected applications all launch
+                if !self.entries[i as usize].is_dir() || self.entries[i as usize].is_package() {
                     if let Some(p) = self.path_of(i) {
                         if crate::nav_touch::may_hold_archive(&p) && !p.exists() && crate::archive_view::split(&p).is_some() {
                             // extracted together, one Status Center entry
@@ -3732,7 +3776,7 @@ impl FolderView {
                     MouseButton::Right,
                     cx.listener(move |this, _: &MouseDownEvent, window, cx| this.on_row_right_down(vi, window, cx)),
                 )
-                .when(e.is_dir(), |d| {
+                .when(e.is_dir() && !e.is_package(), |d| {
                     d.drag_over::<ExternalPaths>(move |s, _, _, _| s.bg(drop_bg).border_1().border_color(drop_border))
                         .on_drop(cx.listener(move |this, paths: &ExternalPaths, _, cx| {
                             if let Some(dest) = this.drop_target_row(ei) {
@@ -3744,9 +3788,14 @@ impl FolderView {
                     MouseButton::Middle,
                     cx.listener(move |this, _: &MouseDownEvent, _, cx| {
                         let Some(&ei) = this.visible.get(vi) else { return };
+                        let package = this.entries[ei as usize].is_package();
                         if this.entries[ei as usize].is_dir() {
                             if let Some(p) = this.path_of(ei) {
-                                cx.emit(FolderEvent::OpenInNewTab(Location::Path(p)));
+                                if package {
+                                    open_in_background(p, cx);
+                                } else {
+                                    cx.emit(FolderEvent::OpenInNewTab(Location::Path(p)));
+                                }
                             }
                         }
                     }),
@@ -4495,9 +4544,11 @@ fn git_style(s: rf_win::git::FileState) -> (&'static str, Hsla) {
     }
 }
 
-/// File name as displayed (extension hidden when the setting says so).
+/// File name as displayed (extension hidden when the setting says so; an app bundle's
+/// extension hides like a file's, the way Finder shows "Safari").
 fn shown_name(e: &Entry, show_ext: bool) -> String {
-    if show_ext || e.is_dir() || e.ext.is_empty() {
+    let hides = !show_ext && (e.is_package() || (!e.is_dir() && !e.ext.is_empty()));
+    if !hides {
         e.shown().to_string()
     } else {
         e.name[..e.stem_len()].to_string()
@@ -4517,9 +4568,9 @@ fn watch_failed(path: &std::path::Path, e: &impl std::fmt::Display) {
 }
 
 /// A name as a row shows it, for a name that is not an entry's yet (the new name of a rename under way): the whole name, or
-/// without its extension when extensions are hidden and it is a file with one.
-fn shown_new_name(name: &str, is_dir: bool, show_ext: bool) -> String {
-    if show_ext || is_dir {
+/// without its extension when extensions are hidden and it is a file (or a macOS package) with one.
+fn shown_new_name(name: &str, is_dir: bool, package: bool, show_ext: bool) -> String {
+    if show_ext || (is_dir && !package) {
         return name.to_string();
     }
     match name.rfind('.') {
@@ -4531,7 +4582,7 @@ fn shown_new_name(name: &str, is_dir: bool, show_ext: bool) -> String {
 /// The name a row shows: the entry's own, or the name it is getting while its rename is under way (`FolderView::renamed`).
 fn row_name(e: &Entry, show_ext: bool, renamed: Option<&(Arc<str>, Arc<str>)>) -> String {
     match renamed {
-        Some((old, new)) if *e.name == **old => shown_new_name(new, e.is_dir(), show_ext),
+        Some((old, new)) if *e.name == **old => shown_new_name(new, e.is_dir(), e.is_package(), show_ext),
         _ => shown_name(e, show_ext),
     }
 }
@@ -4562,6 +4613,7 @@ fn static_column(
                         let cat = icons::category(e);
                         let target = dir.join(&*e.name);
                         let is_dir = e.is_dir();
+                        let package = e.is_package();
                         let view = view.clone();
                         h_flex()
                             .id(("scol", i))
@@ -4576,9 +4628,9 @@ fn static_column(
                             .when(!on, |d| d.hover(|s| s.bg(pal.hover)).text_color(pal.text_secondary))
                             .child(Icon::new(icons::icon_for(cat)).size(px(16.)).text_color(theme::kind_color(cat, pal.dark)))
                             .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(crate::rtl::display_text(&e.name)))
-                            .when(is_dir, |d| d.child(Icon::new(L::ChevronRight).size(px(12.)).text_color(pal.text_tertiary)))
+                            .when(is_dir && !package, |d| d.child(Icon::new(L::ChevronRight).size(px(12.)).text_color(pal.text_tertiary)))
                             .on_click(move |_, _, cx| {
-                                if is_dir {
+                                if is_dir && !package {
                                     view.update(cx, |v, cx| v.navigate(Location::Path(target.clone()), cx));
                                 } else {
                                     open_in_background(target.clone(), cx);
@@ -4816,7 +4868,14 @@ impl Render for FolderView {
             }))
             .on_action(cx.listener(|this, _: &OpenInNewWindow, _, cx| {
                 // the selected folders (a handful at most), or this folder with none selected
-                let dirs: Vec<PathBuf> = this.selection_with_kind().into_iter().filter(|(_, d)| *d).map(|(p, _)| p).take(8).collect();
+                let mut chosen: Vec<u32> = this.selected.iter().copied().collect();
+                chosen.sort_unstable();
+                let dirs: Vec<PathBuf> = chosen
+                    .into_iter()
+                    .filter(|&i| this.entries[i as usize].is_dir() && !this.entries[i as usize].is_package())
+                    .filter_map(|i| this.path_of(i))
+                    .take(8)
+                    .collect();
                 if dirs.is_empty() && this.selected.is_empty() {
                     cx.emit(FolderEvent::OpenInNewWindow(this.location().clone()));
                 }
@@ -5001,13 +5060,15 @@ mod rename_name_tests {
     /// extension when extensions are hidden (a folder and a name that is all extension keep theirs).
     #[test]
     fn the_new_name_of_a_rename_is_shown_as_an_entry_of_that_name_would_be() {
-        assert_eq!(shown_new_name("report.pdf", false, true), "report.pdf");
-        assert_eq!(shown_new_name("report.pdf", false, false), "report");
-        assert_eq!(shown_new_name("archive.tar.gz", false, false), "archive.tar");
-        assert_eq!(shown_new_name(".gitignore", false, false), ".gitignore");
-        assert_eq!(shown_new_name("folder.v2", true, false), "folder.v2");
-        assert_eq!(shown_new_name("noext", false, false), "noext");
-        assert_eq!(shown_new_name("ends.", false, false), "ends.");
+        assert_eq!(shown_new_name("report.pdf", false, false, true), "report.pdf");
+        assert_eq!(shown_new_name("report.pdf", false, false, false), "report");
+        assert_eq!(shown_new_name("archive.tar.gz", false, false, false), "archive.tar");
+        assert_eq!(shown_new_name(".gitignore", false, false, false), ".gitignore");
+        assert_eq!(shown_new_name("folder.v2", true, false, false), "folder.v2");
+        assert_eq!(shown_new_name("Safari.app", true, true, false), "Safari");
+        assert_eq!(shown_new_name("Safari.app", true, true, true), "Safari.app");
+        assert_eq!(shown_new_name("noext", false, false, false), "noext");
+        assert_eq!(shown_new_name("ends.", false, false, false), "ends.");
     }
 }
 

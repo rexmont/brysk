@@ -1669,7 +1669,7 @@
  "1982d5ea": "Benötigt",
  "f206f204": "Dateisuche ist aus: Schalten Sie den Namensindex in den Einstellungen ein",
  "e184b257": "Apps, Dateien oder das Web durchsuchen",
- "011d3815": "Apps",
+ "011d3815": "Programme",
  "d0cc3219": "Lesezeichen",
  "72645431": "Web",
  "6d020bc6": "im Web suchen",
@@ -1935,5 +1935,9 @@
  "16622163": "Auf Monitor öffnen",
  "db7893e9": "An Bildschirm anpassen",
  "7540225a": "Kompakter Infobereich",
- "ae626bdb": "Die Infobereichssymbole der rechten Insel stehen enger beieinander; auf gleichem Platz finden mehr Symbole Platz."
+ "ae626bdb": "Die Infobereichssymbole der rechten Insel stehen enger beieinander; auf gleichem Platz finden mehr Symbole Platz.",
+ "f788f9ef": "Paketinhalt zeigen",
+ "5f91b742": "Paket",
+ "6938d23d": "Pakete",
+ "059c0f6d": "Im Finder zeigen"
 }

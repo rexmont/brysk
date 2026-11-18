@@ -608,7 +608,7 @@ impl Preview {
     fn property_rows(&self, path: &Path, e: &Entry, cx: &App) -> Vec<(&'static str, String)> {
         let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         let mut rows: Vec<(&'static str, String)> = vec![(t!("Tür"), icons::type_label(e).to_string())];
-        if e.is_dir() && !crate::archive_view::is_browsable_path(path) {
+        if e.is_dir() && !e.is_package() && !crate::archive_view::is_browsable_path(path) {
             let on_disk = cx.global::<crate::settings::Settings>().folder_size_on_disk;
             let txt = match &self.folder_size {
                 Some((fp, Some(fs))) if fp == path => {
@@ -765,8 +765,9 @@ impl Preview {
         self.size_cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         self.folder_size = None;
         if let Some((path, e)) = &self.target {
-            // a folder inside an archive has no size on disk to walk
-            if e.is_dir() && !crate::archive_view::is_browsable_path(path) {
+            // a folder inside an archive has no size on disk to walk (nor does an app bundle:
+            // its icon is the whole preview, selecting it must not start a folder walk)
+            if e.is_dir() && !e.is_package() && !crate::archive_view::is_browsable_path(path) {
                 let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 self.size_cancel = cancel.clone();
                 let p = path.clone();

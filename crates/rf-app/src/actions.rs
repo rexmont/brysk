@@ -155,7 +155,8 @@ pub fn bind(cx: &mut App) {
             KeyBinding::new("cmd-[", GoBack, None),
             KeyBinding::new("cmd-]", GoForward, None),
             KeyBinding::new("cmd-up", GoUp, None),
-            KeyBinding::new("cmd-shift-g", GoHome, None),
+            KeyBinding::new("cmd-shift-h", GoHome, None),
+            KeyBinding::new("cmd-shift-g", FocusAddress, None),
             KeyBinding::new("cmd-r", Refresh, None),
             KeyBinding::new("cmd-shift-n", NewFolder, f),
             KeyBinding::new("cmd-alt-p", TogglePreview, None),
@@ -203,6 +204,7 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new("alt-right", GoForward, None),
         KeyBinding::new("alt-up", GoUp, None),
         KeyBinding::new("alt-home", GoHome, None),
+        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("backspace", GoBack, f),
         KeyBinding::new("f5", Refresh, None),
         KeyBinding::new("ctrl-r", Refresh, None),

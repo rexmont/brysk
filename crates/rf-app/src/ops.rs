@@ -305,7 +305,7 @@ impl FolderView {
         if self.shell_read_only(cx) {
             return;
         }
-        let target = if self.selected_is_single_dir() { self.selection_paths().into_iter().next() } else { None };
+        let target = if self.selected_is_single_dir() && !self.selected_is_single_package() { self.selection_paths().into_iter().next() } else { None };
         match target.or_else(|| self.current_dir()) {
             Some(dir) => self.paste_to(dir, window, cx),
             None => {}
@@ -575,7 +575,7 @@ impl FolderView {
             Some(_) => e.name[..e.stem_len()].to_string(),
             None => e.name.to_string(),
         };
-        let sel_end = if e.is_dir() { name.len() } else { e.stem_len().min(name.len()) };
+        let sel_end = if e.is_dir() && !e.is_package() { name.len() } else { e.stem_len().min(name.len()) };
         let input = cx.new(|cx| InputState::new(window, cx).default_value(name));
         let sub = cx.subscribe_in(&input, window, |this, _, ev: &InputEvent, window, cx| match ev {
             InputEvent::PressEnter { .. } | InputEvent::Blur => this.commit_rename(window, cx),
@@ -598,7 +598,8 @@ impl FolderView {
     /// The extension (with its dot) that the list hides for this entry, if any.
     fn hidden_extension(&self, ei: u32, cx: &App) -> Option<String> {
         let e = self.entry(ei);
-        let hidden = !cx.global::<crate::settings::Settings>().show_extensions && !e.is_dir() && !e.ext.is_empty();
+        let hidden = !cx.global::<crate::settings::Settings>().show_extensions
+            && (e.is_package() || (!e.is_dir() && !e.ext.is_empty()));
         hidden.then(|| e.name[e.stem_len()..].to_string())
     }
 

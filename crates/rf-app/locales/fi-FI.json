@@ -1669,7 +1669,7 @@
  "1982d5ea": "Tarvitsee",
  "f206f204": "Tiedostohaku on pois käytöstä: ota nimihakemisto käyttöön Asetuksissa",
  "e184b257": "Etsi sovelluksia, tiedostoja tai verkosta",
- "011d3815": "Sovellukset",
+ "011d3815": "Ohjelmat",
  "d0cc3219": "Kirjanmerkit",
  "72645431": "Verkko",
  "6d020bc6": "hae verkosta",
@@ -1935,5 +1935,9 @@
  "16622163": "Avaa näytöllä",
  "db7893e9": "Sovita näyttöön",
  "7540225a": "Tiivis ilmaisinalue",
- "ae626bdb": "Oikean saaren ilmaisinalueen kuvakkeet ovat lähempänä toisiaan; samaan tilaan mahtuu enemmän kuvakkeita."
+ "ae626bdb": "Oikean saaren ilmaisinalueen kuvakkeet ovat lähempänä toisiaan; samaan tilaan mahtuu enemmän kuvakkeita.",
+ "f788f9ef": "Näytä paketin sisältö",
+ "5f91b742": "Paketti",
+ "6938d23d": "Paketit",
+ "059c0f6d": "Näytä Finderissa"
 }

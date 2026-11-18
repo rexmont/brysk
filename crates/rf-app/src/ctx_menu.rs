@@ -161,14 +161,29 @@ impl FolderView {
 
     fn items_menu(&self, me: &Me, dir: &std::path::Path, items: &[PathBuf], cx: &mut Context<Self>) -> Menu {
         let single_dir = items.len() == 1 && self.selected_is_single_dir();
-        let has_files = !self.selected_is_single_dir() || items.len() > 1;
+        // a macOS package (.app, .bundle, .framework…) is a single item, not a folder to browse
+        let single_package = items.len() == 1 && self.selected_is_single_package();
+        let folder_dir = single_dir && !single_package;
+        let all_packages = self.selected_all_packages();
+        let has_files = !self.selected_is_single_dir() || single_package || items.len() > 1;
         let target_dir = if single_dir { items[0].clone() } else { dir.to_path_buf() };
         let prefs = cx.global::<crate::settings::Settings>();
         let (mp, show_flatten) = (prefs.menu.clone(), prefs.show_flatten);
         let mut v: Vec<Item> = Vec::new();
 
         v.push(Item::action(t!("Aç"), icon(L::SquareArrowOutUpRight), act(me, |v, _, cx| v.open_selected(cx))).hint("Enter"));
-        if single_dir {
+        if single_package {
+            // Finder's own verb: opens the bundle folder itself, so what is inside can be browsed.
+            let p = target_dir.clone();
+            v.push(Item::action(t!("Paket İçeriğini Göster"), icon(L::FolderOpen), act(me, move |v, _, cx| {
+                if cx.global::<crate::settings::Settings>().open_folders_in_new_tab {
+                    cx.emit(FolderEvent::OpenInNewTab(Location::Path(p.clone())));
+                } else {
+                    v.navigate(Location::Path(p.clone()), cx);
+                }
+            })));
+        }
+        if folder_dir {
             let (a, b) = (target_dir.clone(), target_dir.clone());
             if mp.open_in_new_tab {
                 v.push(Item::action(t!("Yeni sekmede aç"), icon(L::SquarePlus), act(me, move |_, _, cx| {
@@ -188,6 +203,9 @@ impl FolderView {
             }
         }
         if has_files {
+            v.push(Item::action(t!("Hızlı Bakış"), icon(L::Eye), act(me, |_, _, cx| cx.emit(FolderEvent::QuickLook))).hint("Space"));
+        }
+        if has_files {
             v.push(Item::Sub { label: t!("Şununla aç").into(), icon: icon(L::LayoutGrid), items: Sub::Pending { key: "openwith", fallback: None } });
         }
         if self.is_search() && items.len() == 1 {
@@ -199,25 +217,41 @@ impl FolderView {
                 }
             })));
         }
+        // Finder's own "Show in Finder": the selection is revealed and selected in a Finder window.
+        #[cfg(target_os = "macos")]
+        if !items.is_empty() {
+            let paths = items.to_vec();
+            v.push(Item::action(t!("Finder'da Göster"), icon(L::FolderSearch), move |_, _| {
+                let paths = paths.clone();
+                std::thread::spawn(move || {
+                    for p in &paths {
+                        if let Err(e) = rf_win::shell::reveal(p) {
+                            log::warn!("reveal {p:?}: {e:#}");
+                        }
+                    }
+                });
+            }));
+        }
         v.push(Item::Separator);
         if mp.copy_path {
             v.push(Item::action(t!("Öğe yolunu kopyala"), icon(L::ClipboardCopy), act(me, |v, _, cx| v.copy_path(cx))).hint("Ctrl+Shift+C"));
         }
+        v.push(Item::action(t!("Özellikler"), icon(L::Info), act(me, |v, _, cx| v.properties(cx))).hint("Cmd+I"));
         if mp.create_shortcut {
             let link_items = items.to_vec();
             v.push(Item::action(t!("Kısayol oluştur"), icon(L::Link), move |_, _| create_shortcuts(link_items.clone())));
         }
-        if !self.is_search() {
+        if !self.is_search() && !all_packages {
             let sel = items.to_vec();
             v.push(Item::action(t!("Seçimle klasör oluştur"), icon(L::FolderInput), act(me, move |v, _, cx| v.folder_with_selection(sel.clone(), cx))));
         }
-        if single_dir && crate::archive_view::split(&target_dir).is_none() && !rf_win::ftp::is_ftp(&target_dir) {
+        if folder_dir && crate::archive_view::split(&target_dir).is_none() && !rf_win::ftp::is_ftp(&target_dir) {
             let d = target_dir.clone();
             v.push(Item::action(t!("Disk kullanımını göster"), icon(L::ChartPie), act(me, move |_, _, cx| {
                 cx.emit(FolderEvent::OpenInNewTab(Location::DiskUsage(d.clone())))
             })));
         }
-        if single_dir && mp.pin {
+        if folder_dir && mp.pin {
             let d = target_dir.clone();
             v.push(Item::action(t!("Kenar çubuğuna sabitle"), icon(L::Pin), act(me, move |v, _, cx| v.pin(d.clone(), cx))));
         }
@@ -230,7 +264,7 @@ impl FolderView {
             v.push(Item::action(label, icon(L::AtSign), move |w, cx| crate::aliases::edit_dialog(d.clone(), w, cx)));
         }
         // leave a folder (a build output, a huge cache) out of the search index
-        if single_dir && cx.global::<crate::settings::Settings>().name_index && crate::archive_view::split(&target_dir).is_none() {
+        if folder_dir && cx.global::<crate::settings::Settings>().name_index && crate::archive_view::split(&target_dir).is_none() {
             let key = target_dir.to_string_lossy().trim_end_matches('\\').to_string();
             let out = cx.global::<crate::settings::Settings>().index_excluded.iter().any(|e| e.eq_ignore_ascii_case(&key));
             v.push(
@@ -247,7 +281,7 @@ impl FolderView {
                 .checked(out),
             );
         }
-        if single_dir && show_flatten {
+        if folder_dir && show_flatten {
             let d = target_dir.clone();
             v.push(Item::action(t!("Klasörü düzleştir"), icon(L::FolderTree), act(me, move |v, w, cx| v.flatten_folder(d.clone(), w, cx))));
         }
@@ -351,7 +385,7 @@ impl FolderView {
         if mp.tags {
             v.push(Item::sub(t!("Etiketler"), icon(L::Tag), tag_items(me, items, cx)));
         }
-        if mp.shelf {
+        if mp.shelf && !all_packages {
             let shelf_items = items.to_vec();
             v.push(Item::action(t!("Rafa ekle"), icon(L::Inbox), act(me, move |_, _, cx| cx.emit(FolderEvent::AddToShelf(shelf_items.clone())))).hint("Ctrl+Shift+S"));
         }
@@ -364,7 +398,7 @@ impl FolderView {
             v.push(Item::action(t!("Diğer panele kopyala"), icon(L::CopyPlus), act(me, move |_, _, cx| cx.emit(FolderEvent::ToOtherPane(Transfer::Copy, c.clone())))));
             v.push(Item::action(t!("Diğer panele taşı"), icon(L::MoveRight), act(me, move |_, _, cx| cx.emit(FolderEvent::ToOtherPane(Transfer::Move, m.clone())))));
         }
-        if single_dir && mp.terminal {
+        if folder_dir && mp.terminal {
             v.push(Item::Separator);
             let d = target_dir.clone();
             v.push(Item::action(t!("Terminalde aç"), icon(L::SquareTerminal), move |_, _| open_terminal(d.clone())).hint("Ctrl+Shift+`"));

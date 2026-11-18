@@ -199,7 +199,7 @@ pub struct Holder {
 fn list_folders(path: &Path) -> Result<Vec<DirItem>, ListFailure> {
     let mut out = Vec::new();
     let r = rf_win::list_dir(path, 4096, &|| false, &mut |batch| {
-        out.extend(batch.iter().filter(|e| e.is_dir()).map(dir_item));
+        out.extend(batch.iter().filter(|e| e.is_dir() && !e.is_package()).map(dir_item));
     });
     match r {
         Ok(_) => Ok(out),
@@ -215,7 +215,7 @@ fn read_changes(dir: &Path, names: Vec<String>) -> Result<Vec<Change>, ListError
         .into_iter()
         .map(|n| {
             rf_win::stat_entry(dir, &n).map(|e| match e {
-                Some(e) if e.is_dir() => Change { name: e.name.to_string(), item: Some(dir_item(&e)) },
+                Some(e) if e.is_dir() && !e.is_package() => Change { name: e.name.to_string(), item: Some(dir_item(&e)) },
                 _ => Change { name: n, item: None },
             })
         })

@@ -13,6 +13,44 @@ pub mod attrs {
     pub const ENCRYPTED: u32 = 0x4000;
     pub const RECALL_ON_OPEN: u32 = 0x40000;
     pub const RECALL_ON_DATA_ACCESS: u32 = 0x400000;
+    /// Private bit (no Windows attribute uses it): a macOS package, a folder the Finder shows
+    /// as one item (.app, .bundle, .framework, …). Set while the listing is made, so drawing a
+    /// row never has to look at the name again.
+    pub const PACKAGE: u32 = 0x0100_0000;
+    /// Private bit: the package is an application bundle (.app), opened with LaunchServices
+    /// instead of browsed.
+    pub const APP_BUNDLE: u32 = 0x0200_0000;
+}
+
+/// Directory suffixes macOS presents as packages. The Finder opens them as one item and its
+/// "Show Package Contents" reaches inside; only `.app` is launched as an application.
+const PACKAGE_SUFFIXES: &[&str] = &[
+    "app", "bundle", "framework", "plugin", "appex", "xpc", "kext", "prefpane", "qlgenerator", "mdimporter", "saver",
+    "component", "workflow", "scptd", "rtfd", "textbundle", "photoslibrary", "fcpbundle", "logicx", "band",
+    "sparsebundle", "xcarchive", "xcworkspace", "xcodeproj", "playground", "dSYM", "xcframework", "mlpackage",
+    "vst", "vst3",
+];
+
+/// Whether `name` is a directory macOS presents as a package (.app, .bundle, .framework…).
+/// Listings store this on the entry; walkers that only have a name (the indexer) ask here.
+pub fn is_package_name(name: &str) -> bool {
+    package_bits(name) != 0
+}
+
+/// Package bits for a directory name (0 for files and plain folders).
+fn package_bits(name: &str) -> u32 {
+    let Some(dot) = name.rfind('.') else { return 0 };
+    if dot == 0 || dot + 1 >= name.len() {
+        return 0;
+    }
+    let suffix = &name[dot + 1..];
+    if suffix.eq_ignore_ascii_case("app") {
+        return attrs::PACKAGE | attrs::APP_BUNDLE;
+    }
+    if PACKAGE_SUFFIXES.iter().any(|s| suffix.eq_ignore_ascii_case(s)) {
+        return attrs::PACKAGE;
+    }
+    0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -49,7 +87,8 @@ impl Entry {
             Some(i) if kind == EntryKind::File && i > 0 && i + 1 < name.len() => shared_ext(&name[i + 1..]),
             _ => shared_ext(""),
         };
-        Self { name: name.into(), ext, kind, size, modified_ms, created_ms, attrs, label: None, link: false }
+        let package = if kind == EntryKind::Dir && cfg!(target_os = "macos") { package_bits(name) } else { 0 };
+        Self { name: name.into(), ext, kind, size, modified_ms, created_ms, attrs: attrs | package, label: None, link: false }
     }
 
     /// The name to show (and sort and type-select by): the localized one when there is one.
@@ -69,12 +108,28 @@ impl Entry {
     pub fn is_symlink(&self) -> bool {
         self.attrs & attrs::REPARSE_POINT != 0
     }
+    /// macOS: a directory the Finder shows as one item (an application, a plug-in, a document
+    /// package) instead of a folder to browse.
+    pub fn is_package(&self) -> bool {
+        self.is_dir() && self.attrs & attrs::PACKAGE != 0
+    }
+    /// macOS: an application bundle (.app): double-clicking it launches the application.
+    pub fn is_app_bundle(&self) -> bool {
+        self.is_dir() && self.attrs & attrs::APP_BUNDLE != 0
+    }
     /// Cloud placeholder not present locally (OneDrive "online-only").
     pub fn is_cloud_placeholder(&self) -> bool {
         self.attrs & (attrs::OFFLINE | attrs::RECALL_ON_OPEN | attrs::RECALL_ON_DATA_ACCESS) != 0
     }
     /// Name without the extension (for rename selection).
     pub fn stem_len(&self) -> usize {
+        // A macOS package hides its extension like a file: renaming "Safari.app" edits "Safari".
+        if self.is_package() {
+            return match self.name.rfind('.') {
+                Some(i) if i > 0 => i,
+                _ => self.name.len(),
+            };
+        }
         // From the original name: `ext` is lower-cased and may differ in byte length
         // (e.g. "İ" → "i̇"), so never derive offsets from it.
         if self.ext.is_empty() {
@@ -200,11 +255,28 @@ mod tests {
         assert_eq!(&*Entry::new("trailing.", EntryKind::File, 0, 0, 0, 0).ext, "");
         assert_eq!(&*Entry::new("dir.d", EntryKind::Dir, 0, 0, 0, 0).ext, "");
         assert_eq!(Entry::new("photo.jpeg", EntryKind::File, 0, 0, 0, 0).stem_len(), 5);
+        // a package hides its extension too
+        let app = Entry::new("Safari.app", EntryKind::Dir, 0, 0, 0, 0);
+        assert_eq!(app.stem_len(), 6);
+        assert_eq!(&app.name[..app.stem_len()], "Safari");
         // lower-casing changes byte length: must not underflow or split a char
         let e = Entry::new("x.İİİ", EntryKind::File, 0, 0, 0, 0);
         assert_eq!(&e.name[..e.stem_len()], "x");
         let k = Entry::new("a.\u{212A}", EntryKind::File, 0, 0, 0, 0);
         assert_eq!(&k.name[..k.stem_len()], "a");
+    }
+
+    #[test]
+    fn macos_packages_are_not_plain_folders() {
+        let dir = |name: &str| Entry::new(name, EntryKind::Dir, 0, 0, 0, attrs::DIRECTORY);
+        let app = dir("Safari.app");
+        assert!(app.is_package() && app.is_app_bundle());
+        assert!(dir("Something.BUNDLE").is_package());
+        assert!(!dir("Applications").is_package());
+        assert!(!dir("archive.zip").is_package(), "a folder named like a file is not a package");
+        assert!(!Entry::new("Safari.app", EntryKind::File, 0, 0, 0, 0).is_package(), "a file is never a package");
+        // the package bits do not disturb the attributes the Windows code reads
+        assert_eq!(app.attrs & !(attrs::PACKAGE | attrs::APP_BUNDLE), attrs::DIRECTORY);
     }
 
     #[test]

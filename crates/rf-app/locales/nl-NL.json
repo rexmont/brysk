@@ -1669,7 +1669,7 @@
  "1982d5ea": "Vereist",
  "f206f204": "Bestandszoeken is uit: schakel de naamindex in via Instellingen",
  "e184b257": "Apps, bestanden of het web doorzoeken",
- "011d3815": "Apps",
+ "011d3815": "Applicaties",
  "d0cc3219": "Bladwijzers",
  "72645431": "Web",
  "6d020bc6": "het web doorzoeken",
@@ -1935,5 +1935,9 @@
  "16622163": "Openen op monitor",
  "db7893e9": "Aanpassen aan scherm",
  "7540225a": "Compact systeemvak",
- "ae626bdb": "De systeemvakpictogrammen van het rechtereiland staan dichter bij elkaar; er passen meer pictogrammen in dezelfde ruimte."
+ "ae626bdb": "De systeemvakpictogrammen van het rechtereiland staan dichter bij elkaar; er passen meer pictogrammen in dezelfde ruimte.",
+ "f788f9ef": "Toon pakketinhoud",
+ "5f91b742": "Pakket",
+ "6938d23d": "Pakketten",
+ "059c0f6d": "Toon in Finder"
 }

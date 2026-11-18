@@ -527,7 +527,12 @@ impl ImageCache {
 /// Whether an entry's icon is its own and not its kind's: a program, a shortcut and the like, and a folder that Windows marks as
 /// customised (its own icon from `desktop.ini`, or the picture of Downloads, Documents ...).
 fn own_picture(e: &Entry) -> bool {
-    if e.is_dir() { folder_has_own_icon(e.attrs) } else { has_unique_icon(&e.ext) }
+    if e.is_dir() {
+        // macOS packages carry the application's/plug-in's own icon (NSWorkspace draws it).
+        e.is_package() || folder_has_own_icon(e.attrs)
+    } else {
+        has_unique_icon(&e.ext)
+    }
 }
 
 #[cfg(test)]

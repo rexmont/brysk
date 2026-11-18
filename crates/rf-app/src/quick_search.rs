@@ -993,7 +993,9 @@ pub(crate) fn search_files(query: &str, index_on: bool) -> FilesFound {
     f.truncate(MAX_FILES);
     for i in &mut f {
         if let Target::Path { path, dir } = &mut i.target {
-            *dir = std::fs::metadata(&*path).is_ok_and(|m| m.is_dir());
+            // an .app bundle is searched as a file: Enter launches it instead of opening a folder
+            *dir = std::fs::metadata(&*path).is_ok_and(|m| m.is_dir())
+                && !path.file_name().is_some_and(|n| rf_core::is_package_name(&n.to_string_lossy()));
         }
     }
     FilesFound { items: f, index_building, index_off }
@@ -1313,7 +1315,9 @@ impl QuickSearch {
             }
             Target::Path { path, dir } => {
                 let name = file_name(path);
-                let e = rf_core::Entry::new(&name, if *dir { rf_core::EntryKind::Dir } else { rf_core::EntryKind::File }, 0, 0, 0, 0);
+                // `dir` is false for an app (Enter launches it), but its icon is the bundle's own
+                let kind = if *dir || rf_core::is_package_name(&name) { rf_core::EntryKind::Dir } else { rf_core::EntryKind::File };
+                let e = rf_core::Entry::new(&name, kind, 0, 0, 0, 0);
                 let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
                 self.images.update(cx, |c, cx| c.icon(&parent, &e, cx))
             }
@@ -1321,6 +1325,7 @@ impl QuickSearch {
         };
         let fallback = match &item.target {
             Target::App { .. } => L::AppWindow,
+            Target::Path { path, .. } if rf_core::is_package_name(&file_name(path)) => L::AppWindow,
             Target::Path { dir: true, .. } => L::Folder,
             Target::Path { .. } => L::File,
             Target::Url { .. } => L::Globe,

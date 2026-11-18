@@ -1,8 +1,7 @@
 //! Saving the settings file without losing another writer's change.
 //!
-//! WHAT WAS SEEN (the user's second trial): an older process of the app, on exit, wrote its whole in-memory settings over the file and
-//! undid a change another writer had made half an hour earlier (the desktop icons vanished). Every writer used to serialize the WHOLE
-//! struct it holds; whoever saved last decided every key, including the ones it never touched and the ones it does not know.
+//! Writing a whole in-memory settings snapshot can overwrite another process's newer changes. Merge only the keys changed by
+//! this writer, preserving unrelated and unknown keys.
 //!
 //! THE RULE NOW. A process remembers what the file held when it read it (its BASELINE, as a TOML table in the same form a save
 //! produces). A save then:

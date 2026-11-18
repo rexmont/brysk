@@ -18,7 +18,7 @@ use crate::t;
 use crate::theme::{self, Palette};
 
 /// The bar that lies over the content (a picture, a video) is shown only while the pointer is in the window's top strip, where the
-/// bar is (the user: "sadece üst bar hoverda görünsün"). While it is shown, the pointer's place is looked at this often ...
+/// bar is. While it is shown, the pointer's place is looked at this often ...
 const BAR_WATCH: Duration = Duration::from_millis(120);
 /// ... and the bar goes when this many looks in a row found the pointer away: about a third of a second, so a pointer that slips
 /// under the bar and comes back does not make it blink.

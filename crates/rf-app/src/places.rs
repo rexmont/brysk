@@ -324,8 +324,7 @@ pub fn drive_icon(d: &Drive) -> L {
 /// The user's pins after `from` was deleted (`to` None) or moved or renamed to `to`: a pin on `from` or inside it goes, or follows it.
 /// `None` when no pin is touched.
 ///
-/// WHY (the owner, trying 0.8.8's sidebar menu on 2026-11-17: "sidebarda siliyorum. dosya siliniyor ama sidebarda görünmeye devam
-/// ediyor"): the pins are a list in the settings, and deleting or renaming the folder did not touch it.
+/// Pins are stored separately from filesystem entries, so folder operations must update them explicitly.
 pub fn pins_after(pins: &[std::path::PathBuf], from: &std::path::Path, to: Option<&std::path::Path>) -> Option<Vec<std::path::PathBuf>> {
     let touched = |p: &std::path::PathBuf| p.starts_with(from);
     if !pins.iter().any(touched) {

@@ -471,9 +471,8 @@ pub struct FolderView {
     /// Re-select this name after the next load (e.g. after going up a level).
     reselect: Option<String>,
     /// A rename that is under way: the item's name on disk until now, and the name it is getting. Its row shows the NEW name from
-    /// the moment the rename box closes. WHY (the user: "isim değiştikten sonra çok kısa eski ismi gösterip sonra yeni isim oluyor
-    /// ya, o olmasın"): the rename itself is done off this thread and the list learns of it from the folder's watcher, so for a
-    /// moment the row had nothing but the entry's old name to show. Taken away when the listing no longer holds the old name
+    /// the moment the rename box closes, while the asynchronous rename and watcher catch up.
+    /// Taken away when the listing no longer holds the old name
     /// (the rename landed) or the rename did not happen.
     renamed: Option<(Arc<str>, Arc<str>)>,
     /// Start inline rename on `reselect` once it appears (new folder flow).
@@ -4461,7 +4460,7 @@ impl FolderView {
                             .child(parent),
                     )
                     .child(div().w(px(130.)).flex_shrink_0().text_color(p.text_secondary).child(format::datetime(r.used_ms)))
-                    // dragged out like a row of the list (the owner: "son kullanılanlarda ... drag drop ta olmuyor")
+                    // Recent items use the same drag threshold and payload as file rows.
                     .on_mouse_down(MouseButton::Left, {
                         let target = target.clone();
                         cx.listener(move |this, ev: &MouseDownEvent, _, _| this.home_press = Some((target.clone(), ev.position)))
@@ -4484,9 +4483,7 @@ impl FolderView {
                         if is_dir {
                             this.navigate(Location::Path(target.clone()), cx);
                         } else if this.picking {
-                            // the Open dialog (the owner: "aç penceresinde ana sayfada son kullanılanlarda dosya seçilemiyor. direkt
-                            // açıyor"): a click shows the file selected in its folder, as a click in the list selects it; a double
-                            // click picks it, as in the list
+                            // In the Open dialog, a single click reveals the selection; a double click picks it.
                             if ev.click_count() >= 2 {
                                 cx.emit(FolderEvent::Picked(vec![target.clone()]));
                             } else if let (Some(dir), Some(name)) = (target.parent(), target.file_name()) {

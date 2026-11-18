@@ -1,10 +1,7 @@
 //! Details columns that are as wide as what they show.
 //!
-//! WHY (the user, 2026-11-15, with a picture of the header of a list some 900 px wide: "burayı daha mantıklı dinamik olacak şekilde
-//! yapalım. boşlukları vs. vs. rahatsız etmesin yani insanları."): every column had one width whatever stood in it, 150 px for a
-//! date, 150 for the type, 130 for the tags, 100 for the size. So "Tür" was followed by a hole before the right-aligned size, the tag
-//! column was a stretch of nothing in a folder without a tagged file, and the name, the one column that never has enough room, was
-//! squeezed to pay for it.
+//! Fixed column widths waste space in sparse columns and crowd filenames. Automatic widths fit the displayed values and give
+//! the remaining space to the name column.
 //!
 //! WHAT IS DONE. A column that nobody has dragged is AUTOMATIC: its width is its widest text in this listing (measured with the font
 //! and size the list really uses), never less than its heading needs, plus the same air towards the next column for every column.

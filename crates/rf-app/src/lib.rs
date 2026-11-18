@@ -370,9 +370,8 @@ const AFTER_EXIT_ENV: &str = "RUSTYFILES_AFTER_EXIT";
 
 /// Restarts Brysk: DirectLook and the dock are asked to stop, a new Brysk is started that waits for this one to end, and
 /// this one quits the usual way (settings and session written). The new one opens its last session and brings the dock and
-/// DirectLook back as the settings say. WHY (the owner, 2026-11-17, after a morning where the dock came up empty: "bir de bir
-/// kısayol ekleyelim. Brysk'ı restart etsin"): there was no way to start everything afresh short of ending the processes by
-/// hand. Ctrl+Alt+Shift+R and the command palette.
+/// DirectLook back according to saved settings. Background helpers stop before the replacement process opens the session.
+/// Available from the command palette and the restart shortcut.
 pub(crate) fn restart(cx: &mut App) {
     let Ok(me) = std::env::current_exe() else { return };
     let pid = std::process::id().to_string();

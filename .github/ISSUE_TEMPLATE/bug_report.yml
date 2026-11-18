@@ -9,7 +9,7 @@ body:
     id: what
     attributes:
       label: What happened?
-      description: What did you expect, and what did rustyfiles do instead?
+      description: What did you expect, and what did Brysk do instead?
     validations:
       required: true
   - type: textarea
@@ -23,15 +23,15 @@ body:
   - type: input
     id: version
     attributes:
-      label: rustyfiles version
-      description: Settings → About shows it (for example "0.3.2 · 3fb55fc").
+      label: Brysk version
+      description: Find this in Settings → About.
     validations:
       required: true
   - type: input
-    id: windows
+    id: macos
     attributes:
-      label: Windows version
-      placeholder: Windows 11 24H2
+      label: macOS version
+      placeholder: macOS version and Mac model
   - type: textarea
     id: log
     attributes:

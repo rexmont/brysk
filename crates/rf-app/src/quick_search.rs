@@ -840,8 +840,7 @@ pub(crate) fn recent() -> Vec<Item> {
     let used: HashMap<String, Use> = with_usage(|m| m.clone());
     let mut v: Vec<&Use> = used.values().filter(|u| !matches!(u.target, Target::Web { .. })).collect();
     v.sort_by_key(|u| std::cmp::Reverse(boost(u)));
-    // a file deleted since is left out, and so is an app that is no longer installed (the owner, 2026-11-17: "kaldırılan uygulamalar
-    // görünmeye devam ediyor ... fl studio 2025 mesela": the usage memory kept FL Studio 2025 after it was replaced by 2026)
+    // Usage history can outlive deleted files and uninstalled applications.
     let installed = apps();
     v.into_iter()
         .filter(|u| !matches!(&u.target, Target::Path { path, .. } if !path.exists()))

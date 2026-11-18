@@ -3233,7 +3233,6 @@ const REPO_URL: &str = "https://github.com/gelenmedya/rustyfiles";
 #[cfg(target_os = "macos")]
 const REPO_URL: &str = "https://github.com/rexmont/brysk";
 const SITE_URL: &str = "https://github.com/rexmont/brysk";
-const DISCORD_URL: &str = "https://discord.gg/K2banZ36zJ";
 #[cfg(not(target_os = "macos"))]
 const ISSUES_URL: &str = "https://github.com/gelenmedya/rustyfiles/issues/new";
 #[cfg(target_os = "macos")]
@@ -3291,13 +3290,12 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
         link_row(p, "gh-issue", L::MessageSquare, t!("Hata bildir ya da öneride bulun"), None, |_, _| open_url(ISSUES_URL)),
         link_row(p, "gh-notes", L::ScrollText, t!("Sürüm notları"), None, |_, _| open_url(RELEASES_URL)),
         section(p, t!("Topluluk")),
-        link_row(p, "site", L::Globe, t!("Web sitesi"), Some("github.com/rexmont/brysk"), |_, _| open_url(SITE_URL)),
-        link_row(p, "discord", L::Users, t!("Discord sunucusu"), Some(t!("Soru sor, fikir paylaş, yeni sürümlerden haberdar ol.")), |_, _| open_url(DISCORD_URL)),
+        link_row(p, "site", L::Globe, crate::i18n::tx("Proje sayfası", "Project page"), Some("github.com/rexmont/brysk"), |_, _| open_url(SITE_URL)),
         div()
             .px_1()
             .text_xs()
             .text_color(p.text_secondary)
-            .child(t!("Rust + GPUI ile yazılmış, hiç donmayan hafif dosya yöneticisi."))
+            .child(crate::i18n::tx("Rust ve GPUI ile yazılmış bir dosya yöneticisi.", "A file manager built with Rust and GPUI."))
             .into_any_element(),
         section(p, t!("Yardım ve destek")),
         link_row(p, "open-log", L::FolderOpen, t!("Kayıt ve ayar klasörünü aç"), settings::app_dir().map(|d| d.display().to_string()).as_deref(), |_, _| {

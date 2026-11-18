@@ -649,7 +649,7 @@ pub struct Settings {
     /// How much the dock's icons grow under the pointer (off / subtle / full).
     pub dock_magnify: DockMagnify,
     /// The growth snaps to the icon under the pointer and slides from icon to icon (`magnify::Glide`); off: it follows the pointer
-    /// smoothly, as the Mac's does. On by default (the owner, 2026-11-17: "ikon ikon daha clicky hissettirebilir mi").
+    /// smoothly, as the Mac's does. On by default.
     pub dock_magnify_snap: bool,
     /// Resting the pointer on a running app's icon in the dock shows a preview of its windows (on; the dock itself is opt-in). Off: nothing.
     pub dock_hover_previews: bool,

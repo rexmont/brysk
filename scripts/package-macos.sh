@@ -57,7 +57,9 @@ trap 'rm -rf "$STAGING"' EXIT
 mkdir "$STAGING/image"
 ditto "$APP" "$STAGING/image/Brysk.app"
 ln -s /Applications "$STAGING/image/Applications"
-hdiutil create -quiet -volname Brysk -srcfolder "$STAGING/image" -format UDZO "$STAGING/Brysk.dmg"
+# hdiutil's automatic estimate can underallocate the temporary filesystem for universal bundles.
+IMAGE_KB="$(du -sk "$STAGING/image" | awk '{print int($1 * 1.2 + 32768)}')"
+hdiutil create -quiet -size "${IMAGE_KB}k" -volname Brysk -srcfolder "$STAGING/image" -format UDZO "$STAGING/Brysk.dmg"
 codesign --force --timestamp --sign "$IDENTITY" "$STAGING/Brysk.dmg"
 
 SUBMISSION="dist/Brysk-$VERSION.submission.json"

@@ -9,9 +9,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2::{MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{NSFontWeightMedium, NSImage, NSImageScaling, NSImageSymbolConfiguration, NSImageSymbolScale, NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength};
-use objc2_foundation::{MainThreadMarker, NSObject, NSString};
+use objc2::{AnyThread, MainThreadOnly, define_class, msg_send, sel};
+use objc2_app_kit::{NSBitmapImageRep, NSImage, NSImageScaling, NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength};
+use objc2_foundation::{MainThreadMarker, NSData, NSObject, NSSize, NSString};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrayEvent {
@@ -32,6 +32,27 @@ pub struct Labels {
 
 static HANDLER: Mutex<Option<Box<dyn Fn(TrayEvent) + Send + 'static>>> = Mutex::new(None);
 static ITEM: AtomicUsize = AtomicUsize::new(0);
+
+fn mascot_bitmap(pixels: u32) -> Option<resvg::tiny_skia::Pixmap> {
+    let tree = resvg::usvg::Tree::from_str(include_str!("../assets/menubar-mascot.svg"), &resvg::usvg::Options::default()).ok()?;
+    let mut bitmap = resvg::tiny_skia::Pixmap::new(pixels, pixels)?;
+    let scale = pixels as f32 / tree.size().width();
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut bitmap.as_mut());
+    Some(bitmap)
+}
+
+fn mascot_image() -> Option<Retained<NSImage>> {
+    let size = NSSize::new(18., 18.);
+    let image = NSImage::initWithSize(NSImage::alloc(), size);
+    for pixels in [18, 36] {
+        let png = mascot_bitmap(pixels)?.encode_png().ok()?;
+        let rep = NSBitmapImageRep::initWithData(NSBitmapImageRep::alloc(), &NSData::with_bytes(&png))?;
+        rep.setSize(size);
+        image.addRepresentation(&rep);
+    }
+    image.setTemplate(true);
+    Some(image)
+}
 
 fn fire(event: TrayEvent) {
     let handler = HANDLER.lock().unwrap();
@@ -112,12 +133,8 @@ pub fn show(labels: Labels) {
         let bar = NSStatusBar::systemStatusBar();
         let status = bar.statusItemWithLength(NSVariableStatusItemLength);
         if let Some(button) = status.button(mtm) {
-            if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(&NSString::from_str("folder"), None) {
-                // Configure the image itself at its natural menu-bar size, without button scaling.
-                let config = NSImageSymbolConfiguration::configurationWithPointSize_weight_scale(16., unsafe { NSFontWeightMedium }, NSImageSymbolScale::Medium);
-                let image = image.imageWithSymbolConfiguration(&config).unwrap_or(image);
+            if let Some(image) = mascot_image() {
                 button.setImageScaling(NSImageScaling::ScaleNone);
-                image.setTemplate(true);
                 button.setImage(Some(&image));
             }
             button.setToolTip(Some(&NSString::from_str(&labels.tooltip)));
@@ -154,4 +171,34 @@ pub fn set_handler(f: impl Fn(TrayEvent) + Send + 'static) {
 
 pub fn notify(_title: &str, _body: &str) {
     // Notifications need UNUserNotificationCenter and the user's permission; later.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mascot_has_padding_at_standard_and_retina_resolutions() {
+        for pixels in [18, 36] {
+            let bitmap = mascot_bitmap(pixels).unwrap();
+            let alpha = |x: u32, y: u32| bitmap.data()[((y * pixels + x) * 4 + 3) as usize];
+            assert!(bitmap.data().chunks_exact(4).any(|p| p[3] > 0));
+            for n in 0..pixels {
+                assert_eq!((alpha(n, 0), alpha(n, pixels - 1), alpha(0, n), alpha(pixels - 1, n)), (0, 0, 0, 0));
+                for inset in 0..(2 * pixels / 18) {
+                    assert_eq!((alpha(n, inset), alpha(n, pixels - 1 - inset)), (0, 0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mascot_image_preserves_logical_size_and_both_resolutions() {
+        let image = mascot_image().unwrap();
+        assert!(image.isTemplate());
+        assert_eq!(image.size(), NSSize::new(18., 18.));
+        let reps = image.representations();
+        assert_eq!(reps.len(), 2);
+        assert!(reps.iter().all(|rep| rep.size() == NSSize::new(18., 18.)));
+    }
 }

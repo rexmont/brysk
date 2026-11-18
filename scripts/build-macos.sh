@@ -24,6 +24,7 @@ if [ "$PROFILE_DIR" != debug ]; then
 fi
 BIN="target/$PROFILE_DIR"
 UNIVERSAL="${UNIVERSAL:-0}"
+./scripts/prepare-sparkle.sh
 
 if [ "$UNIVERSAL" = "1" ]; then
     # One .app for Apple silicon and Intel. Rust needs the second target once:
@@ -42,6 +43,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # MIT: the copyright and permission notice travel with the binary.
 cp LICENSE NOTICE "$APP/Contents/Resources/"
+cp packaging/macos/Sparkle-LICENSE "$APP/Contents/Resources/"
+mkdir -p "$APP/Contents/Frameworks"
+ditto target/sparkle/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
+./scripts/sign-sparkle.sh "$APP"
 cp packaging/macos/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/brysk" "$APP/Contents/MacOS/brysk"
 printf 'APPL????' > "$APP/Contents/PkgInfo"

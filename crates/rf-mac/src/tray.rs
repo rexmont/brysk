@@ -18,6 +18,7 @@ pub enum TrayEvent {
     Open,
     NewWindow,
     Settings,
+    Close,
     Quit,
 }
 
@@ -27,30 +28,33 @@ pub struct Labels {
     pub open: String,
     pub new_window: String,
     pub settings: String,
+    pub close: String,
     pub quit: String,
 }
 
 static HANDLER: Mutex<Option<Box<dyn Fn(TrayEvent) + Send + 'static>>> = Mutex::new(None);
 static ITEM: AtomicUsize = AtomicUsize::new(0);
+const ICON_WIDTH: u32 = 24;
+const ICON_HEIGHT: u32 = 18;
 
-fn mascot_bitmap(pixels: u32) -> Option<resvg::tiny_skia::Pixmap> {
+fn mascot_bitmap(backing_scale: u32) -> Option<resvg::tiny_skia::Pixmap> {
     let tree = resvg::usvg::Tree::from_str(include_str!("../assets/menubar-mascot.svg"), &resvg::usvg::Options::default()).ok()?;
-    let mut bitmap = resvg::tiny_skia::Pixmap::new(pixels, pixels)?;
-    let canvas = pixels as f32;
-    let available = canvas * 14. / 18.;
-    let scale = (available / tree.size().width()).min(available / tree.size().height());
-    let x = (canvas - tree.size().width() * scale) / 2.;
-    let y = (canvas - tree.size().height() * scale) / 2.;
+    let mut bitmap = resvg::tiny_skia::Pixmap::new(ICON_WIDTH * backing_scale, ICON_HEIGHT * backing_scale)?;
+    let (width, height, padding) = (bitmap.width() as f32, bitmap.height() as f32, backing_scale as f32);
+    let bounds = tree.root().abs_layer_bounding_box();
+    let scale = ((width - 2. * padding) / bounds.width()).min((height - 2. * padding) / bounds.height());
+    let x = (width - bounds.width() * scale) / 2. - bounds.x() * scale;
+    let y = (height - bounds.height() * scale) / 2. - bounds.y() * scale;
     let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(x, y);
     resvg::render(&tree, transform, &mut bitmap.as_mut());
     Some(bitmap)
 }
 
 fn mascot_image() -> Option<Retained<NSImage>> {
-    let size = NSSize::new(18., 18.);
+    let size = NSSize::new(ICON_WIDTH as f64, ICON_HEIGHT as f64);
     let image = NSImage::initWithSize(NSImage::alloc(), size);
-    for pixels in [18, 36] {
-        let png = mascot_bitmap(pixels)?.encode_png().ok()?;
+    for backing_scale in [1, 2] {
+        let png = mascot_bitmap(backing_scale)?.encode_png().ok()?;
         let rep = NSBitmapImageRep::initWithData(NSBitmapImageRep::alloc(), &NSData::with_bytes(&png))?;
         rep.setSize(size);
         image.addRepresentation(&rep);
@@ -97,6 +101,11 @@ define_class!(
         fn quit(&self, _sender: &AnyObject) {
             fire(TrayEvent::Quit);
         }
+
+        #[unsafe(method(close:))]
+        fn close(&self, _sender: &AnyObject) {
+            fire(TrayEvent::Close);
+        }
     }
 );
 
@@ -133,7 +142,10 @@ pub fn show(labels: Labels) {
             menu.addItem(&item(&labels.settings, sel!(settings:), "", &target, mtm));
             menu.addItem(&NSMenuItem::separatorItem(mtm));
         }
-        menu.addItem(&item(&labels.quit, sel!(quit:), "q", &target, mtm));
+        if !labels.close.is_empty() {
+            menu.addItem(&item(&labels.close, sel!(close:), "q", &target, mtm));
+        }
+        menu.addItem(&item(&labels.quit, sel!(quit:), "", &target, mtm));
 
         let bar = NSStatusBar::systemStatusBar();
         let status = bar.statusItemWithLength(NSVariableStatusItemLength);
@@ -184,16 +196,22 @@ mod tests {
 
     #[test]
     fn mascot_has_padding_at_standard_and_retina_resolutions() {
-        for pixels in [18, 36] {
-            let bitmap = mascot_bitmap(pixels).unwrap();
-            let alpha = |x: u32, y: u32| bitmap.data()[((y * pixels + x) * 4 + 3) as usize];
+        for scale in [1, 2] {
+            let bitmap = mascot_bitmap(scale).unwrap();
+            let (width, height) = (bitmap.width(), bitmap.height());
+            assert_eq!((width, height), (24 * scale, 18 * scale));
+            let alpha = |x: u32, y: u32| bitmap.data()[((y * width + x) * 4 + 3) as usize];
             assert!(bitmap.data().chunks_exact(4).any(|p| p[3] > 0));
-            for n in 0..pixels {
-                assert_eq!((alpha(n, 0), alpha(n, pixels - 1), alpha(0, n), alpha(pixels - 1, n)), (0, 0, 0, 0));
-                for inset in 0..(2 * pixels / 18) {
-                    assert_eq!((alpha(n, inset), alpha(n, pixels - 1 - inset)), (0, 0));
+            for x in 0..width {
+                for inset in 0..scale {
+                    assert_eq!((alpha(x, inset), alpha(x, height - 1 - inset)), (0, 0));
                 }
             }
+            for y in 0..height {
+                assert_eq!((alpha(0, y), alpha(width - 1, y)), (0, 0));
+            }
+            let occupied_columns = (0..width).filter(|&x| (0..height).any(|y| alpha(x, y) > 0)).count();
+            assert!(occupied_columns >= (20 * scale) as usize, "mascot should fill the wider canvas");
         }
     }
 
@@ -201,9 +219,9 @@ mod tests {
     fn mascot_image_preserves_logical_size_and_both_resolutions() {
         let image = mascot_image().unwrap();
         assert!(image.isTemplate());
-        assert_eq!(image.size(), NSSize::new(18., 18.));
+        assert_eq!(image.size(), NSSize::new(24., 18.));
         let reps = image.representations();
         assert_eq!(reps.len(), 2);
-        assert!(reps.iter().all(|rep| rep.size() == NSSize::new(18., 18.)));
+        assert!(reps.iter().all(|rep| rep.size() == NSSize::new(24., 18.)));
     }
 }

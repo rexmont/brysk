@@ -19,7 +19,21 @@
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>1</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/rexmont/brysk/macos/packaging/macos/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>yxOvuto/41mS/9+r57zNNJ7HaTRkIgo28UeF+wsTHeo=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUSendProfileInfo</key>
+    <false/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
+    <true/>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSMultipleInstancesProhibited</key>

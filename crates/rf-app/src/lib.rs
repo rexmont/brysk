@@ -1009,6 +1009,10 @@ pub fn main() {
         background::init(cx);
         #[cfg(target_os = "macos")]
         {
+            cx.on_action(|_: &crate::actions::CheckForUpdates, cx| {
+                installer::check();
+                cx.refresh_windows();
+            });
             // With no window the menu bar's actions have no dispatch tree of their own; the
             // few entries that make sense without one open a window first. (With a window the
             // workspace handles them, so these do nothing then.)
@@ -1029,7 +1033,12 @@ pub fn main() {
             });
             cx.on_action(|_: &crate::actions::Quit, cx| {
                 if !workspace::any_main_window(cx) {
-                    quit_when_idle(cx);
+                    background::quit_app(cx);
+                }
+            });
+            cx.on_action(|_: &crate::actions::CloseApp, cx| {
+                if !workspace::any_main_window(cx) {
+                    background::close_app(cx);
                 }
             });
         }

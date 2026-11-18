@@ -1109,6 +1109,8 @@ pub fn toggle(cx: &mut App) {
         window_background: crate::theme::popup_material(glassy),
         ..Default::default()
     };
+    #[cfg(target_os = "macos")]
+    if !test { cx.activate(true); }
     match cx.open_window(opts, move |window, cx| {
         let hwnd = crate::look::window::hwnd_of(window);
         rf_win::window::set_dark_mode(hwnd, Palette::for_window(window).dark);
@@ -1156,10 +1158,17 @@ impl QuickSearch {
                 this.run_search(cx);
             }
         })];
-        subs.push(cx.observe_window_activation(window, |_, window, cx| {
-            if !window.is_window_active() {
-                log::info!("quick search: the window lost the foreground and closes");
-                cx.defer(close);
+        let mut was_active = window.is_window_active();
+        subs.push(cx.observe_window_activation(window, move |_, window, cx| {
+            if window.is_window_active() { was_active = true; }
+            else if was_active {
+                cx.defer(|cx| {
+                    let inactive = host(cx).window.is_some_and(|w| w.update(cx, |_, window, _| !window.is_window_active()).unwrap_or(false));
+                    if inactive {
+                        log::info!("quick search: the window lost the foreground and closes");
+                        close(cx);
+                    }
+                });
             }
         }));
         subs.push(cx.observe(&images, |_, _, cx| cx.notify()));
@@ -1234,7 +1243,10 @@ impl QuickSearch {
             }
             (Target::Path { path, .. }, How::ShowInFolder) => {
                 let msg = format!("{}{}", crate::workspace::SELECT_HERE_PREFIX, path.display());
-                cx.defer(move |cx| crate::workspace::route_ipc(msg, cx));
+                cx.defer(move |cx| {
+                    close(cx);
+                    crate::workspace::route_ipc(msg, cx);
+                });
             }
             (Target::Path { path, .. }, How::Preview) => {
                 rf_win::look::win::allow_any_foreground();
@@ -1243,7 +1255,10 @@ impl QuickSearch {
             (Target::Path { path, dir: true }, How::Open) => {
                 // a folder opens in Brysk
                 let msg = path.display().to_string();
-                cx.defer(move |cx| crate::workspace::route_ipc(msg, cx));
+                cx.defer(move |cx| {
+                    close(cx);
+                    crate::workspace::route_ipc(msg, cx);
+                });
             }
             (Target::Path { path, dir: false }, How::Open) => {
                 let p = path.clone();

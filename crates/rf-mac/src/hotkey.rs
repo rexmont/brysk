@@ -5,7 +5,7 @@
 //! press to the application's Carbon event target, which the AppKit run loop processes.
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyError {
@@ -26,6 +26,7 @@ struct EventTypeSpec {
 
 const K_EVENT_CLASS_KEYBOARD: u32 = u32::from_be_bytes(*b"keyb");
 const K_EVENT_HOTKEY_PRESSED: u32 = 5;
+const K_EVENT_HOTKEY_RELEASED: u32 = 6;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -38,11 +39,12 @@ type EventHandlerProc = extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_vo
 
 #[link(name = "Carbon", kind = "framework")]
 unsafe extern "C" {
+    fn GetEventKind(event: *mut std::ffi::c_void) -> u32;
     fn GetApplicationEventTarget() -> *mut std::ffi::c_void;
     fn InstallEventHandler(
         target: *mut std::ffi::c_void,
         handler: EventHandlerProc,
-        num_types: u64,
+        num_types: u32,
         event_types: *const std::ffi::c_void,
         user_data: *mut std::ffi::c_void,
         out_ref: *mut *mut std::ffi::c_void,
@@ -67,8 +69,16 @@ const CMD_KEY: u32 = 0x0100;
 static CALLBACK: Mutex<Option<Box<dyn Fn() + Send + 'static>>> = Mutex::new(None);
 static HOTKEY: Mutex<Option<usize>> = Mutex::new(None);
 static PRESSES: AtomicU32 = AtomicU32::new(0);
+static DOWN: AtomicBool = AtomicBool::new(false);
 
-extern "C" fn on_event(_handler: *mut std::ffi::c_void, _event: *mut std::ffi::c_void, _user: *mut std::ffi::c_void) -> i32 {
+fn first_press(down: &AtomicBool, pressed: bool) -> bool {
+    let was_down = down.swap(pressed, Ordering::Relaxed);
+    pressed && !was_down
+}
+
+extern "C" fn on_event(_handler: *mut std::ffi::c_void, event: *mut std::ffi::c_void, _user: *mut std::ffi::c_void) -> i32 {
+    // Carbon can repeat pressed events while held. Toggle once, then wait for release.
+    if !first_press(&DOWN, unsafe { GetEventKind(event) } == K_EVENT_HOTKEY_PRESSED) { return 0; }
     PRESSES.fetch_add(1, Ordering::Relaxed);
     if let Some(f) = CALLBACK.lock().unwrap().as_ref() {
         f();
@@ -144,6 +154,7 @@ fn with_main<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> Opt
 }
 
 fn unregister() -> Option<usize> {
+    DOWN.store(false, Ordering::Relaxed);
     let old = HOTKEY.lock().unwrap().take();
     if let Some(hk) = old {
         unsafe {
@@ -187,9 +198,9 @@ pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
         static HANDLER: Mutex<bool> = Mutex::new(false);
         let target = GetApplicationEventTarget();
         if !*HANDLER.lock().unwrap() {
-            let spec = EventTypeSpec { event_class: K_EVENT_CLASS_KEYBOARD, event_kind: K_EVENT_HOTKEY_PRESSED };
+            let specs = [K_EVENT_HOTKEY_PRESSED, K_EVENT_HOTKEY_RELEASED].map(|event_kind| EventTypeSpec { event_class: K_EVENT_CLASS_KEYBOARD, event_kind });
             let mut out = std::ptr::null_mut();
-            if InstallEventHandler(target, on_event, 1, &spec as *const _ as *const _, std::ptr::null_mut(), &mut out) != 0 {
+            if InstallEventHandler(target, on_event, specs.len() as u32, specs.as_ptr().cast(), std::ptr::null_mut(), &mut out) != 0 {
                 return None;
             }
             *HANDLER.lock().unwrap() = true;
@@ -216,6 +227,16 @@ pub fn presses() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_held_shortcut_only_toggles_once_until_released() {
+        let down = AtomicBool::new(false);
+        assert!(first_press(&down, true));
+        for _ in 0..10 { assert!(!first_press(&down, true)); }
+        assert!(!first_press(&down, false));
+        assert!(!first_press(&down, false));
+        assert!(first_press(&down, true));
+    }
 
     #[test]
     fn recorded_shortcuts_preserve_mac_modifiers() {

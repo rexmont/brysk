@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Brysk updates</title>
+    <link>https://github.com/rexmont/brysk/releases</link>
+    <description>Signed macOS updates for Brysk.</description>
+    <item>
+      <title>Brysk 0.1.0-alpha.1</title>
+      <pubDate>Wed, 18 Nov 2026 14:02:24 GMT</pubDate>
+      <sparkle:version>0.1.0</sparkle:version>
+      <sparkle:shortVersionString>0.1.0-alpha.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <description sparkle:descriptionFormat="plain-text">Initial alpha release of Brysk, a Rust file manager extensively reworked and extended for macOS. Early software: expect rough edges and report issues.
+
+- Native macOS integration, Command shortcuts, menus, dialogs, sharing and permission onboarding.
+- Tabs, split panes, multiple views, Finder-style file operations and drag previews.
+- DirectLook previews for images, video, PDFs, text and archives, with sharper image loading.
+- Fast name search, asynchronous listing and thumbnails, and memory/performance improvements.
+- Optional Finder Dock-click replacement, plus macOS folder, icon and navigation fixes.
+
+Download: Developer ID-signed and notarized universal DMG for Apple silicon and Intel. Requires macOS 13 or later.
+
+Based on rustyfiles by Özer Güzel, with extensive macOS-specific changes. See the README for features and known limits.</description>
+      <sparkle:fullReleaseNotesLink>https://github.com/rexmont/brysk/releases/tag/v0.1.0-alpha.1</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/rexmont/brysk/releases/download/v0.1.0-alpha.1/Brysk-0.1.0-alpha.1.dmg" length="76925583" type="application/octet-stream" sparkle:edSignature="CLkG+b4kJdB5koTqBXfmI5GGy+Z31T/EJR0CtQasPCn+WMEkaXwD00mM1jQQrYaR1974i4AaTI+qZUgAPJG0Cw=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: ki1FMaDwYLCpWKtJqWeF0PqYSyUIrWfEWyNCYpAS76LMdZmfsErKy5JRQJOLpQjmyx48Six3OQQ1qF607urQBw==
+length: 2217
+-->

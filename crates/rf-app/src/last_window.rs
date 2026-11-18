@@ -28,6 +28,9 @@ pub(crate) fn next(main_window_open: bool, desktop_preview_open: bool, run_in_ba
 /// Run when a window closes, and again when a request from a second launch has been acted on while a quit was held back. Windows
 /// left behind (menus, flyouts) go with the last main window, so the process cannot linger with nothing on the screen.
 pub(crate) fn settle(cx: &mut App, switcher_preview: bool) {
+    // Sparkle closes our windows before replacing the bundle; its native window owns relaunch.
+    #[cfg(target_os = "macos")]
+    if matches!(crate::installer::state(), crate::installer::State::Installing) && !crate::background::quitting() { return; }
     let main = crate::workspace::any_main_window(cx);
     #[cfg(windows)]
     let desktop = crate::shell::desktop::window_open(cx);

@@ -58,6 +58,11 @@ performance and interface changes.
 | Open in Terminal / editor | Services | Context menu + status bar; editor auto-detected |
 | Shortcuts | macOS | macOS Cmd **and** Explorer Ctrl keys |
 
+Current source builds include Sparkle for in-app updates: check in Settings → About,
+or use the title-bar **Update available** button when a newer build is found. The
+first published alpha predates this updater and needs one manual installation of
+an updater-enabled build. See [macOS updates](docs/macos-updates.md).
+
 ## Performance
 
 Latest recorded measurements on macOS 26 arm64. Application memory was measured in a release build
@@ -78,8 +83,10 @@ drag **Brysk** to Applications. The build is signed and notarised; no Gatekeeper
 
 Onboarding and Settings → General offer an optional Finder Dock-click replacement. It needs
 Accessibility access and enables background mode. Plain left-clicks open Brysk; right-clicks
-and modified clicks keep their usual behavior. Turning it off or quitting Brysk restores
-normal Finder clicks. It needs no system patches or SIP changes.
+and modified clicks keep their usual behavior. **Close** (⌘Q) closes Brysk's windows and keeps
+it running in the menu bar, so Finder redirection remains available. **Quit**, directly below
+Close in either Brysk menu, exits completely and has no default shortcut. Turning redirection
+off or choosing Quit restores normal Finder clicks. It needs no system patches or SIP changes.
 If Brysk is moved or removed while still running, native filesystem notifications stop
 redirection. There is no periodic file check or separate replacement service. After granting
 Accessibility access, return to Brysk to activate the integration.

@@ -54,6 +54,7 @@ pub mod sta;
 pub mod thumbs;
 pub mod tags;
 pub mod tray;
+pub mod updater;
 pub mod window;
 
 #[path = "../../rf-win/src/watch.rs"]

@@ -29,6 +29,8 @@ fn tray_labels() -> rf_win::tray::Labels {
         open: crate::t!("DirectLook ayarları").into(),
         new_window: String::new(),
         settings: String::new(),
+        #[cfg(target_os = "macos")]
+        close: String::new(),
         quit: crate::t!("Çıkış").into(),
     }
 }

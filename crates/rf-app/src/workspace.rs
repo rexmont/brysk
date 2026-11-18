@@ -290,6 +290,8 @@ const JUMP_LIST_SETTLE: std::time::Duration = std::time::Duration::from_millis(4
 /// double click made five windows. 0.8.2 made those five one request; with this a second request is harmless whoever sends it.
 /// Says whether the request is taken care of (see `route_ipc_shown`).
 pub fn show_settings(cx: &mut App) -> bool {
+    #[cfg(target_os = "macos")]
+    cx.activate(true);
     let list = cx.try_global::<OpenWorkspaces>().map(|g| g.0.clone()).unwrap_or_default();
     for (handle, ws) in list.into_iter().rev() {
         let Some(ws) = ws.upgrade() else { continue };
@@ -550,6 +552,9 @@ pub fn route_ipc_shown(msg: String, cx: &mut App) -> bool {
         }
         None => {}
     }
+    // File/reveal requests must activate the application as well as ordering its window.
+    #[cfg(target_os = "macos")]
+    cx.activate(true);
     if let Some(file) = msg.strip_prefix(SELECT_HERE_PREFIX) {
         if !select_in_open_folder(std::path::Path::new(file), cx) {
             return route_ipc_shown(format!("{SELECT_PREFIX}{file}"), cx);
@@ -2145,6 +2150,12 @@ impl Workspace {
 
     fn render_titlebar(&mut self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let popups_open = self.popups_open(cx);
+        #[cfg(target_os = "macos")]
+        let update_available = self.picker.is_none() && matches!(crate::installer::state(), crate::installer::State::Available(_));
+        #[cfg(target_os = "macos")]
+        let content_width = (self.viewport_w - 80. - if update_available { 166. } else { 8. }).max(0.);
+        #[cfg(not(target_os = "macos"))]
+        let content_width = (self.viewport_w - 150.).max(200.);
         let mut tabs = h_flex()
             .id("tabs")
             // content-sized, shrinks (and scrolls) only when there is not enough room, so the
@@ -2164,7 +2175,7 @@ impl Workspace {
         }
         // Equal-width tabs that share the strip (like Files / WinUI TabView "Equal"): wide
         // while there are few, shrinking as more open, scrolling only below the minimum.
-        let strip = (self.viewport_w - 150. - TITLEBAR_LEAD - 40.).max(120.);
+        let strip = (content_width - TITLEBAR_LEAD - 40.).max(120.);
         let n = self.tabs.len().max(1) as f32;
         let tab_w = ((strip - 4.) / n - 4.).clamp(TAB_MIN_W, TAB_MAX_W);
         let roomy = tab_w >= 110.;
@@ -2320,7 +2331,7 @@ impl Workspace {
                     .h_full()
                     // explicit width: the component's title bar never shrinks its content, so
                     // many tabs would push the window buttons off-screen (min/max/close ~140 px)
-                    .w(px((self.viewport_w - 150.).max(200.)))
+                    .w(px(content_width))
                     .min_w_0()
                     .overflow_hidden()
                     .items_end()
@@ -2351,6 +2362,25 @@ impl Workspace {
                     .child(tabs)
                     .child(new_tab),
             )
+            .when(cfg!(target_os = "macos"), |bar| {
+                #[cfg(target_os = "macos")]
+                { bar.when(update_available, |bar| bar.child(
+                    h_flex().w(px(158.)).h_full().flex_shrink_0().items_center().pr_2().child(
+                        h_flex().id("titlebar-update").role(Role::Button)
+                            .aria_label(crate::i18n::tx("Güncelleme var", "Update available"))
+                            .w_full().h(px(26.)).px_2().gap_2()
+                            .justify_center().rounded(theme::RADIUS_SM).bg(p.accent.opacity(0.16))
+                            .text_color(p.accent).text_xs().whitespace_nowrap().cursor_pointer()
+                            .hover(|s| s.bg(p.accent.opacity(0.25)))
+                            .child(Icon::new(L::Download).size(px(13.)).flex_shrink_0())
+                            .child(crate::i18n::tx("Güncelleme var", "Update available"))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(|_, _, cx| { cx.stop_propagation(); crate::installer::check(); cx.refresh_windows(); })
+                    )
+                )) }
+                #[cfg(not(target_os = "macos"))]
+                { bar }
+            })
     }
 
     /// Live pane resize; the width is kept in settings (written with the next session save).
@@ -4570,7 +4600,10 @@ impl Render for Workspace {
             // action, the dialog's modal loop handed our windows their messages while the app was borrowed, and the app closed
             // (issue 46: "Clicking on map network drive crashes and closes the explorer window").
             .on_action(cx.listener(|_, _: &RestartApp, _, cx| crate::restart(cx)))
-            .on_action(cx.listener(|_, _: &Quit, _, cx| crate::quit_when_idle(cx)))
+            .on_action(cx.listener(|_, _: &Quit, _, cx| crate::background::quit_app(cx)))
+            .on_action(cx.listener(|this, _: &CloseApp, _, cx| {
+                if this.picker.is_some() { crate::quit_when_idle(cx); } else { crate::background::close_app(cx); }
+            }))
             .on_action(cx.listener(|this, _: &About, window, cx| {
                 crate::settings_view::open_page(crate::settings_view::Page::About, cx);
                 this.navigate(Location::Settings, window, cx)

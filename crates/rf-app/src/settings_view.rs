@@ -932,7 +932,7 @@ fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     ];
     if enabled {
         let status = match finder_replace::status() {
-            Status::Active => tx("Etkin. Brysk'tan çıkınca Finder tıklamaları normale döner.", "Active. Quitting Brysk restores normal Finder clicks."),
+            Status::Active => tx("Etkin. Kapat, Brysk'ı çalışır tutar; Çık tamamen kapatır ve Finder tıklamalarını geri yükler.", "Active. Close keeps Brysk running; Quit fully exits and restores Finder clicks."),
             Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin, ardından Brysk'a dönün.", "Allow Brysk in System Settings → Privacy & Security → Accessibility, then return to Brysk."),
             Status::TapUnavailable => tx("Finder tıklama erişimi başlatılamadı. Erişilebilirlik iznini ve gerekirse Giriş İzleme'yi denetleyip Brysk'a dönün. Finder tıklamaları değiştirilmez.", "Finder click access could not start. Check Accessibility and, if needed, Input Monitoring, then return to Brysk. Finder clicks pass through."),
             Status::AppUnavailable => tx("Brysk kullanılamıyor veya konumu değişti. Finder tıklamaları normale döndü. Brysk'ı kurulu konumundan yeniden açın.", "Brysk is unavailable or its location changed. Finder clicks have been restored. Reopen Brysk from its installed location."),
@@ -2868,7 +2868,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             L::PanelBottom,
             t!("Pencere kapatılınca arka planda çalışmaya devam et"),
             Some(if cfg!(target_os = "macos") {
-                t!("Menü çubuğunda bir simge kalır; yeni pencere anında açılır")
+                crate::i18n::tx("Kapat (⌘Q), Brysk'ı menü çubuğunda çalışır tutar. Çık tamamen kapatır.", "Close (⌘Q) keeps Brysk running in the menu bar. Quit exits completely.")
             } else {
                 t!("Bildirim alanında bir simge kalır; yeni pencere anında açılır")
             }),
@@ -3086,18 +3086,37 @@ fn open_bundled_notices() {
     });
 }
 
-/// Update status and the button that fits it (Settings → About). macOS builds are a notarised `.app` updated by downloading a new
-/// DMG (`installer_mac` knows only "not installed"); there is no background check to report, so the row says how updating works and
-/// points at the releases page. The automatic-download and beta switches are left out of that page for the same reason.
+/// Sparkle supplies the native release notes, download and installation windows.
 #[cfg(target_os = "macos")]
 fn update_card(p: &Palette, _s: &Settings) -> AnyElement {
+    use crate::installer::State;
+    let state = crate::installer::state();
+    let text = match &state {
+        State::NotInstalled => crate::i18n::tx("Bu geliştirme kopyası uygulama paketi olmadan güncellenemez.", "This development copy needs its app bundle to update.").to_string(),
+        State::Checking => t!("Denetleniyor…").to_string(),
+        State::UpToDate => crate::i18n::tx("Uyumlu yeni bir güncelleme yok.", "No compatible updates are available.").to_string(),
+        State::Available(version) => format!("Brysk {version} — {}", crate::i18n::tx("güncelleme var", "update available")),
+        State::Installing => crate::i18n::tx("Güncellemeden önce etkin dosya işlemlerinin bitmesi bekleniyor.", "Waiting for active file operations before updating.").to_string(),
+        State::Failed(error) => format!("{} {error}", t!("Denetlenemedi:")),
+        _ => crate::i18n::tx("Güncellemeler güvenle indirilir ve uygulama içinde kurulur.", "Updates download securely and install within the app.").to_string(),
+    };
+    let available = matches!(state, State::Available(_));
+    let control = if matches!(state, State::NotInstalled | State::Installing) {
+        div().into_any_element()
+    } else {
+        button("upd-check", p, if available { crate::i18n::tx("Güncellemeyi göster…", "View Update…") } else { crate::i18n::tx("Güncellemeleri Denetle…", "Check for Updates…") }, |window, cx| {
+            crate::installer::check();
+            window.refresh();
+            cx.refresh_windows();
+        })
+    };
     shell(p)
         .child(card_body(
             p,
             L::RefreshCw,
             t!("Güncellemeler").into(),
-            Some(t!("Güncellemeler GitHub'dan indirilir: yeni sürümü DMG ile kurun.").into()),
-            Some(button("upd-web", p, t!("Sürümler sayfası"), |_, _| open_url(RELEASES_URL))),
+            Some(text.into()),
+            Some(control),
         ))
         .into_any_element()
 }
@@ -3231,7 +3250,14 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             button("copy-ver", p, t!("Kopyala"), move |_, cx| cx.write_to_clipboard(ClipboardItem::new_string(format!("Brysk {ver}")))),
         ),
         update_card(p, &s),
-        // (Velopack's updater is Windows-only; macOS copies are updated by installing the new DMG, so both switches would do nothing)
+        #[cfg(target_os = "macos")]
+        card(
+            p,
+            L::RefreshCw,
+            crate::i18n::tx("Güncellemeleri kendiliğinden denetle", "Check for updates automatically"),
+            Some(crate::i18n::tx("Güncelleme varsa başlık çubuğunda bir düğme gösterilir. Kurulumu siz başlatırsınız.", "Shows a title-bar button when an update is available. You choose when to install.")),
+            sw("auto-check-upd", p, rf_win::updater::automatic_checks(), |_, on| rf_win::updater::set_automatic_checks(on)),
+        ),
         #[cfg(windows)]
         card(
             p,
@@ -3317,6 +3343,7 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             move || {
                 #[cfg(target_os = "macos")]
                 let libs: &[(&str, &str)] = &[
+                    ("Sparkle", "MIT and bundled third-party notices"),
                     ("GPUI", "Apache-2.0"),
                     ("gpui-kit", "Apache-2.0"),
                     ("objc2, block2, dispatch2", "MIT"),

@@ -22,6 +22,13 @@ Brysk is not affiliated with or endorsed by the original author. The original
 copyright notice and the MIT permission notice must be kept in copies and
 substantial portions of the software.
 
+macOS software updates
+----------------------
+Brysk bundles Sparkle 2.10.1, the open-source software update framework for macOS.
+https://github.com/sparkle-project/Sparkle
+Sparkle's full licence and third-party notices accompany Brysk in
+Contents/Resources/Sparkle-LICENSE and inside Sparkle.framework.
+
 Finder Dock-click integration
 -----------------------------
 Portions of crates/rf-mac/src/finder_replace.rs are adapted into Rust from

@@ -11,6 +11,7 @@ use crate::t;
 pub fn install(cx: &mut App) {
     let app = Menu::new("Brysk").items([
         MenuItem::action(t!("Brysk Hakkında"), About),
+        MenuItem::action(crate::i18n::tx("Güncellemeleri Denetle…", "Check for Updates…"), CheckForUpdates),
         MenuItem::separator(),
         MenuItem::action(t!("Ayarlar…"), GoSettings),
         MenuItem::separator(),
@@ -20,7 +21,8 @@ pub fn install(cx: &mut App) {
         MenuItem::action(t!("Diğerlerini gizle"), HideOthers),
         MenuItem::action(t!("Tümünü göster"), ShowAllApps),
         MenuItem::separator(),
-        MenuItem::action(t!("Brysk'tan çık"), Quit),
+        MenuItem::action(crate::i18n::tx("Kapat", "Close"), CloseApp),
+        MenuItem::action(crate::i18n::tx("Çık", "Quit"), Quit),
     ]);
     let file = Menu::new(t!("Dosya")).items([
         MenuItem::action(t!("Yeni sekme"), NewTab),

@@ -47,6 +47,7 @@ done
 # Sign the nested helper first, then the app. `--deep` is only for verification: signing it
 # that way leaves the helper with the parent's identity requirements.
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/Helpers/DirectLook.app"
+CODESIGN_ID="$IDENTITY" ./scripts/sign-sparkle.sh "$APP"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" \
     --entitlements packaging/macos/Brysk.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
@@ -81,4 +82,5 @@ spctl -a -vv -t open --context context:primary-signature "$STAGING/Brysk.dmg"
 hdiutil verify -quiet "$STAGING/Brysk.dmg"
 mv -f "$STAGING/Brysk.dmg" "$DMG"
 (cd dist && shasum -a 256 "Brysk-$VERSION.dmg") | tee "$DMG.sha256"
+python3 scripts/make-macos-appcast.py "$DMG" "$APP" dist/appcast.xml
 echo "$DMG"

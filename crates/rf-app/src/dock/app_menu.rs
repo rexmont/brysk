@@ -759,7 +759,7 @@ fn fixed_label(f: Fixed, app_name: &str) -> (Option<L>, String) {
         Fixed::Open => (Some(L::Play), app_name.to_string()),
         Fixed::RunAsAdmin => (Some(L::ShieldCheck), t!("Yönetici olarak çalıştır").to_string()),
         Fixed::OpenLocation => (Some(L::FolderOpen), t!("Dosya konumunu aç").to_string()),
-        Fixed::Properties => (Some(L::Wrench), t!("Özellikler").to_string()),
+        Fixed::Properties => (Some(L::Info), t!("Özellikler").to_string()),
         Fixed::MoveToMonitor(n) => (Some(L::Monitor), format!("{}: {n}", t!("Monitörde aç"))),
         Fixed::FitToScreen => (Some(L::Maximize2), t!("Ekrana sığdır").to_string()),
         Fixed::Pin => (Some(L::Pin), t!("Dock'a sabitle").to_string()),

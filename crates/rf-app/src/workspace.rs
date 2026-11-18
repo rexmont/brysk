@@ -2404,7 +2404,7 @@ impl Workspace {
                 });
             })),
             // our Properties window (a drive gets its own page there)
-            Item::action(t!("Özellikler"), MenuIcon::Lucide(L::Wrench), with(|ws, p, _, cx| {
+            Item::action(t!("Özellikler"), MenuIcon::Lucide(L::Info), with(|ws, p, _, cx| {
                 crate::properties_view::open(vec![p], ws.images.clone(), cx);
             }))
             .hint("Alt+Enter"),
@@ -2455,7 +2455,7 @@ impl Workspace {
                     ws.active_tab().clone().update(cx, |v, cx| v.delete_paths(vec![p], false, w, cx))
                 })),
                 Quick::new(
-                    L::Wrench,
+                    L::Info,
                     t!("Özellikler  (Alt+Enter)"),
                     true,
                     with(|ws, p, _, cx| {
@@ -2915,7 +2915,7 @@ impl Workspace {
                 cmd("cb-delete", L::Trash, "Sil  (Del)", writable_sel, cx, |this, w, cx| this.with_tab(cx, |v, cx| v.delete_selected(false, w, cx)))
             }))
             .children(on("props").then(|| {
-                cmd("cb-props", L::Wrench, "Özellikler  (Alt+Enter)", in_folder, cx, |this, _, cx| {
+                cmd("cb-props", L::Info, "Özellikler  (Alt+Enter)", in_folder, cx, |this, _, cx| {
                     this.with_tab(cx, |v, cx| if v.selection_paths().is_empty() { v.folder_properties(cx) } else { v.properties(cx) })
                 })
             }))

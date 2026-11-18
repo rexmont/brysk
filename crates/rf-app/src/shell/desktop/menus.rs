@@ -71,7 +71,7 @@ fn item_of(me: &Me, cmd: ItemCmd) -> Item {
         ItemCmd::CreateShortcut => Item::action(t!("Kısayol oluştur"), icon(L::Link), act(me, |v, _, cx| v.create_shortcuts(cx))),
         ItemCmd::EmptyBin => Item::action(t!("Geri Dönüşüm Kutusu'nu boşalt"), icon(L::Trash), act(me, |v, _, cx| v.empty_bin(cx))),
         ItemCmd::CopyPath => Item::action(t!("Öğe yolunu kopyala"), icon(L::ClipboardCopy), act(me, |v, _, cx| v.copy_paths_as_text(cx))).hint("Ctrl+Shift+C"),
-        ItemCmd::Properties => Item::action(t!("Özellikler"), icon(L::Wrench), act(me, |v, _, cx| v.properties(cx))).hint("Alt+Enter"),
+        ItemCmd::Properties => Item::action(t!("Özellikler"), icon(L::Info), act(me, |v, _, cx| v.properties(cx))).hint("Alt+Enter"),
     }
 }
 

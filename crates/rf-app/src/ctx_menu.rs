@@ -140,7 +140,7 @@ impl FolderView {
         if !with_items {
             return vec![
                 Quick::new(L::ClipboardPaste, t!("Yapıştır  (Ctrl+V)"), paste_ok, act(me, |v, w, cx| v.paste(w, cx))),
-                Quick::new(L::Wrench, t!("Özellikler  (Alt+Enter)"), true, act(me, |v, _, cx| v.folder_properties(cx))),
+                Quick::new(L::Info, t!("Özellikler  (Alt+Enter)"), true, act(me, |v, _, cx| v.folder_properties(cx))),
             ];
         }
         vec![
@@ -155,7 +155,7 @@ impl FolderView {
             Quick::new(L::TextCursorInput, t!("Yeniden adlandır  (F2)"), true, act(me, |v, w, cx| v.rename_selection(w, cx))),
             Quick::new(L::Share2, t!("Paylaş"), true, act(me, |v, w, cx| v.share(w, cx))),
             Quick::new(L::Trash, t!("Sil  (Del)"), true, act(me, |v, w, cx| v.delete_selected(false, w, cx))),
-            Quick::new(L::Wrench, t!("Özellikler  (Alt+Enter)"), true, act(me, |v, _, cx| v.properties(cx))),
+            Quick::new(L::Info, t!("Özellikler  (Alt+Enter)"), true, act(me, |v, _, cx| v.properties(cx))),
         ]
     }
 
@@ -625,7 +625,7 @@ impl FolderView {
                     Item::action(t!("Hiçbirini seçme"), icon(L::Square), act(&me, |v, _, cx| v.select_no_items(cx))).enabled(!none),
                     Item::action(t!("Seçimi tersine çevir"), icon(L::ArrowLeftRight), act(&me, |v, _, cx| v.invert_selected_items(cx))),
                     Item::Separator,
-                    Item::action(t!("Özellikler"), icon(L::Wrench), act(&me, |v, _, cx| v.folder_properties(cx))),
+                    Item::action(t!("Özellikler"), icon(L::Info), act(&me, |v, _, cx| v.folder_properties(cx))),
                     Item::action(t!("Ayarlar"), icon(L::Settings), |w, cx| w.dispatch_action(Box::new(crate::actions::GoSettings), cx)).hint("Ctrl+,"),
                 ]
             }

@@ -95,6 +95,9 @@ struct Ui {
     /// How wide the Settings pane was at its last paint, logical px (0: not painted yet). The list of pages is drawn as a strip of
     /// icons when the pane is narrow ([`nav_is_strip`]).
     pane_w: f32,
+    /// Bumped when another page is opened: the page's scroll container gets a new id, so the
+    /// new page starts at the top instead of inheriting the old page's offset.
+    scroll_gen: u64,
 }
 impl Global for Ui {}
 
@@ -112,7 +115,7 @@ pub(crate) fn nav_is_strip(pane_w: f32) -> bool {
 
 fn ui(cx: &mut App) -> &mut Ui {
     if !cx.has_global::<Ui>() {
-        cx.set_global(Ui { page: Page::General, open: HashSet::new(), search: None, hg_focus: Vec::new(), pane_w: 0.0 });
+        cx.set_global(Ui { page: Page::General, open: HashSet::new(), search: None, hg_focus: Vec::new(), pane_w: 0.0, scroll_gen: 0 });
     }
     cx.global_mut::<Ui>()
 }
@@ -228,7 +231,11 @@ fn build_page(page: Page, p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyEle
 }
 
 pub fn open_page(page: Page, cx: &mut App) {
-    ui(cx).page = page;
+    let u = ui(cx);
+    if u.page != page {
+        u.page = page;
+        u.scroll_gen = u.scroll_gen.wrapping_add(1);
+    }
 }
 
 // ---------------------------------------------------------------- controls
@@ -605,9 +612,9 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
         )
         .child(nav)
         .child(
-            // One scroll state per page: opening another page starts at its top instead of
-            // inheriting the previous page's offset (returning to a page keeps its own place).
-            div().id(("settings-page", page as usize)).flex_1().min_w_0().h_full().overflow_y_scroll().child(
+            // A new page (and returning to an earlier one) starts at the top: the scroll
+            // container's id carries the page generation, so it cannot inherit the offset.
+            div().id(("settings-page", ui(cx).scroll_gen as usize)).flex_1().min_w_0().h_full().overflow_y_scroll().child(
                 v_flex()
                     .w_full()
                     .max_w(px(980.))

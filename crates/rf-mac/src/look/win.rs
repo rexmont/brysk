@@ -26,7 +26,10 @@ pub fn set_topmost(hwnd: HWND, on: bool) {
     let _ = crate::window::set_topmost(hwnd, on);
 }
 
-pub fn set_rect(_hwnd: HWND, _rect: [f32; 4], _scale: f32) {}
+pub fn set_rect(hwnd: HWND, rect: [f32; 4], scale: f32) {
+    let [x, y, w, h] = rect;
+    crate::window::place(hwnd, [(x * scale).round() as i32, (y * scale).round() as i32, ((x + w) * scale).round() as i32, ((y + h) * scale).round() as i32]);
+}
 
 pub fn set_show_in_taskbar(_hwnd: HWND, _show: bool) {}
 
@@ -45,6 +48,6 @@ pub fn in_top_strip(p: (i32, i32), width: i32, strip: i32) -> bool {
     p.1 >= 0 && p.1 < strip
 }
 
-pub fn pointer_in_top_strip(_hwnd: HWND, _strip: i32) -> bool {
-    false
+pub fn pointer_in_top_strip(hwnd: HWND, strip: i32) -> bool {
+    crate::window::pointer_in_top_strip(hwnd, strip)
 }

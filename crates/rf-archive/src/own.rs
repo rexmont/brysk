@@ -194,7 +194,7 @@ impl rarchive::Sink for DiskSink<'_> {
             self.sh.stats.lock().unwrap().skipped += 1;
             return Ok(false);
         }
-        let wanted = self.sh.dest.join(&rel);
+        let wanted = super::safe_destination(self.sh.dest, &rel).map_err(|e| self.fail(e))?;
         if e.is_dir {
             std::fs::create_dir_all(&wanted)
                 .map_err(|x| self.fail(anyhow::Error::new(x).context(format!("Klasör oluşturulamadı: {}", wanted.display()))))?;
@@ -237,7 +237,7 @@ impl rarchive::Sink for DiskSink<'_> {
         Ok(())
     }
 
-    fn end(&mut self, _: &rarchive::Entry) -> io::Result<()> {
+    fn end(&mut self, entry: &rarchive::Entry) -> io::Result<()> {
         let Some(o) = self.open.take() else { return Ok(()) };
         // flush + close (+ the antivirus scan) at normal priority; `file` drops before this
         let _io = IoPriority::raise();
@@ -252,6 +252,16 @@ impl rarchive::Sink for DiskSink<'_> {
         if let Some(t) = o.mtime {
             let _ = file.set_modified(t);
         }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = (entry.attributes >> 16) as u32;
+            if mode & 0o170000 == 0o100000 {
+                file.set_permissions(std::fs::Permissions::from_mode(mode & 0o777)).map_err(|e| self.fail(e.into()))?;
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = entry;
         let mut st = self.sh.stats.lock().unwrap();
         st.files += 1;
         st.bytes += o.written;

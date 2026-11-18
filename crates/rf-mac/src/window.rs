@@ -34,6 +34,17 @@ fn scale(window: &NSWindow) -> f64 {
     window.backingScaleFactor()
 }
 
+/// The overlay toolbar uses client coordinates even when AppKit owns its mouse events.
+pub(crate) fn pointer_in_top_strip(hwnd: HWND, strip: i32) -> bool {
+    let Some(window) = window(hwnd) else { return false };
+    let Some(view) = window.contentView() else { return false };
+    let at = view.convertPoint_fromView(window.mouseLocationOutsideOfEventStream(), None);
+    let bounds = view.bounds();
+    let x = at.x - bounds.origin.x;
+    let y = if view.isFlipped() { at.y - bounds.origin.y } else { bounds.origin.y + bounds.size.height - at.y };
+    x >= 0.0 && x < bounds.size.width && y >= 0.0 && y < f64::from(strip) / scale(&window)
+}
+
 fn is_maximized(window: &NSWindow) -> bool {
     let (Some(screen), frame) = (window.screen(), window.frame()) else { return false };
     let visible = screen.visibleFrame();

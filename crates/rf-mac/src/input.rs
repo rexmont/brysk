@@ -38,6 +38,11 @@ pub fn ctrl_down() -> bool {
     unsafe { CGEventSourceKeyState(COMBINED, KEY_CONTROL) }
 }
 
+/// The Option key is the macOS file-drag copy modifier.
+pub fn alt_down() -> bool {
+    unsafe { CGEventSourceKeyState(COMBINED, 58) || CGEventSourceKeyState(COMBINED, 61) }
+}
+
 /// The Command key is down.
 pub fn cmd_down() -> bool {
     unsafe { CGEventSourceKeyState(COMBINED, KEY_COMMAND) }

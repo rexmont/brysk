@@ -346,6 +346,24 @@ impl FolderView {
     }
 
     pub(crate) fn paste_to(&mut self, dir: PathBuf, _window: &mut Window, cx: &mut Context<Self>) {
+        self.paste_to_kind(dir, None, cx);
+    }
+
+    pub fn move_here(&mut self, cx: &mut Context<Self>) {
+        if self.shell_read_only(cx) { return; }
+        if let Some(dir) = self.current_dir() { self.paste_to_kind(dir, Some(Transfer::Move), cx); }
+    }
+
+    pub fn duplicate_items(&mut self, cx: &mut Context<Self>) {
+        if self.shell_read_only(cx) { return; }
+        let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
+        for p in self.selection_paths() {
+            if let Some(parent) = p.parent() { groups.entry(parent.to_path_buf()).or_default().push(p); }
+        }
+        for (dir, paths) in groups { crate::status_center::transfer(cx, Transfer::Copy, paths, dir); }
+    }
+
+    fn paste_to_kind(&mut self, dir: PathBuf, force: Option<Transfer>, cx: &mut Context<Self>) {
         // GetClipboardData can block on a slow source app (delayed rendering).
         let (tx, rx) = oneshot::channel();
         rf_win::sta::run(move |owner| {
@@ -389,7 +407,7 @@ impl FolderView {
                     });
                 };
                 match clip {
-                    Some((paths, kind)) => crate::status_center::transfer_then(cx, kind, paths, dir, select),
+                    Some((paths, kind)) => crate::status_center::transfer_then(cx, force.unwrap_or(kind), paths, dir, select),
                     None => crate::status_center::paste_virtual(cx, dir, select),
                 }
             });
@@ -605,7 +623,8 @@ impl FolderView {
 
     pub fn commit_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((ei, input)) = self.renaming.take() else { return };
-        let typed = input.read(cx).value().trim().to_string();
+        let value = input.read(cx).value();
+        let typed = if cfg!(windows) { value.trim().to_string() } else { value.to_string() };
         let new_name = match self.hidden_extension(ei, cx) {
             Some(ext) if !typed.is_empty() => format!("{typed}{ext}"),
             _ => typed,
@@ -614,12 +633,8 @@ impl FolderView {
         self.set_renaming(None, None);
         // the list has the keyboard again from here on: a dialog opened below gives it back to the list when it closes
         window.focus(&self.focus, cx);
-        // Explorer's rule, said up front instead of a shell error after the fact
-        const INVALID: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-        if new_name.contains(INVALID) || new_name.ends_with('.') {
-            let title = crate::t!("Yeniden adlandır").to_string();
-            let msg = format!("{}\n\n{}", new_name, crate::t!("Dosya adı şu karakterleri içeremez: \\ / : * ? \" < > | ve nokta ile bitemez."));
-            crate::prompt::notice(title, msg, window, cx);
+        if let Err(error) = rf_core::rename::validate(&new_name) {
+            crate::prompt::notice(crate::t!("Yeniden adlandır"), format!("{new_name}\n\n{error}"), window, cx);
             cx.notify();
             return;
         }
@@ -647,7 +662,7 @@ impl FolderView {
                 let ext = |n: &str| std::path::Path::new(n).extension().map(|e| e.to_string_lossy().to_lowercase());
                 let warn = cx.global::<crate::settings::Settings>().warn_extension_change;
                 // (a dialog of our own, in the window: it was a Windows message box, which opened behind the window, issue 30)
-                let asks = warn && !self.entry(ei).is_dir() && ext(&old).is_some() && ext(&old) != ext(&new_name);
+                let asks = warn && (!self.entry(ei).is_dir() || self.entry(ei).is_package()) && ext(&old).is_some() && ext(&old) != ext(&new_name);
                 let confirm_rx = if asks {
                     let msg = crate::t!("Dosya adı uzantısını değiştirirseniz dosya kullanılamaz hale gelebilir. Değiştirmek istediğinizden emin misiniz?").to_string();
                     Some(crate::prompt::ask(crate::t!("Dosya adı uzantısı"), msg, window, cx))
@@ -891,10 +906,23 @@ impl FolderView {
     /// Files dropped onto `dest` (a folder row or the current folder background).
     pub fn drop_into(&mut self, dest: PathBuf, paths: &ExternalPaths, cx: &mut Context<Self>) {
         let sources: Vec<PathBuf> = paths.paths().to_vec();
+        #[cfg(target_os = "macos")]
+        if dest.extension().is_some_and(|e| e.eq_ignore_ascii_case("app")) {
+            crate::status_center::start(cx, t!("Şununla aç").into(), move |_| {
+                for path in sources { rf_win::shell::open_with_app(&path, &dest)?; }
+                Ok(true)
+            });
+            return;
+        }
         if sources.is_empty() || rf_win::dnd::is_invalid_drop(&sources, &dest) {
             return;
         }
-        let (ctrl, shift) = (rf_win::input::ctrl_down(), rf_win::input::shift_down());
+        let (ctrl, shift) = {
+            #[cfg(target_os = "macos")]
+            { (rf_win::input::alt_down(), rf_win::input::cmd_down()) }
+            #[cfg(not(target_os = "macos"))]
+            { (rf_win::input::ctrl_down(), rf_win::input::shift_down()) }
+        };
         let kind = rf_win::dnd::default_transfer(&sources, &dest, ctrl, shift);
         crate::status_center::transfer(cx, kind, sources, dest);
     }

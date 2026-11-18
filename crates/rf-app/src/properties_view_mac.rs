@@ -620,7 +620,7 @@ impl GetInfo {
 
     fn title(&self) -> String {
         let what = if self.paths.len() == 1 { file_name(&self.paths[0]) } else { crate::i18n::items(self.paths.len()) };
-        format!("{what} — {}", t!("Özellikler"))
+        format!("{what} — {}", if cfg!(target_os = "macos") { t!("Bilgi Al") } else { t!("Özellikler") })
     }
 
     fn header_name(&self) -> String {

@@ -166,7 +166,7 @@ fn entry_of(path: &Path, name: &str) -> Option<Entry> {
         attrs |= rf_core::entry::attrs::DIRECTORY;
     }
     if name.starts_with('.') {
-        attrs |= rf_core::entry::attrs::HIDDEN | rf_core::entry::attrs::SYSTEM;
+        attrs |= rf_core::entry::attrs::HIDDEN;
     }
     let mut e = Entry::new(name, if is_dir { EntryKind::Dir } else { EntryKind::File }, md.len(), ms(md.modified().ok()), ms(md.created().ok()), attrs);
     e.link = md.file_type().is_symlink();

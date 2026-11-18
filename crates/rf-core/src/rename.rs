@@ -59,7 +59,7 @@ pub enum RenameError {
     #[error("Ad boş olamaz")]
     Empty,
     #[cfg_attr(windows, error("Geçersiz karakter: < > : \" / \\ | ? * veya denetim karakteri"))]
-    #[cfg_attr(not(windows), error("Geçersiz karakter: / veya denetim karakteri"))]
+    #[cfg_attr(not(windows), error("Geçersiz karakter: / veya NUL"))]
     InvalidChars,
     #[error("Ad nokta veya boşlukla bitemez")]
     TrailingDotSpace,
@@ -77,7 +77,7 @@ pub enum RenameError {
 
 /// (stem, ext-with-dot). A leading dot alone (".gitignore") is not an extension.
 pub fn split_ext(name: &str, is_dir: bool) -> (&str, &str) {
-    if is_dir {
+    if is_dir && !(cfg!(target_os = "macos") && crate::is_package_name(name)) {
         return (name, "");
     }
     match name.rfind('.') {
@@ -150,7 +150,7 @@ const RESERVED: [&str; 22] = [
 /// kept behind the platform check so the shared app does not reject `a?b.txt`, `a|b` or `CON`
 /// on macOS.
 pub fn validate(name: &str) -> Result<(), RenameError> {
-    if name.trim().is_empty() {
+    if name.is_empty() || (cfg!(windows) && name.trim().is_empty()) || name == "." || name == ".." {
         return Err(RenameError::Empty);
     }
     #[cfg(windows)]
@@ -168,9 +168,9 @@ pub fn validate(name: &str) -> Result<(), RenameError> {
     }
     #[cfg(not(windows))]
     {
-        // APFS/HFS: only `/` is the path separator. NUL and the control characters are not
+        // APFS/HFS: only `/` is the path separator. NUL is not
         // representable; `:` is legal on disk (Finder draws it as `/`) and is accepted.
-        if name.chars().any(|c| c == '/' || c == '\0' || ((c as u32) < 32)) {
+        if name.chars().any(|c| c == '/' || c == '\0') {
             return Err(RenameError::InvalidChars);
         }
     }

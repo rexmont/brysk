@@ -189,7 +189,7 @@ fn package_at(p: &Path) -> bool {
 fn plan_walk(
     src: &Path,
     dst: &Path,
-    dirs: &mut Vec<PathBuf>,
+    dirs: &mut Vec<(PathBuf, PathBuf, bool)>,
     files: &mut Vec<PlanFile>,
     reserved: &mut HashSet<PathBuf>,
 ) -> std::io::Result<()> {
@@ -209,7 +209,7 @@ fn plan_walk(
     let merge = is_real_dir(dst) && !reserved.contains(dst) && !package;
     let dst = if merge || !(exists(dst) || reserved.contains(dst)) { dst.to_path_buf() } else { keep_both(dst, !package, reserved) };
     reserved.insert(dst.clone());
-    dirs.push(dst.clone());
+    dirs.push((src.to_path_buf(), dst.clone(), !exists(&dst)));
     for e in std::fs::read_dir(src)? {
         let e = e?;
         plan_walk(&e.path(), &dst.join(e.file_name()), dirs, files, reserved)?;
@@ -413,10 +413,14 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
     let mut dirs = Vec::new();
     let mut files = Vec::new();
     let mut moved_dirs = Vec::new();
+    let mut new_roots = Vec::new();
     let mut reserved: HashSet<PathBuf> = HashSet::new();
     for src in sources {
         match top_target(src, dest_dir, kind, &reserved)? {
             Some(dst) => {
+                if is_real_dir(src) && !exists(&dst) {
+                    new_roots.push((src.clone(), dst.clone()));
+                }
                 if kind == Transfer::Move && is_real_dir(src) {
                     moved_dirs.push(src.clone());
                 }
@@ -434,8 +438,8 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
     (tracker.on_progress)(0, total_files as u32, None);
 
     // Directories first (a merge is harmless), shallowest first.
-    dirs.sort_by_key(|d| d.components().count());
-    for d in &dirs {
+    dirs.sort_by_key(|(_, d, _)| d.components().count());
+    for (_, d, _) in &dirs {
         if tracker.cancel.load(Ordering::Relaxed) {
             return Ok(false);
         }
@@ -467,6 +471,15 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
         (tracker.on_progress)(done as u32, total_files as u32, Some(name));
     }
 
+    // Apply directory metadata after writing children (which changes their timestamps).
+    for (src, dst, created) in dirs.iter().rev() {
+        if *created {
+            let (s, d) = (cpath(src)?, cpath(dst)?);
+            if unsafe { copyfile(s.as_ptr(), d.as_ptr(), std::ptr::null_mut(), COPYFILE_METADATA) } != 0 {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        }
+    }
     // A move emptied the source folders; they go too (deepest first). Empty only: never
     // remove something the operation did not copy.
     if kind == Transfer::Move {
@@ -478,11 +491,46 @@ pub fn transfer(kind: Transfer, sources: &[PathBuf], dest_dir: &Path, tracker: A
         }
     }
 
+    // New folders/packages are one undo item, including empty directories. A merged folder
+    // keeps its per-file record so undo never deletes items that were already there.
+    let mut results = tracker.results.lock().unwrap();
+    for (src, dst) in new_roots {
+        results.retain(|(s, d)| !(s.starts_with(&src) && d.starts_with(&dst)));
+        results.push((src, dst));
+    }
+    drop(results);
+
     if let Some(j) = &journal {
         let _ = std::fs::remove_file(j);
     }
     (tracker.on_progress)(total_files as u32, total_files as u32, None);
     Ok(true)
+}
+
+/// Undo a move to its exact original name, without merging or replacing another item.
+pub fn move_back(from: &Path, to: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = to.parent() { std::fs::create_dir_all(parent)?; }
+    match crate::fileops::rename_no_replace(from, to) {
+        Ok(()) => return Ok(()),
+        Err(e) if e.raw_os_error() == Some(libc::EXDEV) => {},
+        Err(e) => return Err(e.into()),
+    }
+    let parent = to.parent().ok_or_else(|| anyhow::anyhow!("ad yok"))?;
+    let stage = crate::fileops::unique_name(parent, ".brysk-undo", "");
+    std::fs::create_dir(&stage)?;
+    let staged = stage.join("item");
+    let result = (|| -> anyhow::Result<()> {
+        let (s, d) = (cpath(from)?, cpath(&staged)?);
+        // copyfile.h: recurse, exclusive destination, preserve symlinks themselves.
+        let flags = COPYFILE_ALL | (1 << 15) | (1 << 17) | (1 << 18) | (1 << 19);
+        if unsafe { copyfile(s.as_ptr(), d.as_ptr(), std::ptr::null_mut(), flags) } != 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        crate::fileops::rename_no_replace(&staged, to)?;
+        crate::fileops::remove_recursive(from)
+    })();
+    let _ = std::fs::remove_dir_all(stage);
+    result
 }
 
 /// Unused helper kept for the DnD path: whether a drop of `sources` into `dest` makes no sense.
@@ -784,5 +832,37 @@ mod tests {
         assert!(transfer(Transfer::Copy, std::slice::from_ref(&src), &dest, tracker()).unwrap());
         assert_eq!(read(&dest.join("Photos")), b"a file, not a folder");
         assert_eq!(read(&dest.join("Photos copy/one.txt")), b"one");
+    }
+}
+
+#[cfg(test)]
+mod undo_tests {
+    use super::*;
+
+    #[test]
+    fn a_new_package_has_one_undo_record_and_a_move_restores_its_exact_name() {
+        let root = std::env::temp_dir().join(format!("brysk-undo-package-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let app = root.join("Demo.app");
+        std::fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
+        std::fs::create_dir_all(app.join("Contents/Empty")).unwrap();
+        std::fs::write(app.join("Contents/MacOS/Demo"), b"app").unwrap();
+        let dest = root.join("dest");
+        std::fs::create_dir_all(dest.join("Demo.app")).unwrap();
+        let tracker = Arc::new(Tracker::new(Box::new(|_, _, _| {}), Arc::new(AtomicBool::new(false))));
+        assert!(transfer(Transfer::Move, std::slice::from_ref(&app), &dest, tracker.clone()).unwrap());
+        let moved = dest.join("Demo copy.app");
+        assert_eq!(*tracker.results.lock().unwrap(), vec![(app.clone(), moved.clone())]);
+        assert!(!app.exists());
+        move_back(&moved, &app).unwrap();
+        assert_eq!(std::fs::read(app.join("Contents/MacOS/Demo")).unwrap(), b"app");
+        assert!(app.join("Contents/Empty").is_dir());
+        assert!(dest.join("Demo.app").is_dir());
+        assert!(!moved.exists());
+        std::fs::write(root.join("occupied"), b"keep").unwrap();
+        assert!(move_back(&app, &root.join("occupied")).is_err());
+        assert!(app.is_dir());
+        assert_eq!(std::fs::read(root.join("occupied")).unwrap(), b"keep");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

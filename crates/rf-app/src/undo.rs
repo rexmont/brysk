@@ -206,6 +206,17 @@ fn undo_op(op: UndoOp, cx: &mut App) {
             crate::status_center::delete_ex(cx, pairs.into_iter().map(|(_, dst)| dst).collect(), false, false)
         }
         UndoOp::Transferred { kind: Transfer::Move, pairs } => {
+            #[cfg(target_os = "macos")]
+            {
+                crate::status_center::start(cx, t!("Geri alınıyor: taşıma").into(), move |_| {
+                    for (original, moved) in pairs.into_iter().rev() {
+                        rf_win::fastcopy::move_back(&moved, &original)?;
+                    }
+                    Ok(true)
+                });
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
             // Move everything back, grouped by original folder.
             let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
             for (src, dst) in pairs {
@@ -215,6 +226,7 @@ fn undo_op(op: UndoOp, cx: &mut App) {
             }
             for (dir, items) in groups {
                 crate::status_center::transfer_ex(cx, Transfer::Move, items, dir, false);
+            }
             }
         }
         UndoOp::Recycled { pairs } => {

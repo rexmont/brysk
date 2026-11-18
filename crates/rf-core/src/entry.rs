@@ -28,7 +28,7 @@ const PACKAGE_SUFFIXES: &[&str] = &[
     "app", "bundle", "framework", "plugin", "appex", "xpc", "kext", "prefpane", "qlgenerator", "mdimporter", "saver",
     "component", "workflow", "scptd", "rtfd", "textbundle", "photoslibrary", "fcpbundle", "logicx", "band",
     "sparsebundle", "xcarchive", "xcworkspace", "xcodeproj", "playground", "dSYM", "xcframework", "mlpackage",
-    "vst", "vst3",
+    "vst", "vst3", "pages", "numbers", "key", "pkg", "mpkg",
 ];
 
 /// Whether `name` is a directory macOS presents as a package (.app, .bundle, .framework…).

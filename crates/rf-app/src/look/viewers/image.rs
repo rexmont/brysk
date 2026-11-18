@@ -12,6 +12,7 @@ use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use rf_win::thumbs::Bgra;
+use futures::StreamExt;
 
 use super::zoom;
 use crate::look::viewer::{MoreItem, Prepared, Probe, ThemeChoice, Viewer};
@@ -32,6 +33,7 @@ const MAX_SIDE: u32 = 8192;
 #[derive(Default)]
 pub struct ImageViewer {
     view: Option<Entity<ImageView>>,
+    dims: Option<(u32, u32)>,
 }
 
 impl Viewer for ImageViewer {
@@ -47,7 +49,9 @@ impl Viewer for ImageViewer {
     }
     fn prepare(&mut self, f: &Probe, cx: &mut App) -> Prepared {
         let name = super::file_name(&f.path);
-        let dims = rf_win::look::decode::dimensions(&f.path);
+        let dims = self.dims.or_else(|| {
+            image::ImageReader::new(std::io::Cursor::new(&f.head)).with_guessed_format().ok()?.into_dimensions().ok()
+        });
         let path = f.path.clone();
         self.view = Some(cx.new(|cx| ImageView::new(path, dims, cx)));
         let (w, h) = dims.map_or((800.0, 600.0), |(w, h)| (w as f32, h as f32));
@@ -65,6 +69,12 @@ impl Viewer for ImageViewer {
             LookImageTheme::Light => ThemeChoice::Light,
         });
         p
+    }
+    fn loader(&self) -> Option<fn(&Probe) -> crate::look::viewer::Loaded> {
+        Some(|p| Box::new(rf_win::look::decode::dimensions(&p.path)))
+    }
+    fn take_loaded(&mut self, loaded: crate::look::viewer::Loaded) {
+        self.dims = *loaded.downcast::<Option<(u32, u32)>>().expect("image dimensions");
     }
     fn render(&mut self, _window: &mut Window, _cx: &mut App) -> AnyElement {
         self.view.as_ref().map_or_else(|| div().into_any_element(), |v| v.clone().into_any_element())
@@ -160,6 +170,44 @@ fn ready(d: rf_win::look::decode::Decoded) -> Ready {
     Ready { width: d.width, height: d.height, exif: d.exif, has_alpha, delays, frames }
 }
 
+/// Requested images bypass thumbnail/metadata queues. Cancelled navigation is skipped;
+/// live requests (including pinned windows) must all be answered.
+fn decode_requested(path: PathBuf) -> futures::channel::mpsc::UnboundedReceiver<anyhow::Result<Ready>> {
+    type Request = (PathBuf, futures::channel::mpsc::UnboundedSender<anyhow::Result<Ready>>);
+    static WORKER: std::sync::OnceLock<crossbeam_channel::Sender<Request>> = std::sync::OnceLock::new();
+    let worker = WORKER.get_or_init(|| {
+        let (tx, rx) = crossbeam_channel::unbounded::<Request>();
+        let (original_tx, original_rx) = crossbeam_channel::unbounded::<Request>();
+        std::thread::Builder::new().name("directlook-original".into()).spawn(move || {
+            #[cfg(target_os = "macos")]
+            rf_win::look::decode::prioritize_worker();
+            while let Ok((path, reply)) = original_rx.recv() {
+                if !reply.is_closed() {
+                    let _ = reply.unbounded_send(rf_win::look::decode::decode_full(&path, MAX_SIDE).map(ready));
+                }
+            }
+        }).expect("Direct Look original worker");
+        std::thread::Builder::new().name("directlook-image".into()).spawn(move || {
+            #[cfg(target_os = "macos")]
+            rf_win::look::decode::prioritize_worker();
+            while let Ok((path, reply)) = rx.recv() {
+                if !reply.is_closed() {
+                    let side = if cfg!(target_os = "macos") { 2048 } else { MAX_SIDE };
+                    let result = rf_win::look::decode::decode_full(&path, side).map(ready);
+                    let needs_original = result.as_ref().is_ok_and(|d| cfg!(target_os = "macos") && (d.width > side || d.height > side));
+                    if reply.unbounded_send(result).is_ok() && needs_original {
+                        let _ = original_tx.send((path, reply));
+                    }
+                }
+            }
+        }).expect("Direct Look image worker");
+        tx
+    });
+    let (tx, rx) = futures::channel::mpsc::unbounded();
+    let _ = worker.send((path, tx));
+    rx
+}
+
 fn inverted(b: &Bgra) -> Bgra {
     let mut data = b.data.clone();
     for px in data.chunks_exact_mut(4) {
@@ -221,6 +269,13 @@ impl ImageView {
             }
         })
         .detach();
+        // Start the requested original before speculative thumbnail work.
+        let mut full = decode_requested(path.clone());
+        v._tasks.push(cx.spawn(async move |this, cx| {
+            while let Some(r) = full.next().await {
+                if this.update(cx, |v, cx| v.loaded(r, cx)).is_err() { break; }
+            }
+        }));
         // önce kabuk küçük resmi (çoğunlukla önbellekte, anında)
         let p = path.clone();
         let thumb = cx.background_spawn(async move { rf_win::thumbs::get_image(&p, 256, rf_win::thumbs::Kind::Thumbnail).ok() });
@@ -234,18 +289,17 @@ impl ImageView {
                 });
             }
         }));
-        let full = cx.background_spawn(async move { rf_win::look::decode::decode_full(&path, MAX_SIDE).map(ready) });
-        v._tasks.push(cx.spawn(async move |this, cx| {
-            let r = full.await;
-            let _ = this.update(cx, |v, cx| v.loaded(r, cx));
-        }));
         v
     }
 
     fn loaded(&mut self, r: anyhow::Result<Ready>, cx: &mut Context<Self>) {
-        crate::look::trace::mark("tam resim");
         match r {
             Ok(d) => {
+                let original = d.frames.first().is_some_and(|f| {
+                    let size = f.size(0);
+                    size.width.0 as u32 >= d.width.min(MAX_SIDE) || size.height.0 as u32 >= d.height.min(MAX_SIDE)
+                });
+                crate::look::trace::mark(if original { "tam resim" } else { "net resim" });
                 self.dims = Some((d.width as f32, d.height as f32));
                 self.exif = d.exif;
                 self.has_alpha = d.has_alpha;
@@ -268,7 +322,7 @@ impl ImageView {
             }
             Err(e) => {
                 log::warn!("look image {}: {e:#}", self.path.display());
-                self.state = State::Failed(e.to_string());
+                if self.frames.is_empty() { self.state = State::Failed(e.to_string()); }
             }
         }
         cx.notify();

@@ -35,7 +35,7 @@ fn meta_attrs(m: &std::fs::Metadata, name: &str) -> u32 {
             a |= rf_core::entry::attrs::DIRECTORY;
         }
         if name.starts_with('.') {
-            a |= rf_core::entry::attrs::HIDDEN | rf_core::entry::attrs::SYSTEM;
+            a |= rf_core::entry::attrs::HIDDEN;
         }
         a
     }
@@ -198,7 +198,7 @@ fn group_key(g: GroupBy, e: &Entry, now: chrono::DateTime<chrono::Local>) -> (u3
         }
         GroupBy::Modified => relative_day(e.modified_ms, now),
         GroupBy::Size => {
-            if e.is_dir() {
+            if e.is_dir() && !e.is_package() {
                 return (0, "Klasörler".into());
             }
             match e.size {
@@ -892,6 +892,7 @@ impl FolderView {
                         MouseButton::Left,
                         cx.listener(move |this, ev: &MouseDownEvent, window, cx| this.on_row_mouse_down(vi, ev, window, cx)),
                     )
+                    .map(|d| self.file_drag_source(d, ei, cx))
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, _: &MouseDownEvent, window, cx| this.on_row_right_down(vi, window, cx)),
@@ -2121,6 +2122,16 @@ impl FolderView {
 
 }
 
+#[cfg(target_os = "macos")]
+struct FileDragGhost(String);
+
+#[cfg(target_os = "macos")]
+impl Render for FileDragGhost {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().px_3().py_1().rounded_md().bg(rgb(0x303030)).text_color(white()).text_sm().child(self.0.clone())
+    }
+}
+
 /// Known folders with a layout of their own in adaptive mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KnownKind {
@@ -2571,11 +2582,12 @@ impl FolderView {
                         MouseButton::Left,
                         cx.listener(move |this, ev: &MouseDownEvent, window, cx| this.on_row_mouse_down(vi, ev, window, cx)),
                     )
+                    .map(|d| self.file_drag_source(d, ei, cx))
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, _: &MouseDownEvent, window, cx| this.on_row_right_down(vi, window, cx)),
                     )
-                    .when(e.is_dir() && !e.is_package(), |d| {
+                    .when((e.is_dir() && !e.is_package()) || e.is_app_bundle(), |d| {
                         d.drag_over::<ExternalPaths>(move |s, _, _, _| s.bg(drop_bg).border_1().border_color(drop_border))
                             .on_drop(cx.listener(move |this, paths: &ExternalPaths, _, cx| {
                                 if let Some(dest) = this.drop_target_row(ei) {
@@ -2624,6 +2636,12 @@ impl FolderView {
         if ev.click_count >= 2 && !double {
             // (it landed on this row because the listing changed under the pointer: the user did not aim at it, so it does not even
             // select it)
+            return;
+        }
+        if cfg!(target_os = "macos") && double && ev.modifiers.platform {
+            if self.entries[ei as usize].is_dir() && !self.entries[ei as usize].is_package() {
+                if let Some(path) = self.path_of(ei) { cx.emit(FolderEvent::OpenInNewTab(Location::Path(path))); }
+            } else { self.open_entry(ei, cx); }
             return;
         }
         if plain && (double || (single && ev.click_count == 1)) {
@@ -2679,6 +2697,39 @@ impl FolderView {
         .detach();
     }
 
+    fn file_drag_source(&self, element: Stateful<Div>, ei: u32, cx: &Context<Self>) -> Stateful<Div> {
+        #[cfg(target_os = "macos")]
+        {
+            if self.renaming.is_some() || self.picking || !matches!(self.location(), Location::Path(_)) {
+                return element;
+            }
+            let indices: Vec<u32> = if self.selected.contains(&ei) { self.selected.iter().copied().collect() } else { vec![ei] };
+            let files = FileDragPaths::new(indices.iter().filter_map(|&i| Some((self.path_of(i)?, self.entries[i as usize].is_dir()))));
+            let paths = ExternalPaths(files.entries().iter().map(|(p, _)| p.clone()).collect());
+            let me = cx.entity().downgrade();
+            element
+                .on_drag(paths, move |paths, _, _, cx| {
+                    let _ = me.update(cx, |v, _| {
+                        v.drag_origin = None;
+                        v.slow_click = None;
+                    });
+                    let label = if paths.paths().len() == 1 {
+                        paths.paths()[0].file_name().unwrap_or_default().to_string_lossy().into_owned()
+                    } else {
+                        crate::i18n::items(paths.paths().len())
+                    };
+                    cx.new(|_| FileDragGhost(label))
+                })
+                .external_drag_payload(move |_: &ExternalPaths, _, _| Some(ExternalDragPayload::Files(files.clone())))
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (ei, cx);
+            element
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
     fn on_drag_motion(&mut self, ev: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
         let Some(start) = self.drag_origin else { return };
         if ev.pressed_button != Some(MouseButton::Left) {
@@ -3212,8 +3263,25 @@ impl FolderView {
         // A macOS package is one item: an application is launched (LaunchServices), any other
         // package opens in its application. Its insides are reached with "Show Package Contents".
         let package = e.is_package();
-        if package && !self.picking {
-            open_in_background(path, cx);
+        if package {
+            if self.picking { cx.emit(FolderEvent::Picked(vec![path])); } else { open_in_background(path, cx); }
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        if e.link && !e.is_dir() {
+            let p = path.clone();
+            let directory = cx.background_spawn(async move {
+                std::fs::metadata(&p).is_ok_and(|m| m.is_dir())
+                    && !p.canonicalize().ok().and_then(|p| p.file_name().map(|n| rf_core::is_package_name(&n.to_string_lossy()))).unwrap_or(false)
+            });
+            let location = self.location().clone();
+            cx.spawn(async move |this, cx| {
+                let dir = directory.await;
+                let _ = this.update(cx, |v, cx| {
+                    if v.location() != &location { return; }
+                    if dir { v.navigate(Location::Path(path), cx); } else if v.picking { cx.emit(FolderEvent::Picked(vec![path])); } else { open_in_background(path, cx); }
+                });
+            }).detach();
             return;
         }
         let browse = !e.is_dir()
@@ -3772,11 +3840,12 @@ impl FolderView {
                     MouseButton::Left,
                     cx.listener(move |this, ev: &MouseDownEvent, window, cx| this.on_row_mouse_down(vi, ev, window, cx)),
                 )
+                    .map(|d| self.file_drag_source(d, ei, cx))
                 .on_mouse_down(
                     MouseButton::Right,
                     cx.listener(move |this, _: &MouseDownEvent, window, cx| this.on_row_right_down(vi, window, cx)),
                 )
-                .when(e.is_dir() && !e.is_package(), |d| {
+                .when((e.is_dir() && !e.is_package()) || e.is_app_bundle(), |d| {
                     d.drag_over::<ExternalPaths>(move |s, _, _, _| s.bg(drop_bg).border_1().border_color(drop_border))
                         .on_drop(cx.listener(move |this, paths: &ExternalPaths, _, cx| {
                             if let Some(dest) = this.drop_target_row(ei) {
@@ -4051,7 +4120,10 @@ impl FolderView {
                             }
                             return;
                         }
-                        this.on_drag_motion(ev, window, cx)
+                        #[cfg(not(target_os = "macos"))]
+                        this.on_drag_motion(ev, window, cx);
+                        #[cfg(target_os = "macos")]
+                        let _ = window;
                     }))
                     .on_mouse_up(
                         MouseButton::Left,
@@ -4889,6 +4961,14 @@ impl Render for FolderView {
             .on_action(cx.listener(|this, _: &CutItems, window, cx| this.copy_to_clipboard(rf_win::fileops::Transfer::Move, window, cx)))
             .on_action(cx.listener(|this, _: &PasteItems, window, cx| this.paste(window, cx)))
             .on_action(cx.listener(|this, _: &PasteIntoSelected, window, cx| this.paste_into_selected(window, cx)))
+            .on_action(cx.listener(|this, _: &MoveHere, _, cx| this.move_here(cx)))
+            .on_action(cx.listener(|this, _: &DuplicateItems, _, cx| this.duplicate_items(cx)))
+            .on_action(cx.listener(|this, _: &RevealInFinder, _, _| {
+                #[cfg(target_os = "macos")]
+                for path in this.selection_paths() { std::thread::spawn(move || { let _ = rf_win::shell::reveal(&path); }); }
+                #[cfg(not(target_os = "macos"))]
+                let _ = this;
+            }))
             .on_action(cx.listener(|this, _: &PasteShortcut, window, cx| this.paste_shortcuts(window, cx)))
             .on_action(cx.listener(|this, _: &DeleteItems, w, cx| {
                 if !this.bin_delete(w, cx) {
@@ -4901,7 +4981,9 @@ impl Render for FolderView {
                 }
             }))
             .on_action(cx.listener(|this, _: &RenameItem, window, cx| {
-                if this.selected.len() > 1 {
+                if this.renaming.is_some() {
+                    this.commit_rename(window, cx);
+                } else if this.selected.len() > 1 {
                     cx.emit(FolderEvent::BulkRename(this.selection_paths()));
                 } else {
                     this.begin_rename(window, cx)
@@ -5132,12 +5214,17 @@ impl FolderView {
 /// says it for its own folder (issue 54: dragging from W: onto the tree's D: row said "Move" and copied: the tree said nothing, and
 /// the list's last word, W: onto W:, stayed).
 pub(crate) fn show_drop_effect(paths: &[PathBuf], dir: &std::path::Path) {
+    #[cfg(target_os = "macos")]
+    { let _ = (paths, dir); }
+    #[cfg(not(target_os = "macos"))]
+    {
     let t = rf_win::dnd::default_transfer(paths, dir, false, false);
     log::debug!("drag over {}: {t:?} ({} item(s), the first {:?})", dir.display(), paths.len(), paths.first());
     gpui_windows::dnd_hint::set(match t {
         rf_win::fileops::Transfer::Move => gpui_windows::dnd_hint::MOVE,
         rf_win::fileops::Transfer::Copy => gpui_windows::dnd_hint::COPY,
     });
+    }
 }
 
 /// [`show_drop_effect`] as a drag-move listener of a drop target, for the moves over it.

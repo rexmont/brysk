@@ -21,6 +21,13 @@ fn mac(text: &str) -> String {
     let mut s = text.to_string();
     // Keys whose macOS binding differs from the Explorer one (or which macOS itself owns).
     for (from, to) in [
+        ("Alt+Enter", "⌘I"),
+        ("F2", "↩"),
+        ("Shift+Del", "⇧⌦"),
+        ("Ctrl+Shift+D", "⌥⌘D"),
+        ("Ctrl+Shift+C", "⌥⌘C"),
+        ("Ctrl+Alt+C", "⇧⌘C"),
+        ("Alt+Home", "⇧⌘H"),
         // Ctrl+Tab stays Control: Command+Tab belongs to the app switcher.
         ("Ctrl+Shift+Tab", "⌃⇧⇥"),
         ("Ctrl+Tab", "⌃⇥"),
@@ -28,8 +35,8 @@ fn mac(text: &str) -> String {
         // Hidden items are Command+Shift+Period on macOS (Command+H hides the app).
         ("Ctrl+H", "⇧⌘."),
         // Views are Command+1…5 (Command+Shift+3/4 are system screenshots).
-        ("Ctrl+Shift+1", "⌘1"),
-        ("Ctrl+Shift+2", "⌘2"),
+        ("Ctrl+Shift+1", "⌘2"),
+        ("Ctrl+Shift+2", "⌘1"),
         ("Ctrl+Shift+3", "⌘3"),
         ("Ctrl+Shift+4", "⌘4"),
         ("Ctrl+Shift+5", "⌘5"),
@@ -37,8 +44,9 @@ fn mac(text: &str) -> String {
         s = s.replace(from, to);
     }
     // Everything else follows the Command/Option bindings installed alongside the Ctrl ones.
-    s = s.replace("Ctrl+", "⌘").replace("Alt+", "⌥").replace("Shift+", "⇧");
-    s.replace("Del", "⌫")
+    s = s.replace("Ctrl+", "⌘").replace("Cmd+", "⌘").replace("Alt+", "⌥").replace("Option+", "⌥").replace("Shift+", "⇧");
+    s = s.replace("(Del)", "(⌘⌫)");
+    if s == "Del" { "⌘⌫".into() } else { s }
 }
 
 #[cfg(all(test, target_os = "macos"))]
@@ -49,8 +57,14 @@ mod tests {
     fn menu_hints_take_the_mac_keys() {
         assert_eq!(mac("Ctrl+N"), "⌘N");
         assert_eq!(mac("Ctrl+Shift+N"), "⌘⇧N");
-        assert_eq!(mac("Shift+Del"), "⇧⌫");
-        assert_eq!(mac("Alt+Enter"), "⌥Enter");
+        assert_eq!(mac("Shift+Del"), "⇧⌦");
+        assert_eq!(mac("Alt+Enter"), "⌘I");
+        assert_eq!(mac("F2"), "↩");
+        assert_eq!(mac("Del"), "⌘⌫");
+        assert_eq!(mac("Delete  (Del)"), "Delete  (⌘⌫)");
+        assert_eq!(mac("Cmd+Alt+V"), "⌘⌥V");
+        assert_eq!(mac("Ctrl+Shift+1"), "⌘2");
+        assert_eq!(mac("Ctrl+Shift+2"), "⌘1");
     }
 
     #[test]

@@ -134,7 +134,7 @@ impl LookManager {
         let s = cx.global::<LookSettings>().clone();
         let work = rect(rf_win::look::win::work_area_at_cursor());
         // a file in a slow place (a network drive) opens off the UI thread, in the window
-        let slow = rf_win::drives::slow_to_read(&path);
+        let slow = cfg!(target_os = "macos") || rf_win::drives::slow_to_read(&path);
         let (viewer, prepared): (Box<dyn viewer::Viewer>, _) =
             if slow { (Box::new(window::Opening), window::Opening::prepared(&path)) } else { window::prepare_viewer(&path, cx) };
         let size = geometry::fit(prepared.preferred, work, prepared.fit_ratio);

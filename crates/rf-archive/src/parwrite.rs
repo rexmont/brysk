@@ -33,6 +33,7 @@ struct Job {
     wanted: PathBuf,
     data: Vec<u8>,
     mtime: Option<SystemTime>,
+    mode: Option<u32>,
 }
 
 #[derive(Default)]
@@ -59,7 +60,7 @@ pub(crate) struct ParWriter {
 
 /// Creates `wanted` (or a free variant of its name: never overwrites) with `data`.
 /// Returns whether the name had to change.
-pub(crate) fn write_new(wanted: &Path, data: &[u8], mtime: Option<SystemTime>, made: &Mutex<HashSet<PathBuf>>) -> Result<bool> {
+fn write_new_mode(wanted: &Path, data: &[u8], mtime: Option<SystemTime>, made: &Mutex<HashSet<PathBuf>>, mode: Option<u32>) -> Result<bool> {
     // each folder once (asking the file system again per file costs two calls through the
     // antivirus filter)
     if let Some(parent) = wanted.parent() {
@@ -90,6 +91,15 @@ pub(crate) fn write_new(wanted: &Path, data: &[u8], mtime: Option<SystemTime>, m
             let _ = file.set_modified(t);
         }
     }
+    #[cfg(unix)]
+    if res.is_ok() {
+        if let Some(mode) = mode {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(mode & 0o777))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = mode;
     drop(file);
     if let Err(e) = res {
         let _ = fs::remove_file(&target); // partial file
@@ -113,7 +123,12 @@ impl ParWriter {
     }
 
     /// Queues a file; waits while the queue holds more than the byte budget.
+    #[cfg(test)]
     pub(crate) fn submit(&self, wanted: PathBuf, data: Vec<u8>, mtime: Option<SystemTime>) -> Result<()> {
+        self.submit_mode(wanted, data, mtime, None)
+    }
+
+    pub(crate) fn submit_mode(&self, wanted: PathBuf, data: Vec<u8>, mtime: Option<SystemTime>, mode: Option<u32>) -> Result<()> {
         self.check()?;
         let n = data.len() as u64;
         {
@@ -125,7 +140,7 @@ impl ParWriter {
         }
         self.check()?;
         if let Some(tx) = &self.tx {
-            tx.send(Job { wanted, data, mtime }).map_err(|_| anyhow::anyhow!("yazıcı durdu"))?;
+            tx.send(Job { wanted, data, mtime, mode }).map_err(|_| anyhow::anyhow!("yazıcı durdu"))?;
         }
         Ok(())
     }
@@ -177,7 +192,7 @@ fn worker(rx: &Mutex<Receiver<Job>>, sh: &Shared) {
         };
         let n = job.data.len() as u64;
         if !sh.stop.load(Ordering::Relaxed) && !sh.failed.load(Ordering::Relaxed) {
-            match write_new(&job.wanted, &job.data, job.mtime, &sh.made) {
+            match write_new_mode(&job.wanted, &job.data, job.mtime, &sh.made, job.mode) {
                 Ok(renamed) => {
                     sh.files.fetch_add(1, Ordering::Relaxed);
                     sh.bytes.fetch_add(n, Ordering::Relaxed);

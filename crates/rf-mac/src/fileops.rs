@@ -149,21 +149,36 @@ pub fn rename(path: &Path, new_name: &str) -> anyhow::Result<bool> {
         return Ok(false);
     }
     let to = parent.join(new_name);
-    if taken(&to) {
-        anyhow::bail!("Bu adda bir öğe zaten var");
-    }
-    std::fs::rename(path, &to)?;
+    rename_no_replace(path, &to)?;
     Ok(true)
 }
 
-/// Rename that never replaces an existing item (an atomic `RENAME_EXCL` on macOS is not
-/// exposed by std; the check-then-rename is the same guarantee the Windows version has for
-/// one process).
+/// Atomic no-replace rename, including a case-only change on case-insensitive APFS.
 pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    if taken(to) {
-        return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "exists"));
+    use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
+    fn exclusive(from: &Path, to: &Path) -> std::io::Result<()> {
+        use std::os::unix::ffi::OsStrExt;
+        let from = std::ffi::CString::new(from.as_os_str().as_bytes())?;
+        let to = std::ffi::CString::new(to.as_os_str().as_bytes())?;
+        if unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) } == 0 { Ok(()) } else { Err(std::io::Error::last_os_error()) }
     }
-    std::fs::rename(from, to)
+    let same_item = match (std::fs::symlink_metadata(from), std::fs::symlink_metadata(to)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    };
+    if same_item && from.as_os_str().as_bytes() != to.as_os_str().as_bytes()
+        && from.to_string_lossy().to_lowercase() == to.to_string_lossy().to_lowercase() {
+        let parent = from.parent().unwrap_or(Path::new("."));
+        let temp = unique_name(parent, ".brysk-rename", "");
+        exclusive(from, &temp)?;
+        if let Err(e) = exclusive(&temp, to) {
+            exclusive(&temp, from)?;
+            return Err(e);
+        }
+        Ok(())
+    } else {
+        exclusive(from, to)
+    }
 }
 
 /// Copies or moves `sources` into `dest_dir` without progress (small drag-and-drop cases).
@@ -249,4 +264,25 @@ pub fn new_text_file(dir: &Path, name: &str) -> anyhow::Result<PathBuf> {
     let p = unique_name(dir, name, "");
     std::fs::write(&p, b"")?;
     Ok(p)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn case_only_rename_works_without_replacing_a_different_file() {
+        let dir = std::env::temp_dir().join(format!("brysk-rename-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("report.txt");
+        std::fs::write(&path, b"original").unwrap();
+        assert!(rename(&path, "Report.txt").unwrap());
+        assert!(std::fs::read_dir(&dir).unwrap().any(|e| e.unwrap().file_name() == "Report.txt"));
+        std::fs::write(dir.join("other.txt"), b"other").unwrap();
+        assert!(rename(&dir.join("Report.txt"), "other.txt").is_err());
+        assert_eq!(std::fs::read(dir.join("Report.txt")).unwrap(), b"original");
+        assert_eq!(std::fs::read(dir.join("other.txt")).unwrap(), b"other");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

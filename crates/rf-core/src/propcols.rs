@@ -266,11 +266,12 @@ pub fn sort_order(entries: &[Entry], values: &[PropValue], spec: &SortSpec) -> V
     let mut idx: Vec<u32> = (0..entries.len() as u32).collect();
     idx.sort_unstable_by(|&x, &y| {
         let (a, b) = (&entries[x as usize], &entries[y as usize]);
-        if spec.dirs_first && a.is_dir() != b.is_dir() {
-            return if a.is_dir() { Ordering::Less } else { Ordering::Greater };
+        let (a_folder, b_folder) = (a.is_dir() && !a.is_package(), b.is_dir() && !b.is_package());
+        if spec.dirs_first && a_folder != b_folder {
+            return if a_folder { Ordering::Less } else { Ordering::Greater };
         }
-        if spec.files_first && a.is_dir() != b.is_dir() {
-            return if a.is_dir() { Ordering::Greater } else { Ordering::Less };
+        if spec.files_first && a_folder != b_folder {
+            return if a_folder { Ordering::Greater } else { Ordering::Less };
         }
         let (va, vb) = (values.get(x as usize).unwrap_or(&empty), values.get(y as usize).unwrap_or(&empty));
         compare_values(va, vb, spec.dir).then_with(|| {

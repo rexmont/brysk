@@ -61,7 +61,8 @@ fn entry_of(name: &str, md: &std::fs::Metadata) -> Entry {
     }
     // A cloud placeholder (iCloud "optimise storage") is not local: mark it like OneDrive's
     // online-only files so the list shows the cloud state.
-    if md.blocks() == 0 && !is_dir && md.size() > 0 {
+    const SF_DATALESS: u32 = 0x4000_0000;
+    if std::os::macos::fs::MetadataExt::st_flags(md) & SF_DATALESS != 0 {
         at |= attrs::OFFLINE | attrs::RECALL_ON_DATA_ACCESS;
     }
     let mut e = Entry::new(name, if is_dir { EntryKind::Dir } else { EntryKind::File }, md.size(), ms(md.modified().ok()), ms(md.created().ok()), at);
@@ -119,15 +120,61 @@ pub fn list_dir(
 pub fn stat_entry(dir: &Path, name: &str) -> Result<Option<Entry>, ListError> {
     let p = dir.join(name);
     match std::fs::symlink_metadata(&p) {
-        Ok(md) => Ok(Some(entry_of(name, &md))),
+        Ok(md) => {
+            let actual = disk_name(&p).map_err(|e| errno(&e))?;
+            Ok(Some(entry_of(&actual, &md)))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(errno(&e)),
     }
 }
 
+/// A case-insensitive lookup can find a renamed file through its old spelling. FSEvents
+/// reports both names; return the spelling on disk so the patch adds the item only once.
+fn disk_name(path: &Path) -> std::io::Result<String> {
+    use std::os::unix::ffi::OsStrExt;
+    #[repr(C)]
+    struct Name {
+        length: u32,
+        reference: libc::attrreference_t,
+        bytes: [u8; 1024],
+    }
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    let mut attrs: libc::attrlist = unsafe { std::mem::zeroed() };
+    attrs.bitmapcount = libc::ATTR_BIT_MAP_COUNT;
+    attrs.commonattr = libc::ATTR_CMN_NAME;
+    let mut name: Name = unsafe { std::mem::zeroed() };
+    if unsafe { libc::getattrlist(path.as_ptr(), (&mut attrs as *mut libc::attrlist).cast(), (&mut name as *mut Name).cast(), std::mem::size_of::<Name>(), libc::FSOPT_NOFOLLOW as _) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let start = 4i64 + i64::from(name.reference.attr_dataoffset);
+    let length = name.reference.attr_length as usize;
+    let bytes = unsafe { std::slice::from_raw_parts((&name as *const Name).cast::<u8>(), std::mem::size_of::<Name>()) };
+    let value = usize::try_from(start).ok().and_then(|i| bytes.get(i..i.checked_add(length)?)).and_then(|s| s.strip_suffix(&[0]));
+    value.map(|s| String::from_utf8_lossy(s).into_owned()).ok_or_else(|| std::io::Error::other("Geçersiz dosya adı"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn watcher_stats_use_the_disk_spelling_and_keep_symlink_identity() {
+        let dir = std::env::temp_dir().join(format!("brysk-stat-name-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("report.txt"), b"x").unwrap();
+        crate::fileops::rename(&dir.join("report.txt"), "Report.txt").unwrap();
+        // On case-sensitive volumes the old name is gone; on APFS it resolves to the new one.
+        if let Some(entry) = stat_entry(&dir, "report.txt").unwrap() { assert_eq!(&*entry.name, "Report.txt"); }
+        assert_eq!(&*stat_entry(&dir, "Report.txt").unwrap().unwrap().name, "Report.txt");
+        std::os::unix::fs::symlink("Report.txt", dir.join("Link")).unwrap();
+        let link = stat_entry(&dir, "Link").unwrap().unwrap();
+        assert_eq!(&*link.name, "Link");
+        assert!(link.link);
+        assert!(!link.is_cloud_placeholder());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn a_user_dot_folder_is_hidden_not_a_system_file() {

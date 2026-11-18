@@ -33,6 +33,12 @@ fn commands() -> Vec<Cmd> {
         cmd!("Diğer sekmeleri kapat", "", L::X, CloseOtherTabs),
         cmd!("Tüm sekmeleri kapat", "", L::X, CloseAllTabs),
         cmd!("Kapatılan sekmeyi yeniden aç", "Ctrl+Shift+T", L::RotateCcw, ReopenClosedTab),
+        #[cfg(target_os = "macos")]
+        cmd!("Çoğalt", "Cmd+D", L::Copy, DuplicateItems),
+        #[cfg(target_os = "macos")]
+        cmd!("Buraya taşı", "Cmd+Alt+V", L::ClipboardPaste, MoveHere),
+        #[cfg(target_os = "macos")]
+        cmd!("Klasöre git…", "Cmd+Shift+G", L::FolderOpen, GoToFolder),
         cmd!("Yeni klasör", "Ctrl+Shift+N", L::FolderPlus, NewFolder),
         cmd!("Yeni metin belgesi", "", L::FilePlus, NewTextFile),
         cmd!("Yenile", "F5", L::RotateCw, Refresh),
@@ -91,13 +97,16 @@ fn commands() -> Vec<Cmd> {
         cmd!("Yapıştır", "Ctrl+V", L::ClipboardPaste, PasteItems),
         cmd!("Seçili klasöre yapıştır", "Ctrl+Shift+V", L::ClipboardPaste, PasteIntoSelected),
         cmd!("Kısayol olarak yapıştır", "", L::Link, PasteShortcut),
-        cmd!("Geri dönüşüm kutusuna taşı", "Del", L::Trash, DeleteItems),
+        cmd!(if cfg!(target_os = "macos") { "Çöp Sepetine taşı" } else { "Geri dönüşüm kutusuna taşı" }, "Del", L::Trash, DeleteItems),
         cmd!("Kalıcı olarak sil", "Shift+Del", L::TrashOff, DeletePermanently),
         cmd!("Yeniden adlandır", "F2", L::Pencil, RenameItem),
         cmd!("Geri al", "Ctrl+Z", L::Undo2, Undo),
         cmd!("Yolu kopyala", "Ctrl+Shift+C", L::Link, CopyPath),
         cmd!("Birlikte aç…", "", L::AppWindow, OpenWith),
+        #[cfg(not(target_os = "macos"))]
         cmd!("Özellikler", "Alt+Enter", L::Info, Properties),
+        #[cfg(target_os = "macos")]
+        cmd!("Bilgi Al", "Cmd+I", L::Info, Properties),
         cmd!("Sağ tık menüsü", "Shift+F10", L::Menu, ShowContextMenu),
     ]
 }

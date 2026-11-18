@@ -139,7 +139,6 @@ pub fn list_drives() -> Vec<Drive> {
         out.push(d);
     }
     // Everything else mounted under /Volumes (an APFS data volume, an external disk, a share).
-    let mut seen: Vec<String> = out.iter().map(|d| d.fs.clone()).collect();
     let mut letter = b'B';
     if let Ok(rd) = std::fs::read_dir("/Volumes") {
         let mut vols: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
@@ -149,11 +148,6 @@ pub fn list_drives() -> Vec<Drive> {
                 break;
             }
             if let Some(d) = volume_of(&p, letter as char, p.file_name().map(|n| n.to_string_lossy().into_owned())) {
-                // a boot helper volume is listed by the Finder too; keep it, but skip duplicates
-                if seen.contains(&d.fs) && d.root != Path::new("/") {
-                    continue;
-                }
-                seen.push(d.fs.clone());
                 out.push(d);
                 letter += 1;
             }
@@ -169,6 +163,9 @@ fn volume_of(root: &Path, letter: char, fallback_label: Option<String>) -> Optio
     if unsafe { libc::statfs(c.as_ptr(), &mut st) } != 0 {
         return None;
     }
+    let mount = PathBuf::from(unsafe { CStr::from_ptr(st.f_mntonname.as_ptr()) }.to_string_lossy().into_owned());
+    // /Volumes/Macintosh HD may be a link to /; ordinary directories are not mounts either.
+    if mount != root { return None; }
     let fs = unsafe { CStr::from_ptr(st.f_fstypename.as_ptr()) }.to_string_lossy().into_owned();
     let mut total = 0u64;
     let mut free = 0u64;
@@ -185,6 +182,18 @@ fn volume_of(root: &Path, letter: char, fallback_label: Option<String>) -> Optio
 
 pub fn visible_drives() -> Vec<Drive> {
     list_drives()
+}
+
+/// Unmount/eject the volume containing `path`. Never offer the startup volume.
+pub fn eject(path: &Path) -> anyhow::Result<()> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSString, NSURL};
+    let drive = mount_of(path).ok_or_else(|| anyhow::anyhow!("Disk bulunamadı"))?;
+    anyhow::ensure!(drive.root.parent() == Some(Path::new("/Volumes")), "Başlangıç diski çıkarılamaz");
+    objc2::rc::autoreleasepool(|_| {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&drive.root.to_string_lossy()));
+        NSWorkspace::sharedWorkspace().unmountAndEjectDeviceAtURL_error(&url).map_err(|e| anyhow::anyhow!("{e}"))
+    })
 }
 
 /// Whether `path` is on removable media (an external disk or a mounted image).
@@ -205,12 +214,11 @@ pub fn seek_penalty(path: &Path) -> Option<bool> {
 
 /// The volume a path lives on.
 pub fn mount_of(path: &Path) -> Option<Drive> {
-    let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let mut best: Option<Drive> = None;
-    for d in list_drives() {
-        if canon.starts_with(&d.root) && best.as_ref().is_none_or(|b| b.root.as_os_str().len() < d.root.as_os_str().len()) {
-            best = Some(d);
-        }
-    }
-    best
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut st: libc::statfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statfs(path.as_ptr(), &mut st) } != 0 { return None; }
+    let root = PathBuf::from(unsafe { CStr::from_ptr(st.f_mntonname.as_ptr()) }.to_string_lossy().into_owned());
+    let label = if root == Path::new("/") { labels().get(&root).cloned() } else { root.file_name().map(|n| n.to_string_lossy().into_owned()) };
+    volume_of(&root, 'A', label)
 }

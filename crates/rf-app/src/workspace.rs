@@ -1,4 +1,4 @@
-//! Window chrome: title bar with tabs, toolbar (nav + breadcrumb/address + search),
+﻿//! Window chrome: title bar with tabs, toolbar (nav + breadcrumb/address + search),
 //! sidebar, active tab content, status bar.
 
 use crate::t;
@@ -161,6 +161,7 @@ pub struct Workspace {
     addr_suggest: Vec<PathBuf>,
     addr_sel: Option<usize>,
     _addr_task: Option<Task<()>>,
+    _live_search: Option<Task<()>>,
     search: Entity<InputState>,
     /// Files' "Filter by" strip under the command bar (name filter for this folder).
     filter_bar: bool,
@@ -717,6 +718,11 @@ impl Workspace {
             }
             if let InputEvent::Change = ev {
                 let q = input.read(cx).value().to_string();
+                #[cfg(target_os = "macos")]
+                if this.search_mode {
+                    this.schedule_search(q, cx);
+                    return;
+                }
                 if let Some(tab) = this.tabs.get(this.active).map(|t| t.view().clone()) {
                     tab.update(cx, |v, cx| v.set_query(q, cx));
                 }
@@ -824,6 +830,7 @@ impl Workspace {
             addr_suggest: Vec::new(),
             addr_sel: None,
             _addr_task: None,
+            _live_search: None,
             search,
             filter_bar: false,
             filter_input,
@@ -1946,14 +1953,67 @@ impl Workspace {
 
     /// Searches the active tab's folder and its subfolders for `q`, and remembers the search.
     fn run_search(&mut self, q: String, window: &mut Window, cx: &mut Context<Self>) {
+        self._live_search = None;
         let root = match self.active_tab().read(cx).location() {
             Location::Search { root, .. } => Some(root.clone()),
+            Location::Home if cfg!(target_os = "macos") => dirs::home_dir(),
             l => l.path().map(Path::to_path_buf),
         };
         let (false, Some(root)) = (q.is_empty(), root) else { return };
         crate::settings::update(cx, |s| remember_search(&mut s.search_history, &q));
         self.active_tab().clone().update(cx, |v, cx| v.navigate(Location::Search { root, query: q }, cx));
         self.focus_active(window, cx);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn schedule_search(&mut self, q: String, cx: &mut Context<Self>) {
+        self._live_search = None;
+        let tab = self.active_tab().clone();
+        let location = tab.read(cx).location().clone();
+        let root = match &location {
+            Location::Search { root, .. } => Some(root.clone()),
+            Location::Home => dirs::home_dir(),
+            l => l.path().map(Path::to_path_buf),
+        };
+        let Some(root) = root else { return; };
+        self._live_search = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(std::time::Duration::from_millis(250)).await;
+            let _ = this.update(cx, |ws, cx| {
+                if !ws.search_mode || ws.active_tab() != &tab || tab.read(cx).location() != &location || ws.search.read(cx).value().as_ref() != q {
+                    return;
+                }
+                tab.update(cx, |v, cx| {
+                    if q.trim().is_empty() {
+                        v.set_query(String::new(), cx);
+                        if matches!(v.location(), Location::Search { .. }) { v.navigate(Location::Path(root), cx); }
+                    } else {
+                        v.navigate(Location::Search { root, query: q }, cx);
+                    }
+                });
+            });
+        }));
+    }
+
+    fn go_to_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let path = self.active_tab().read(cx).location().path().map(|p| p.display().to_string()).unwrap_or_else(|| "~/".into());
+        let me = cx.entity().downgrade();
+        crate::prompt::show(t!("Klasöre git…"), None, Some((path, String::new())), vec![
+            crate::prompt::Button::new(t!("Git"), crate::prompt::Kind::Primary, move |text, w, cx| {
+                let path = text.unwrap_or_default().trim().to_string();
+                if path.is_empty() { return Err(t!("Ad boş olamaz").into()); }
+                let _ = me.update(cx, |ws, cx| ws.enter_address_text(path, false, w, cx));
+                Ok(())
+            }),
+            crate::prompt::Button::cancel(),
+        ], window, cx);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn eject_volume(path: PathBuf, cx: &mut App) {
+        crate::status_center::start(cx, t!("Diski çıkar").into(), move |_| {
+            rf_win::drives::eject(&path)?;
+            Ok(true)
+        });
     }
 
     /// Under the empty search box: the searches run before (a click runs one again).
@@ -2416,7 +2476,7 @@ impl Workspace {
                 });
             })),
             // our Properties window (a drive gets its own page there)
-            Item::action(t!("Özellikler"), MenuIcon::Lucide(L::Info), with(|ws, p, _, cx| {
+            Item::action(if cfg!(target_os = "macos") { t!("Bilgi Al") } else { t!("Özellikler") }, MenuIcon::Lucide(L::Info), with(|ws, p, _, cx| {
                 crate::properties_view::open(vec![p], ws.images.clone(), cx);
             }))
             .hint("Alt+Enter"),
@@ -2424,6 +2484,14 @@ impl Workspace {
             #[cfg(windows)]
             Item::Sub { label: t!("Diğer seçenekleri göster").into(), icon: MenuIcon::Lucide(L::Ellipsis), items: Sub::Pending { key: "more", fallback: None } },
         ];
+        #[cfg(target_os = "macos")]
+        let items = {
+            let mut items = items;
+            if self.places.read(cx).drives.iter().any(|d| d.root == path && d.root.parent() == Some(Path::new("/Volumes"))) {
+                items.push(Item::action(t!("Diski çıkar"), MenuIcon::Lucide(L::LogOut), with(|_, p, _, cx| Self::eject_volume(p, cx))).hint("Cmd+E"));
+            }
+            items
+        };
         // a drive can be taken off the lists of places (it comes back from Settings > Files and folders)
         let mut items = items;
         if let Some(letter) = crate::settings_view::drive_letter(&path) {
@@ -2469,7 +2537,7 @@ impl Workspace {
                 })),
                 Quick::new(
                     L::Info,
-                    t!("Özellikler  (Alt+Enter)"),
+                    if cfg!(target_os = "macos") { t!("Bilgi Al  (Cmd+I)") } else { t!("Özellikler  (Alt+Enter)") },
                     true,
                     with(|ws, p, _, cx| {
                         crate::properties_view::open(vec![p], ws.images.clone(), cx)
@@ -2493,11 +2561,9 @@ impl Workspace {
             Some((old.clone(), String::new())),
             vec![
                 crate::prompt::Button::new(t!("Yeniden adlandır"), crate::prompt::Kind::Primary, move |text, _, cx| {
-                    let name = text.unwrap_or_default().trim().to_string();
-                    const INVALID: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-                    if name.is_empty() || name.contains(INVALID) || name.ends_with('.') {
-                        return Err(t!("Dosya adı şu karakterleri içeremez: \\ / : * ? \" < > | ve nokta ile bitemez.").to_string());
-                    }
+                    let value = text.unwrap_or_default();
+                    let name = if cfg!(windows) { value.trim().to_string() } else { value.to_string() };
+                    rf_core::rename::validate(&name).map_err(|e| e.to_string())?;
                     if name == old {
                         return Ok(());
                     }
@@ -4461,7 +4527,29 @@ impl Render for Workspace {
             }))
             .on_action(cx.listener(|this, _: &GoForward, _, cx| this.with_tab(cx, |v, cx| v.forward(cx))))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.with_tab(cx, |v, cx| v.up(cx))))
-            .on_action(cx.listener(|this, _: &GoHome, window, cx| this.navigate(Location::Home, window, cx)))
+            .on_action(cx.listener(|this, _: &GoHome, window, cx| {
+                let loc = if cfg!(target_os = "macos") { dirs::home_dir().map(Location::Path).unwrap_or(Location::Home) } else { Location::Home };
+                this.navigate(loc, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &GoToFolder, window, cx| this.go_to_folder(window, cx)))
+            .on_action(cx.listener(|this, _: &GoDesktop, w, cx| { if let Some(p) = dirs::desktop_dir() { this.navigate(Location::Path(p), w, cx); } }))
+            .on_action(cx.listener(|this, _: &GoDocuments, w, cx| { if let Some(p) = dirs::document_dir() { this.navigate(Location::Path(p), w, cx); } }))
+            .on_action(cx.listener(|this, _: &GoDownloads, w, cx| { if let Some(p) = dirs::download_dir() { this.navigate(Location::Path(p), w, cx); } }))
+            .on_action(cx.listener(|this, _: &GoApplications, w, cx| this.navigate(Location::Path(PathBuf::from("/Applications")), w, cx)))
+            .on_action(cx.listener(|this, _: &GoUtilities, w, cx| this.navigate(Location::Path(PathBuf::from("/System/Applications/Utilities")), w, cx)))
+            .on_action(cx.listener(|this, _: &EjectVolume, _, cx| {
+                #[cfg(target_os = "macos")]
+                if let Some(path) = this.active_tab().read(cx).selection_paths().into_iter().next().or_else(|| this.active_tab().read(cx).location().path().map(Path::to_path_buf)) {
+                    Self::eject_volume(path, cx);
+                }
+                #[cfg(not(target_os = "macos"))]
+                let _ = this;
+            }))
+            .on_action(cx.listener(|_, _: &HideApp, _, cx| cx.hide()))
+            .on_action(cx.listener(|_, _: &HideOthers, _, cx| cx.hide_other_apps()))
+            .on_action(cx.listener(|_, _: &ShowAllApps, _, cx| cx.unhide_other_apps()))
+            .on_action(cx.listener(|_, _: &MinimizeWindow, w, _| w.minimize_window()))
+            .on_action(cx.listener(|_, _: &ZoomWindow, w, _| w.zoom_window()))
             .on_action(cx.listener(|this, _: &Refresh, _, cx| this.with_tab(cx, |v, cx| v.refresh(cx))))
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.with_tab(cx, |v, cx| v.toggle_hidden(cx))))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {

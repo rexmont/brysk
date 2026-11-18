@@ -47,8 +47,8 @@ pub fn folder_has_own_icon(_attrs: u32) -> bool {
     false
 }
 
-pub fn has_unique_icon(_ext: &str) -> bool {
-    false
+pub fn has_unique_icon(ext: &str) -> bool {
+    matches!(ext, "alias" | "dmg" | "pkg" | "mpkg" | "xip" | "icns")
 }
 
 fn rgba_to_bgra(img: &image::RgbaImage) -> Bgra {

@@ -16,6 +16,10 @@ pub fn install(cx: &mut App) {
         MenuItem::separator(),
         MenuItem::os_submenu("Services", SystemMenuType::Services),
         MenuItem::separator(),
+        MenuItem::action(t!("Brysk’ı gizle"), HideApp),
+        MenuItem::action(t!("Diğerlerini gizle"), HideOthers),
+        MenuItem::action(t!("Tümünü göster"), ShowAllApps),
+        MenuItem::separator(),
         MenuItem::action(t!("Brysk'tan çık"), Quit),
     ]);
     let file = Menu::new(t!("Dosya")).items([
@@ -23,13 +27,15 @@ pub fn install(cx: &mut App) {
         MenuItem::action(t!("Yeni pencere"), NewWindow),
         MenuItem::separator(),
         MenuItem::action(t!("Yeni klasör"), NewFolder),
-        MenuItem::action(t!("Yeni metin belgesi"), NewTextFile),
+        MenuItem::action(t!("Çoğalt"), DuplicateItems),
+        MenuItem::action(t!("Çöp Sepetine taşı"), DeleteItems),
+        MenuItem::action(t!("Diski çıkar"), EjectVolume),
         MenuItem::separator(),
         MenuItem::action(t!("Sekmeyi kapat"), CloseTab),
         MenuItem::action(t!("Diğer sekmeleri kapat"), CloseOtherTabs),
         MenuItem::action(t!("Kapatılan sekmeyi yeniden aç"), ReopenClosedTab),
         MenuItem::separator(),
-        MenuItem::action(t!("Özellikler"), Properties),
+        MenuItem::action(t!("Bilgi Al"), Properties),
     ]);
     let edit = Menu::new(t!("Düzen")).items([
         MenuItem::os_action(t!("Geri al"), Undo, OsAction::Undo),
@@ -38,7 +44,7 @@ pub fn install(cx: &mut App) {
         MenuItem::os_action(t!("Kes"), CutItems, OsAction::Cut),
         MenuItem::os_action(t!("Kopyala"), CopyItems, OsAction::Copy),
         MenuItem::os_action(t!("Yapıştır"), PasteItems, OsAction::Paste),
-        MenuItem::action(t!("Seçili klasöre yapıştır"), PasteIntoSelected),
+        MenuItem::action(t!("Buraya taşı"), MoveHere),
         MenuItem::separator(),
         MenuItem::os_action(t!("Tümünü seç"), SelectAll, OsAction::SelectAll),
         MenuItem::separator(),
@@ -61,9 +67,18 @@ pub fn install(cx: &mut App) {
         MenuItem::action(t!("Geri"), GoBack),
         MenuItem::action(t!("İleri"), GoForward),
         MenuItem::action(t!("Üst klasör"), GoUp),
-        MenuItem::action(t!("Ana sayfa"), GoHome),
+        MenuItem::action(t!("Kullanıcı"), GoHome),
+        MenuItem::action(t!("Masaüstü"), GoDesktop),
+        MenuItem::action(t!("Belgeler"), GoDocuments),
+        MenuItem::action(t!("İndirilenler"), GoDownloads),
+        MenuItem::action(t!("Uygulamalar"), GoApplications),
+        MenuItem::action(t!("İzlenceler"), GoUtilities),
         MenuItem::separator(),
-        MenuItem::action(t!("Klasöre git…"), FocusAddress),
+        MenuItem::action(t!("Klasöre git…"), GoToFolder),
     ]);
-    cx.set_menus([app, file, edit, view, go]);
+    let window = Menu::new(t!("Pencere")).items([
+        MenuItem::action(t!("Simge durumuna küçült"), MinimizeWindow),
+        MenuItem::action(t!("Yakınlaştır"), ZoomWindow),
+    ]);
+    cx.set_menus([app, file, edit, view, go, window]);
 }

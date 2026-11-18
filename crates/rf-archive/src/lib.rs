@@ -42,8 +42,9 @@
 //!   stream syntax (`:`) abort the whole extraction with an error (zip-slip protection).
 //! * **Existing files are never overwritten**: a colliding file is auto-renamed to
 //!   `name (2).ext`, `name (3).ext`, ... Directories merge into existing directories.
-//! * Symbolic / hard links inside archives are skipped (counted in [`ExtractStats::skipped`]).
-//! * File modification times are restored; directory times are not.
+//! * On Unix, relative symbolic links in ZIP / tar / 7z are restored last and may not escape
+//!   the destination. Hard links and unsupported link types are skipped.
+//! * File modification times and Unix executable permissions are restored; directory times are not.
 
 mod names;
 mod timeconv;
@@ -771,6 +772,55 @@ fn map_7z(e: sevenz_rust2::Error) -> anyhow::Error {
 
 // ---------------------------------------------------------------- extract
 
+/// Refuse existing symlink parents as well as lexical traversal: archive members cannot
+/// write through a link already in the destination. Links from this archive are made last.
+fn safe_destination(dest: &Path, rel: &Path) -> Result<PathBuf> {
+    let mut path = dest.to_path_buf();
+    if let Some(parent) = rel.parent() {
+        for part in parent.components() {
+            path.push(part);
+            if let Ok(md) = fs::symlink_metadata(&path) {
+                anyhow::ensure!(md.is_dir() && !md.file_type().is_symlink(), "Güvensiz arşiv yolu: {}", path.display());
+            }
+        }
+    }
+    Ok(dest.join(rel))
+}
+
+/// Links are restored after all regular files, so no later member can write through one.
+fn restore_links(dest: &Path, links: Vec<(PathBuf, PathBuf)>, stats: &mut ExtractStats, cancelled: &dyn Fn() -> bool) -> Result<()> {
+    #[cfg(unix)]
+    for (rel, target) in links {
+        use std::path::Component;
+        if cancelled() { return Err(Cancelled.into()); }
+        anyhow::ensure!(!target.as_os_str().is_empty(), "Boş arşiv bağlantısı");
+        let mut depth = rel.parent().map_or(0, |p| p.components().count());
+        for c in target.components() {
+            match c {
+                Component::Normal(_) => depth += 1,
+                Component::CurDir => {},
+                Component::ParentDir if depth > 0 => depth -= 1,
+                _ => bail!("Arşiv dışına çıkan bağlantı: {}", rel.display()),
+            }
+        }
+        let wanted = safe_destination(dest, &rel)?;
+        if let Some(parent) = wanted.parent() { fs::create_dir_all(parent)?; }
+        let mut path = unique_path(&wanted, true);
+        loop {
+            match std::os::unix::fs::symlink(&target, &path) {
+                Ok(()) => break,
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => path = unique_path(&wanted, true),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        stats.renamed += u64::from(path != wanted);
+        stats.files += 1;
+    }
+    #[cfg(not(unix))]
+    let _ = (dest, links, stats, cancelled);
+    Ok(())
+}
+
 struct Extractor<'a> {
     dest: &'a Path,
     progress: &'a mut dyn FnMut(Progress),
@@ -832,7 +882,10 @@ impl<'a> Extractor<'a> {
         if !self.only.wants(rel) {
             return Ok(());
         }
-        let target = self.dest.join(rel);
+        let target = safe_destination(self.dest, rel)?;
+        if let Ok(md) = fs::symlink_metadata(&target) {
+            anyhow::ensure!(md.is_dir() && !md.file_type().is_symlink(), "Güvensiz arşiv yolu: {}", target.display());
+        }
         fs::create_dir_all(&target).with_context(|| format!("Klasör oluşturulamadı: {}", target.display()))?;
         self.stats.dirs += 1;
         self.emit(display, false);
@@ -840,13 +893,17 @@ impl<'a> Extractor<'a> {
     }
 
     fn file(&mut self, rel: &Path, display: &str, r: &mut dyn Read, mtime: Option<SystemTime>) -> Result<()> {
+        self.file_mode(rel, display, r, mtime, None)
+    }
+
+    fn file_mode(&mut self, rel: &Path, display: &str, r: &mut dyn Read, mtime: Option<SystemTime>, mode: Option<u32>) -> Result<()> {
         self.check_cancel()?;
         if !self.only.wants(rel) {
             // read past it: some readers (solid 7z) expect each member to be consumed
             io::copy(r, &mut io::sink()).with_context(|| format!("Arşiv girdisi okunamadı: {display}"))?;
             return Ok(());
         }
-        let wanted = self.dest.join(rel);
+        let wanted = safe_destination(self.dest, rel)?;
         if let Some(parent) = wanted.parent() {
             fs::create_dir_all(parent).with_context(|| format!("Klasör oluşturulamadı: {}", parent.display()))?;
         }
@@ -888,6 +945,13 @@ impl<'a> Extractor<'a> {
             if let Some(t) = mtime {
                 let _ = file.set_modified(t);
             }
+            #[cfg(unix)]
+            if let Some(mode) = mode {
+                use std::os::unix::fs::PermissionsExt;
+                file.set_permissions(fs::Permissions::from_mode(mode & 0o777))?;
+            }
+            #[cfg(not(unix))]
+            let _ = mode;
             Ok(n)
         })();
         drop(file);
@@ -948,7 +1012,7 @@ fn extract_zip(
     cancelled: &dyn Fn() -> bool,
 ) -> Result<ExtractStats> {
     // Our own decoder when it can do the whole archive: parallel, low priority.
-    if let Some(a) = own_zip(archive, opts) {
+    if let Some(a) = own_zip(archive, opts).filter(|a| !cfg!(unix) || !a.entries().iter().any(|e| e.is_link)) {
         if a.needs_password() {
             a.verify_password().map_err(own::map_err)?;
         }
@@ -973,25 +1037,36 @@ fn extract_zip(
         zip_open(&mut za, i, Some(pw))?;
     }
     let mut ex = Extractor::new(dest, total, None, progress, cancelled).only(Only::new(&opts.only));
+    let mut links = Vec::new();
     for i in 0..za.len() {
         let mut f = zip_open(&mut za, i, pw)?;
         let name = names::entry_name(f.name_raw(), f.name().context("Zip girdi adı çözülemedi")?).into_owned();
         let Some(rel) = sanitize(&name)? else { continue };
         let encrypted = f.encrypted();
         let r = if f.is_symlink() {
-            ex.stats.skipped += 1;
+            #[cfg(unix)]
+            if ex.only.wants(&rel) {
+                let mut target = Vec::new();
+                (&mut f).take(16 * 1024).read_to_end(&mut target)?;
+                use std::os::unix::ffi::OsStringExt;
+                links.push((rel, PathBuf::from(std::ffi::OsString::from_vec(target))));
+            }
+            #[cfg(not(unix))]
+            { ex.stats.skipped += 1; }
             Ok(())
         } else if f.is_dir() {
             ex.dir(&rel, &name)
         } else {
             let mt = zip_mtime(f.last_modified());
-            ex.file(&rel, &name, &mut f, mt)
+            let mode = f.unix_mode();
+            ex.file_mode(&rel, &name, &mut f, mt, mode)
         };
         if let Err(e) = r {
             // ZipCrypto's check byte lets 1 in 256 wrong passwords through: the CRC then fails.
             return Err(if encrypted && ex.read_failed { PasswordError::Wrong.into() } else { e });
         }
     }
+    restore_links(dest, links, &mut ex.stats, cancelled)?;
     ex.emit("", true);
     Ok(ex.stats)
 }
@@ -1053,7 +1128,7 @@ fn extract_7z(
     progress: &mut dyn FnMut(Progress),
     cancelled: &dyn Fn() -> bool,
 ) -> Result<ExtractStats> {
-    if let Some(a) = own_archive(archive, opts)? {
+    if let Some(a) = own_archive(archive, opts)?.filter(|a| !cfg!(unix) || !a.entries().iter().any(|e| e.is_link)) {
         if a.needs_password() {
             a.verify_password().map_err(own::map_err)?;
         }
@@ -1073,6 +1148,7 @@ fn extract_7z(
         }
     }
     let mut ex = Extractor::new(dest, total, None, progress, cancelled).only(Only::new(&opts.only));
+    let mut links = Vec::new();
     let mut failure: Option<anyhow::Error> = None;
     let res = reader.for_each_entries(|e, r| {
         let mut step = || -> Result<()> {
@@ -1080,12 +1156,20 @@ fn extract_7z(
                 return Ok(());
             }
             let Some(rel) = sanitize(&e.name)? else { return Ok(()) };
-            if e.has_windows_attributes && e.windows_attributes & REPARSE_POINT != 0 {
+            if cfg!(unix) && e.has_windows_attributes && (e.windows_attributes >> 16) & 0o170000 == 0o120000 {
+                #[cfg(unix)]
+                if ex.only.wants(&rel) {
+                    use std::os::unix::ffi::OsStringExt;
+                    let mut target = Vec::new();
+                    r.take(16 * 1024).read_to_end(&mut target)?;
+                    links.push((rel, PathBuf::from(std::ffi::OsString::from_vec(target))));
+                }
+            } else if e.has_windows_attributes && e.windows_attributes & REPARSE_POINT != 0 {
                 ex.stats.skipped += 1;
             } else if e.is_directory {
                 ex.dir(&rel, &e.name)?;
             } else {
-                ex.file(&rel, &e.name, r, nt_mtime(e))?;
+                ex.file_mode(&rel, &e.name, r, nt_mtime(e), e.has_windows_attributes.then_some(e.windows_attributes >> 16).filter(|m| *m != 0))?;
             }
             Ok(())
         };
@@ -1101,6 +1185,7 @@ fn extract_7z(
         return Err(if encrypted && ex.read_failed { PasswordError::Wrong.into() } else { e });
     }
     res.map_err(|e| map_7z_pw(e, opts))?;
+    restore_links(dest, links, &mut ex.stats, cancelled)?;
     ex.emit("", true);
     Ok(ex.stats)
 }
@@ -1118,6 +1203,7 @@ fn extract_tar(
     let mut ex = Extractor::new(dest, total, Some(counter.clone()), progress, cancelled).only(Only::new(&opts.only));
     let mut ar = tar::Archive::new(open_stream(kind, archive, counter)?);
     // small files are written by a pool while the stream keeps decoding (see parwrite)
+    let mut links = Vec::new();
     let pw = parwrite::ParWriter::new(parwrite::threads());
     let res = (|| -> Result<()> {
         for e in ar.entries().context("Tar okunamadı")? {
@@ -1145,11 +1231,18 @@ fn extract_tar(
                         return Err(anyhow::Error::new(err).context(format!("Arşiv girdisi okunamadı: {name}")));
                     }
                     ex.emit(&name, false);
-                    pw.submit(dest.join(&rel), data, mt)?;
+                    pw.submit_mode(safe_destination(dest, &rel)?, data, mt, e.header().mode().ok())?;
                 } else {
-                    ex.file(&rel, &name, &mut e, mt)?;
+                    let mode = e.header().mode().ok();
+                    ex.file_mode(&rel, &name, &mut e, mt, mode)?;
                 }
-            } else if t.is_symlink() || t.is_hard_link() {
+            } else if t.is_symlink() {
+                if let Some(rel) = sanitize(&name)? {
+                    if cfg!(unix) && ex.only.wants(&rel) {
+                        if let Some(target) = e.link_name()? { links.push((rel, target.into_owned())); }
+                    } else { ex.stats.skipped += 1; }
+                }
+            } else if t.is_hard_link() {
                 sanitize(&name)?;
                 ex.stats.skipped += 1;
             }
@@ -1166,6 +1259,7 @@ fn extract_tar(
     ex.stats.files += files;
     ex.stats.bytes += bytes;
     ex.stats.renamed += renamed;
+    restore_links(dest, links, &mut ex.stats, cancelled)?;
     ex.emit("", true);
     Ok(ex.stats)
 }
@@ -1196,6 +1290,22 @@ struct Item {
     is_dir: bool,
     size: u64,
     mtime: Option<SystemTime>,
+}
+
+impl Item {
+    fn mode(&self) -> Option<u32> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            fs::symlink_metadata(&self.path).ok().map(|m| m.mode())
+        }
+        #[cfg(not(unix))]
+        { None }
+    }
+
+    fn link(&self) -> Option<PathBuf> {
+        fs::read_link(&self.path).ok()
+    }
 }
 
 #[cfg(windows)]
@@ -1242,7 +1352,7 @@ fn collect(sources: &[PathBuf], skip: &[PathBuf]) -> Result<Vec<Item>> {
             if m.is_dir() {
                 items.push(Item { path: p.clone(), name: name.clone(), is_dir: true, size: 0, mtime: m.modified().ok() });
                 walk(&p, &name, items, is_skipped)?;
-            } else if m.is_file() {
+            } else if m.is_file() || m.file_type().is_symlink() {
                 items.push(Item { path: p, name, is_dir: false, size: m.len(), mtime: m.modified().ok() });
             }
         }
@@ -1266,7 +1376,7 @@ fn collect(sources: &[PathBuf], skip: &[PathBuf]) -> Result<Vec<Item>> {
         if m.is_dir() {
             items.push(Item { path: src.clone(), name: name.clone(), is_dir: true, size: 0, mtime: m.modified().ok() });
             walk(src, &name, &mut items, &is_skipped)?;
-        } else if m.is_file() {
+        } else if m.is_file() || m.file_type().is_symlink() {
             items.push(Item { path: src.clone(), name, is_dir: false, size: m.len(), mtime: m.modified().ok() });
         }
     }
@@ -1294,7 +1404,7 @@ impl CompressCtx<'_> {
 
 /// File reader that reports progress and honours cancellation.
 struct Feed<'a, 'b> {
-    file: File,
+    file: Box<dyn Read + Send>,
     ctx: &'a mut CompressCtx<'b>,
 }
 
@@ -1316,8 +1426,8 @@ fn zstd_level(level: u32) -> i32 {
 }
 
 /// Creates `dest_archive` from files / folders. `level` is 0 (store / fastest) to 9 (smallest);
-/// 5 is a good default. Folders are added recursively under their own name; symlinks and
-/// junctions are skipped. If `dest_archive` already exists a free name (`x (2).zip`) is used —
+/// 5 is a good default. Folders are added recursively under their own name; Unix symlinks
+/// are stored as links and Windows junctions are skipped. If `dest_archive` already exists a free name (`x (2).zip`) is used —
 /// see [`CompressStats::path`]. The archive is written to `<name>.part` and renamed on success,
 /// so cancellation or failure never leaves a truncated archive behind.
 pub fn compress(
@@ -1475,10 +1585,19 @@ fn split_into_volumes(part: &Path, final_path: &Path, size: u64, cancelled: &dyn
     }
 }
 
+fn source_reader(path: &Path) -> io::Result<Box<dyn Read + Send>> {
+    #[cfg(unix)]
+    if let Ok(target) = fs::read_link(path) {
+        use std::os::unix::ffi::OsStrExt;
+        return Ok(Box::new(io::Cursor::new(target.as_os_str().as_bytes().to_vec())));
+    }
+    Ok(Box::new(File::open(path)?))
+}
+
 fn feed<'a, 'b>(item: &Item, ctx: &'a mut CompressCtx<'b>) -> Result<Feed<'a, 'b>> {
     ctx.current = item.name.clone();
     ctx.emit(true);
-    let file = File::open(&item.path).with_context(|| format!("Dosya açılamadı: {}", item.path.display()))?;
+    let file = source_reader(&item.path).with_context(|| format!("Dosya açılamadı: {}", item.path.display()))?;
     Ok(Feed { file, ctx })
 }
 
@@ -1496,6 +1615,9 @@ fn zip_put<W: Write + Seek>(
     }
     let method = if level == 0 { zip::CompressionMethod::Stored } else { zip::CompressionMethod::Deflated };
     let mut opts = SimpleFileOptions::default().compression_method(method);
+    if let Some(mode) = item.mode() {
+        opts = opts.unix_permissions(mode);
+    }
     if level > 0 {
         opts = opts.compression_level(Some(level as i64));
     }
@@ -1504,7 +1626,9 @@ fn zip_put<W: Write + Seek>(
     }) {
         opts = opts.last_modified_time(dt);
     }
-    if item.is_dir {
+    if let Some(target) = item.link() {
+        zw.add_symlink(item.name.clone(), target.to_string_lossy(), opts)?;
+    } else if item.is_dir {
         zw.add_directory(item.name.clone(), opts)?;
     } else {
         opts = opts.large_file(item.size >= 0xFFFF_0000);
@@ -1562,13 +1686,24 @@ fn sz_content_methods_mt(level: u32, password: Option<&str>, mt: bool, dict: Opt
     }
 }
 
+fn sz_entry(item: &Item) -> sevenz_rust2::ArchiveEntry {
+    let mut entry = sevenz_rust2::ArchiveEntry::from_path(&item.path, item.name.clone());
+    if let Some(mode) = item.mode() {
+        entry.has_windows_attributes = true;
+        entry.windows_attributes = (mode << 16) | 0x8000 | if item.is_dir { 0x10 } else { 0x20 };
+        entry.is_directory = item.is_dir;
+        entry.has_stream = !item.is_dir;
+        entry.size = item.size;
+    }
+    entry
+}
+
 fn sz_put<W: Write + Seek>(sw: &mut sevenz_rust2::ArchiveWriter<W>, item: &Item, ctx: &mut CompressCtx) -> Result<()> {
-    use sevenz_rust2::ArchiveEntry;
     if (ctx.cancelled)() {
         ctx.was_cancelled = true;
         bail!("iptal");
     }
-    let entry = ArchiveEntry::from_path(&item.path, item.name.clone());
+    let entry = sz_entry(item);
     if item.is_dir {
         sw.push_archive_entry::<&[u8]>(entry, None).map_err(|e| anyhow::Error::new(e).context("7z'ye eklenemedi"))?;
     } else {
@@ -1584,7 +1719,7 @@ fn sz_put<W: Write + Seek>(sw: &mut sevenz_rust2::ArchiveWriter<W>, item: &Item,
 /// progress and honours cancellation from the calling thread.
 struct LazySource<'a, 'b> {
     path: PathBuf,
-    file: Option<File>,
+    file: Option<Box<dyn Read + Send>>,
     finished: bool,
     ctx: &'a std::cell::RefCell<&'a mut CompressCtx<'b>>,
 }
@@ -1602,7 +1737,7 @@ impl Read for LazySource<'_, '_> {
             }
         }
         if self.file.is_none() {
-            let f = File::open(&self.path).map_err(|e| io::Error::new(e.kind(), format!("Dosya açılamadı: {}: {e}", self.path.display())))?;
+            let f = source_reader(&self.path)?;
             self.file = Some(f);
             self.ctx.borrow_mut().current = self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         }
@@ -1648,7 +1783,7 @@ fn write_7z(items: &[Item], part: &Path, level: u32, password: Option<&str>, dic
             ctx.was_cancelled = true;
             bail!("iptal");
         }
-        let entry = ArchiveEntry::from_path(&item.path, item.name.clone());
+        let entry = sz_entry(item);
         sw.push_archive_entry::<&[u8]>(entry, None).map_err(|e| anyhow::Error::new(e).context("7z'ye eklenemedi"))?;
     }
     // the rest solid (like 7-Zip), in blocks; LZMA2 compresses each block on several threads
@@ -1663,7 +1798,7 @@ fn write_7z(items: &[Item], part: &Path, level: u32, password: Option<&str>, dic
             end += 1;
         }
         let block = &files[start..end];
-        let entries: Vec<ArchiveEntry> = block.iter().map(|i| ArchiveEntry::from_path(&i.path, i.name.clone())).collect();
+        let entries: Vec<ArchiveEntry> = block.iter().map(|i| sz_entry(i)).collect();
         let readers: Vec<SourceReader<LazySource>> =
             block.iter().map(|i| SourceReader::new(LazySource { path: i.path.clone(), file: None, finished: false, ctx: &cell })).collect();
         let r = sw.push_archive_entries(entries, readers);
@@ -1682,10 +1817,14 @@ fn tar_put<W: Write>(tb: &mut tar::Builder<W>, item: &Item, ctx: &mut CompressCt
         ctx.was_cancelled = true;
         bail!("iptal");
     }
-    let meta = fs::metadata(&item.path).with_context(|| format!("Okunamadı: {}", item.path.display()))?;
+    let meta = fs::symlink_metadata(&item.path).with_context(|| format!("Okunamadı: {}", item.path.display()))?;
     let mut h = tar::Header::new_gnu();
     h.set_metadata(&meta);
-    if item.is_dir {
+    if let Some(target) = item.link() {
+        h.set_entry_type(tar::EntryType::Symlink);
+        h.set_size(0);
+        tb.append_link(&mut h, &item.name, target)?;
+    } else if item.is_dir {
         h.set_entry_type(tar::EntryType::Directory);
         h.set_size(0);
         tb.append_data(&mut h, format!("{}/", item.name), io::empty())?;

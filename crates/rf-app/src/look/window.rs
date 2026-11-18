@@ -229,7 +229,7 @@ impl LookWindow {
         self.viewer.cleanup();
         self._loading = None;
         self.busy = false;
-        if rf_win::drives::slow_to_read(&self.path) {
+        if cfg!(target_os = "macos") || rf_win::drives::slow_to_read(&self.path) {
             self.load_in_background(resize, window, cx);
             return;
         }

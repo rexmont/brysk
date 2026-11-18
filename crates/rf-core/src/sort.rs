@@ -70,11 +70,12 @@ impl SortSpec {
 
     /// Folders before files (or the reverse), when the spec asks; `None` = decided by the key.
     fn folder_order(&self, a: &Entry, b: &Entry) -> Option<Ordering> {
-        if self.dirs_first && a.is_dir() != b.is_dir() {
-            return Some(if a.is_dir() { Ordering::Less } else { Ordering::Greater });
+        let (a_folder, b_folder) = (a.is_dir() && !a.is_package(), b.is_dir() && !b.is_package());
+        if self.dirs_first && a_folder != b_folder {
+            return Some(if a_folder { Ordering::Less } else { Ordering::Greater });
         }
-        if self.files_first && a.is_dir() != b.is_dir() {
-            return Some(if a.is_dir() { Ordering::Greater } else { Ordering::Less });
+        if self.files_first && a_folder != b_folder {
+            return Some(if a_folder { Ordering::Greater } else { Ordering::Less });
         }
         None
     }
@@ -97,7 +98,11 @@ impl SortSpec {
             SortKey::Modified => a.modified_ms.cmp(&b.modified_ms),
             SortKey::Created => a.created_ms.cmp(&b.created_ms),
             SortKey::Size => a.size.cmp(&b.size),
-            SortKey::Type => a.ext.cmp(&b.ext),
+            SortKey::Type => {
+                let a_type = if a.is_app_bundle() { "app" } else if a.is_package() { "package" } else { &a.ext };
+                let b_type = if b.is_app_bundle() { "app" } else if b.is_package() { "package" } else { &b.ext };
+                a_type.cmp(b_type)
+            },
             SortKey::Sync => crate::sortkeys::sync_rank(a).cmp(&crate::sortkeys::sync_rank(b)),
         };
         self.directed(primary.then_with(|| natural_cmp(a.shown(), b.shown())))

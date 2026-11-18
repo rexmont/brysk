@@ -1,6 +1,16 @@
 //! English translations: (Turkish source string, English). Generated table; keep keys unique.
 
 pub const EN: &[(&str, &str)] = &[
+    ("Yakınlaştır", "Zoom"),
+    ("Simge durumuna küçült", "Minimize"),
+    ("İzlenceler", "Utilities"),
+    ("Tümünü göster", "Show All"),
+    ("Diğerlerini gizle", "Hide Others"),
+    ("Brysk’ı gizle", "Hide Brysk"),
+    ("Diski çıkar", "Eject"),
+    ("Çoğalt", "Duplicate"),
+    ("Bilgi Al  (Cmd+I)", "Get Info  (Cmd+I)"),
+    ("Bilgi Al", "Get Info"),
     ("Aranacak metin", "Text to find"),
     ("Yerine yazılacak", "Replace with"),
     ("Tatil_{n:03}", "Holiday_{n:03}"),

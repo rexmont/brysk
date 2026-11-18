@@ -107,7 +107,8 @@ fn load_cloud_and_wsl() -> Vec<Pinned> {
         }
     }
     if let Some(home) = dirs::home_dir() {
-        add("iCloud Drive".into(), home.join("iCloudDrive"), L::Cloud);
+        let icloud = if cfg!(target_os = "macos") { home.join("Library/Mobile Documents/com~apple~CloudDocs") } else { home.join("iCloudDrive") };
+        add("iCloud Drive".into(), icloud, L::Cloud);
         add("Dropbox".into(), home.join("Dropbox"), L::Cloud);
     }
     if let Some(local) = dirs::data_local_dir() {
@@ -185,10 +186,10 @@ impl Places {
         .detach();
         // Notice drives appearing/disappearing (USB, network mappings) without any shell hooks.
         cx.spawn(async move |this, cx| {
-            let mut mask = rf_win::drives::drive_mask();
+            let mut mask = cx.background_spawn(async { rf_win::drives::drive_mask() }).await;
             loop {
                 cx.background_executor().timer(std::time::Duration::from_secs(3)).await;
-                let now = rf_win::drives::drive_mask();
+                let now = cx.background_spawn(async { rf_win::drives::drive_mask() }).await;
                 if now != mask {
                     mask = now;
                     if this.update(cx, |p, cx| p.refresh(cx)).is_err() {

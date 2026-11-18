@@ -50,6 +50,7 @@ struct Written {
     dos: (u16, u16),
     unix: Option<u32>,
     is_dir: bool,
+    mode: Option<u32>,
 }
 
 fn dos_time(t: Option<SystemTime>) -> (u16, u16) {
@@ -68,6 +69,12 @@ fn unix_secs(t: Option<SystemTime>) -> Option<u32> {
 
 /// Reads and compresses one file in memory (stored when Deflate doesn't help).
 fn pack(path: &Path, level: u32) -> Result<Packed> {
+    #[cfg(unix)]
+    let raw = match std::fs::read_link(path) {
+        Ok(target) => { use std::os::unix::ffi::OsStrExt; target.as_os_str().as_bytes().to_vec() },
+        Err(_) => std::fs::read(path).with_context(|| format!("Dosya okunamadı: {}", path.display()))?,
+    };
+    #[cfg(not(unix))]
     let raw = std::fs::read(path).with_context(|| format!("Dosya okunamadı: {}", path.display()))?;
     let crc = crc32fast::hash(&raw);
     let size = raw.len() as u64;
@@ -262,7 +269,7 @@ fn central_entry(w: &Written, force64: bool) -> Vec<u8> {
     let pick = |big: bool, v: u64| if big { U32_MAX as u32 } else { v as u32 };
     let mut h = Le::default();
     h.u32(0x0201_4b50)
-        .u16(45) // made by: MS-DOS, spec 4.5
+        .u16(if w.mode.is_some() { (3 << 8) | 45 } else { 45 })
         .u16(if zip64 { 45 } else { 20 })
         .u16(1 << 11)
         .u16(w.method)
@@ -276,7 +283,7 @@ fn central_entry(w: &Written, force64: bool) -> Vec<u8> {
         .u16(0)
         .u16(0)
         .u16(0)
-        .u32(if w.is_dir { 0x10 } else { 0x20 })
+        .u32(w.mode.map_or(0, |m| m << 16) | if w.is_dir { 0x10 } else { 0x20 })
         .u32(pick(big_off, w.offset))
         .bytes(&w.name)
         .bytes(&extra);
@@ -319,6 +326,7 @@ pub(crate) fn write(items: &[Item], part: &Path, level: u32, ctx: &mut CompressC
                     dos: dos_time(item.mtime),
                     unix: unix_secs(item.mtime),
                     is_dir: item.is_dir,
+                    mode: item.mode(),
                 };
                 ctx.current = item.name.clone();
                 if item.is_dir {

@@ -605,7 +605,9 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
         )
         .child(nav)
         .child(
-            div().id("settings-page").flex_1().min_w_0().h_full().overflow_y_scroll().child(
+            // One scroll state per page: opening another page starts at its top instead of
+            // inheriting the previous page's offset (returning to a page keeps its own place).
+            div().id(("settings-page", page as usize)).flex_1().min_w_0().h_full().overflow_y_scroll().child(
                 v_flex()
                     .w_full()
                     .max_w(px(980.))

@@ -2973,6 +2973,35 @@ fn open_url(url: &'static str) {
     });
 }
 
+/// The upstream project and licence, always shown in About → Open source.
+const UPSTREAM_URL: &str = "https://github.com/gelenmedya/rustyfiles";
+const UPSTREAM_LICENSE_URL: &str = "https://github.com/gelenmedya/rustyfiles/blob/main/LICENSE";
+
+/// `Brysk.app/Contents/Resources/LICENSE` inside the bundle (the release workflow puts
+/// `LICENSE` beside the executable on Windows).
+fn bundled_license_path() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    #[cfg(target_os = "macos")]
+    {
+        Some(exe.parent()?.parent()?.join("Resources").join("LICENSE"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Some(exe.with_file_name("LICENSE"))
+    }
+}
+
+fn open_bundled_license() {
+    std::thread::spawn(|| {
+        let target = bundled_license_path()
+            .filter(|p| p.is_file())
+            .unwrap_or_else(|| std::path::PathBuf::from(UPSTREAM_LICENSE_URL));
+        if let Err(e) = rf_win::shell::open(&target) {
+            log::warn!("open licence: {e:#}");
+        }
+    });
+}
+
 /// Update status and the button that fits it (Settings → About). macOS builds are a notarised `.app` updated by downloading a new
 /// DMG (`installer_mac` knows only "not installed"); there is no background check to report, so the row says how updating works and
 /// points at the releases page. The automatic-download and beta switches are left out of that page for the same reason.
@@ -3164,6 +3193,28 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
             }
         }),
         section(p, t!("Açık kaynak")),
+        link_row(
+            p,
+            "upstream",
+            L::Globe,
+            "rustyfiles (MIT)",
+            Some(crate::i18n::tx(
+                "Brysk'ın temeli: Özer Güzel'in rustyfiles projesi. MIT lisansı.",
+                "The upstream project Brysk is based on, by Özer Güzel. MIT licensed.",
+            )),
+            |_, _| open_url(UPSTREAM_URL),
+        ),
+        link_row(
+            p,
+            "license",
+            L::ScrollText,
+            crate::i18n::tx("Lisans ve bildirimler", "Licence and notices"),
+            Some(crate::i18n::tx(
+                "Uygulamayla gelen MIT lisansını ve kaynak bildirimlerini aç.",
+                "Open the bundled MIT licence and attribution notices.",
+            )),
+            |_, _| open_bundled_license(),
+        ),
         expander(
             "libs",
             p,

@@ -45,6 +45,6 @@
     <!-- Not sandboxed: a file manager must reach every folder the user can. Developer ID +
          hardened runtime is the distribution route. -->
     <key>NSHumanReadableCopyright</key>
-    <string>MIT. Brysk is a macOS port of rustyfiles by Özer Güzel; the same licence.</string>
+    <string>Copyright © 2026 Özer Güzel (gelenmedya). Brysk is an MIT-licensed macOS fork of rustyfiles.</string>
 </dict>
 </plist>

@@ -1,0 +1,23 @@
+Brysk
+=====
+
+Brysk is a macOS fork of rustyfiles.
+
+Original project
+----------------
+rustyfiles
+Copyright (c) 2026 Özer Güzel (gelenmedya)
+https://github.com/gelenmedya/rustyfiles
+
+The original project and this fork are distributed under the MIT License. The
+full permission notice is in LICENSE, which is included with this source tree
+and in every Brysk.app bundle.
+
+Modifications for Brysk
+-----------------------
+Brysk's changes are distributed under the MIT License by the Brysk project.
+https://github.com/rexmont/brysk
+
+Brysk is not affiliated with or endorsed by the original author. The original
+copyright notice and the MIT permission notice must be kept in copies and
+substantial portions of the software.

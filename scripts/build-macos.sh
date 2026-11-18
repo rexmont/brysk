@@ -37,6 +37,8 @@ fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+# MIT: the copyright and permission notice travel with the binary.
+cp LICENSE NOTICE "$APP/Contents/Resources/"
 cp packaging/macos/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/brysk" "$APP/Contents/MacOS/brysk"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
@@ -45,9 +47,11 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Brysk.app, LaunchServices registers it as Brysk and `open Brysk.app` then
 # activates the invisible helper instead of starting the file manager.
 HELPER="$APP/Contents/Helpers/DirectLook.app"
-mkdir -p "$HELPER/Contents/MacOS"
+mkdir -p "$HELPER/Contents/MacOS" "$HELPER/Contents/Resources"
 cp packaging/macos/DirectLook-Info.plist "$HELPER/Contents/Info.plist"
 cp "$BIN/directlook" "$HELPER/Contents/MacOS/directlook"
+# The nested bundle is distributed as its own app, so it carries its own notice too.
+cp LICENSE NOTICE "$HELPER/Contents/Resources/"
 
 # The icon is optional: `packaging/macos/Brysk.icns` when it exists.
 if [ -f packaging/macos/Brysk.icns ]; then

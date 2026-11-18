@@ -107,4 +107,7 @@ Port notes: [`docs/port-macos.md`](docs/port-macos.md). Upstream sync:
 Brysk is based on [rustyfiles](https://github.com/gelenmedya/rustyfiles) by
 [Özer Güzel](https://github.com/gelenmedya). The macOS port keeps the MIT licence of the original.
 
+The full MIT licence, including the upstream copyright notice, is in [LICENSE](LICENSE). Fork
+attribution is in [NOTICE](NOTICE); both files ship inside `Brysk.app`.
+
 If Brysk is useful: [support on Ko-fi](https://ko-fi.com/rexmont).

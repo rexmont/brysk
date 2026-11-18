@@ -35,6 +35,15 @@ else
     PROFILE=release ./scripts/build-macos.sh
 fi
 
+# The licence and attribution must be sealed into both signed bundles. Copy them again here
+# so a stale or hand-built target/Brysk.app cannot produce a release without them.
+for bundle in "$APP" "$APP/Contents/Helpers/DirectLook.app"; do
+    mkdir -p "$bundle/Contents/Resources"
+    cp LICENSE NOTICE "$bundle/Contents/Resources/"
+    test -f "$bundle/Contents/Resources/LICENSE"
+    test -f "$bundle/Contents/Resources/NOTICE"
+done
+
 # Sign the nested helper first, then the app. `--deep` is only for verification: signing it
 # that way leaves the helper with the parent's identity requirements.
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/Helpers/DirectLook.app"

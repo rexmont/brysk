@@ -59,9 +59,8 @@ performance and interface changes.
 | Shortcuts | macOS | macOS Cmd **and** Explorer Ctrl keys |
 
 Current builds include Sparkle for in-app updates: check in Settings → About,
-or use the title-bar **Update available** button when a newer build is found. The
-first published alpha predates this updater and needs one manual installation of
-an updater-enabled build. See [macOS updates](docs/macos-updates.md).
+or use the title-bar **Update available** button when a newer build is found.
+See [macOS updates](docs/macos-updates.md).
 
 ## Performance
 

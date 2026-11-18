@@ -32,13 +32,10 @@ unwritable location receives Sparkle's normal move/authorization guidance.
 - After uploading the DMG and checksum to the matching GitHub release, copy
   `dist/appcast.xml` to `packaging/macos/appcast.xml`, then commit and push it to
   `macos`. Publish assets first so a feed never advertises an unavailable download.
-  The feed retains previous entries and replaces an entry with the same build.
+  The feed retains previous entries and replaces an entry with the same build or asset URL.
 - Any feed edit requires re-signing with
   `target/sparkle/bin/sign_update --account com.rexmont.brysk packaging/macos/appcast.xml`.
   Validate with the same command plus `--verify`.
-
-The first published alpha predates Sparkle. Its users must install the first
-updater-enabled build once manually; subsequent newer builds can update in-app.
 
 ## QA
 

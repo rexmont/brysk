@@ -181,9 +181,16 @@ pub fn dump_windows() {
         eprintln!("windows: {}", windows.len());
         for w in windows.iter() {
             let frame = w.frame();
+            let lights = [("close", objc2_app_kit::NSWindowButton::CloseButton), ("min", objc2_app_kit::NSWindowButton::MiniaturizeButton), ("zoom", objc2_app_kit::NSWindowButton::ZoomButton)]
+                .into_iter()
+                .filter_map(|(name, which)| w.standardWindowButton(which).map(|b| (name, b.frame())))
+                .map(|(name, f)| format!("{name}=({:.1},{:.1},{:.1},{:.1})", f.origin.x, f.origin.y, f.size.width, f.size.height))
+                .collect::<Vec<_>>()
+                .join(" ");
             eprintln!(
-                "  title={:?} frame=({:.0},{:.0},{:.0},{:.0}) visible={} alpha={:.2} level={}",
+                "  title={:?} py={:.0} frame=({:.0},{:.0},{:.0},{:.0}) visible={} alpha={:.2} level={} {lights}",
                 w.title().to_string(),
+                frame.size.height,
                 frame.origin.x,
                 frame.origin.y,
                 frame.size.width,

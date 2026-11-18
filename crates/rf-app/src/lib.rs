@@ -118,11 +118,11 @@ use rf_core::Location;
 
 use crate::workspace::Workspace;
 
-/// The window title bar's options: the traffic lights sit a little lower than centred and
-/// their left margin matches the top margin (16 px in the 40 px custom title bar; the toolkit
-/// default, 9 px, leaves them high up and too close to the edge).
+/// The window title bar's options: the traffic lights are centred on the same line as the
+/// tab-actions icon (a 14 px button at y = 9 in the 40 px bar has its centre 24 px from the
+/// top, exactly the icon's), with a 16 px left margin.
 pub(crate) fn titlebar_options() -> TitlebarOptions {
-    TitlebarOptions { traffic_light_position: Some(point(px(16.), px(12.))), ..TitleBar::title_bar_options() }
+    TitlebarOptions { traffic_light_position: Some(point(px(16.), px(9.))), ..TitleBar::title_bar_options() }
 }
 
 /// Window placement from the last session (ignored if it is implausibly small). Windows

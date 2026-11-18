@@ -2257,7 +2257,9 @@ impl Workspace {
                         h_flex().flex_shrink_0().w(px(TITLEBAR_LEAD)).h_full().items_end().child(
                             div()
                                 .id("tab-actions")
-                                .ml(px(-2.))
+                                // a little right of the old flush-left position, without
+                                // crowding the first tab
+                                .ml(px(2.))
                                 .mb(px(2.))
                                 .size(px(28.))
                                 .flex()

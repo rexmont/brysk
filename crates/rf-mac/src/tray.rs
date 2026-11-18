@@ -36,8 +36,13 @@ static ITEM: AtomicUsize = AtomicUsize::new(0);
 fn mascot_bitmap(pixels: u32) -> Option<resvg::tiny_skia::Pixmap> {
     let tree = resvg::usvg::Tree::from_str(include_str!("../assets/menubar-mascot.svg"), &resvg::usvg::Options::default()).ok()?;
     let mut bitmap = resvg::tiny_skia::Pixmap::new(pixels, pixels)?;
-    let scale = pixels as f32 / tree.size().width();
-    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut bitmap.as_mut());
+    let canvas = pixels as f32;
+    let available = canvas * 14. / 18.;
+    let scale = (available / tree.size().width()).min(available / tree.size().height());
+    let x = (canvas - tree.size().width() * scale) / 2.;
+    let y = (canvas - tree.size().height() * scale) / 2.;
+    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(x, y);
+    resvg::render(&tree, transform, &mut bitmap.as_mut());
     Some(bitmap)
 }
 

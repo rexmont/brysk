@@ -16,7 +16,7 @@ and a native macOS core. Based on [rustyfiles](https://github.com/gelenmedya/rus
 and file-operation layer, macOS system integration, a rebuilt preview pipeline, and substantial
 performance and interface changes.
 
-> **Status: 0.1.0-alpha.1 — initial alpha.** Requires macOS 13 or later. Releases are universal (Apple silicon + Intel)
+> **Version: 0.1.0 — initial release.** Requires macOS 13 or later. Releases are universal (Apple silicon + Intel)
 > Developer ID builds, notarised and stapled as DMGs.
 
 ## Why Brysk
@@ -80,7 +80,8 @@ with the search index enabled; the other measurements used debug builds.
 Download the latest DMG from [Releases](https://github.com/rexmont/brysk/releases), open it and
 drag **Brysk** to Applications. The build is signed and notarised; no Gatekeeper bypass is needed.
 
-Onboarding and Settings → General offer an optional Finder Dock-click replacement. A small
+Onboarding offers Finder Dock-click replacement with its checkbox selected by default. Continue
+applies the choice; it can also be changed in Settings → General. A small
 macOS-managed background helper opens Brysk even after **Quit (⌘Q)**. It needs Accessibility
 access and intercepts plain left-clicks only; right-clicks and modified clicks keep their usual
 Finder behavior. Turning the option off unregisters the helper. Native filesystem notifications

@@ -293,7 +293,8 @@ fn mac_onboarding(cx: &mut App) {
     use std::rc::Rc;
     let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
     let message = "Allow folder access when macOS asks. Full Disk Access is optional for browsing the Trash.\n\nThe Finder option uses a small background helper and needs Accessibility access.";
-    let checked = Rc::new(Cell::new(cx.global::<settings::Settings>().finder_dock_redirect));
+    // Preselect the checkbox; Continue applies the choice and requests permission.
+    let checked = Rc::new(Cell::new(true));
     let check = crate::prompt::Check {
         label: "Finder Dock icon opens Brysk".into(),
         checked: checked.clone(),

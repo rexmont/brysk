@@ -23,7 +23,7 @@ unwritable location receives Sparkle's normal move/authorization guidance.
   third-party notices are included in `packaging/macos/Sparkle-LICENSE` and the app.
 - `CFBundleVersion` in `packaging/macos/Info.plist` is the monotonically increasing
   update build number. Increment it for every different published build, even
-  when replacing an asset under the same alpha tag. The user-facing version comes
+  when replacing an asset under the same release tag. The user-facing version comes
   from Cargo; Apple's numeric `CFBundleShortVersionString` stays numeric.
 - The Sparkle Ed25519 signing key is in the login Keychain under account
   `com.rexmont.brysk`. Only its public key is committed in `SUPublicEDKey`.

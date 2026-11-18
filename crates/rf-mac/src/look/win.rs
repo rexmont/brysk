@@ -22,7 +22,9 @@ pub fn work_area_of(_hwnd: HWND) -> [f32; 4] {
 
 pub fn allow_any_foreground() {}
 
-pub fn set_topmost(_hwnd: HWND, _on: bool) {}
+pub fn set_topmost(hwnd: HWND, on: bool) {
+    let _ = crate::window::set_topmost(hwnd, on);
+}
 
 pub fn set_rect(_hwnd: HWND, _rect: [f32; 4], _scale: f32) {}
 

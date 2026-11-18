@@ -1884,7 +1884,9 @@ pub fn group_ix(g: &str) -> usize {
 
 fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     let mut v = vec![section(p, t!("Görünüm"))];
-    let (h, sys, dot) = (s.show_hidden, s.show_system_files, s.show_dot_files);
+    let (h, dot) = (s.show_hidden, s.show_dot_files);
+    #[cfg(windows)]
+    let sys = s.show_system_files;
     let pp = *p;
     v.push(expander(
         "hidden",
@@ -1896,14 +1898,11 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         move || {
             vec![
                 sub(&pp, t!("Gizli öğeleri göster"), Some(HINT_HIDDEN), switch("h1", &pp, h, move |_, cx| settings::update(cx, |s| s.show_hidden = !h))),
+                #[cfg(windows)]
                 sub(
                     &pp,
                     t!("Korunan işletim sistemi dosyalarını göster"),
-                    Some(if cfg!(target_os = "macos") {
-                        t!(".DS_Store, ._AppleDouble gibi gizli sistem dosyaları")
-                    } else {
-                        t!("desktop.ini, thumbs.db gibi sistem dosyaları")
-                    }),
+                    Some(t!("desktop.ini, thumbs.db gibi sistem dosyaları")),
                     switch("h2", &pp, sys, move |_, cx| settings::update(cx, |s| s.show_system_files = !sys)),
                 ),
                 sub(

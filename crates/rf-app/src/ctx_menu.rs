@@ -390,7 +390,7 @@ impl FolderView {
         v.push(Item::sub(t!("Gruplandır"), icon(L::ListTree), group_menu));
         // The folder's current view/sort/group can become the default for folders that have no
         // remembered layout of their own (Files' "Set as default" in the layout menu).
-        if !cx.global::<crate::settings::Settings>().sync_layout && matches!(self.location(), rf_core::Location::Path(_)) {
+        if matches!(self.location(), rf_core::Location::Path(_)) {
             v.push(Item::action(t!("Tüm klasörler için varsayılan yap"), icon(L::CopyCheck), act(me, |v, _, cx| v.make_layout_default(cx))));
         }
         v.push(Item::action(t!("Yenile"), icon(L::RotateCw), act(me, |v, _, cx| v.refresh(cx))).hint("Ctrl+R"));
@@ -643,7 +643,7 @@ impl FolderView {
                     Item::Separator,
                 ];
                 v.extend(order_items(&me, self.sort));
-                if !cx.global::<crate::settings::Settings>().sync_layout && matches!(self.location(), Location::Path(_)) {
+                if matches!(self.location(), Location::Path(_)) {
                     v.push(Item::Separator);
                     v.push(Item::action(t!("Tüm klasörler için varsayılan yap"), icon(L::CopyCheck), act(&me, |v, _, cx| v.make_layout_default(cx))));
                 }

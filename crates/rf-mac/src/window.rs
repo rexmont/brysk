@@ -136,8 +136,11 @@ pub fn bring_to_front(hwnd: HWND) {
 }
 
 pub fn bring_to_front_quietly(hwnd: HWND) {
+    // `orderFrontRegardless` is the one ordering that also works for a window of an app that
+    // is not active (DirectLook's preview over Brysk): it comes forward without taking the
+    // keyboard, which stays in the file list so the arrow keys keep stepping the selection.
     if let Some(w) = window(hwnd) {
-        w.orderFront(None);
+        w.orderFrontRegardless();
     }
 }
 

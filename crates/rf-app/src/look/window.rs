@@ -42,6 +42,8 @@ pub(crate) fn hwnd_of(window: &Window) -> isize {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     match HasWindowHandle::window_handle(window).map(|h| h.as_raw()) {
         Ok(RawWindowHandle::Win32(h)) => h.hwnd.get(),
+        // `rf_win::window`/`look::win` on macOS take the NSView pointer and reach its NSWindow.
+        Ok(RawWindowHandle::AppKit(h)) => h.ns_view.as_ptr() as isize,
         _ => 0,
     }
 }

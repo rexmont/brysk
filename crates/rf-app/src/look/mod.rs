@@ -106,7 +106,21 @@ impl LookManager {
         let path = PathBuf::from(path.to_string_lossy().replace('/', "\\"));
         if opts.pin {
             Self::pin_current(cx);
-        } else if Self::with_active(cx, |v, w, cx| v.set_path(path.clone(), w, cx)).is_some() {
+        } else if Self::with_active(cx, |v, w, cx| {
+            v.set_path(path.clone(), w, cx);
+            // macOS: it may be a preview window from an earlier Space press, left behind the
+            // main window; bring it forward again without taking the keyboard.
+            #[cfg(target_os = "macos")]
+            rf_win::window::bring_to_front_quietly(window::hwnd_of(w));
+        })
+        .is_some()
+        {
+            #[cfg(target_os = "macos")]
+            {
+                let wanted = opts.topmost || cx.global::<LookSettings>().look_topmost;
+                Self::with_active(cx, |v, _, cx| v.set_topmost(wanted, cx));
+            }
+            #[cfg(not(target_os = "macos"))]
             if opts.topmost {
                 Self::with_active(cx, |v, _, cx| v.set_topmost(true, cx));
             }
@@ -156,6 +170,12 @@ impl LookManager {
             cx.new(|cx| LookWindow::new(path, topmost, viewer, prepared, window, cx))
         }) {
             Ok(h) => {
+                // The preview belongs to the separate DirectLook app: ordering its window front
+                // makes it appear above Brysk even when DirectLook is not the active app. The
+                // keyboard is not taken (unless "focus on open" is on), so arrow keys keep
+                // stepping the selection in the file list.
+                #[cfg(target_os = "macos")]
+                let _ = h.update(cx, |_, window, _| rf_win::window::bring_to_front_quietly(window::hwnd_of(window)));
                 Self::global(cx).active = Some(h);
                 Self::report_windows(cx);
                 if slow {

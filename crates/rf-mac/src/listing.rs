@@ -1,9 +1,11 @@
 //! Directory listing, the macOS half of `rf-win::listing`.
 //!
 //! The list is built from `readdir` + `lstat`, with the same `rf_core::Entry` shape the UI
-//! already understands. Hidden means "name starts with a dot" (the Finder rule) and a
-//! symbolic link is marked like a junction is on Windows. Packages (`.app`, `.photoslibrary`)
-//! stay folders the user can enter, exactly as they are on disk.
+//! already understands. Hidden means "name starts with a dot" (the Finder rule); macOS has no
+//! separate "protected operating system file" attribute a dotfile should carry, so `.git` and
+//! `.config` show with "show hidden items" alone. A symbolic link is marked like a junction is
+//! on Windows. Packages (`.app`, `.photoslibrary`) stay folders the user can enter, exactly as
+//! they are on disk.
 
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -49,7 +51,7 @@ fn entry_of(name: &str, md: &std::fs::Metadata) -> Entry {
     let is_dir = md.is_dir();
     let mut at = 0u32;
     if name.starts_with('.') {
-        at |= attrs::HIDDEN | attrs::SYSTEM;
+        at |= attrs::HIDDEN;
     }
     if is_dir {
         at |= attrs::DIRECTORY;
@@ -120,5 +122,26 @@ pub fn stat_entry(dir: &Path, name: &str) -> Result<Option<Entry>, ListError> {
         Ok(md) => Ok(Some(entry_of(name, &md))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(errno(&e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_user_dot_folder_is_hidden_not_a_system_file() {
+        let d = std::env::temp_dir().join(format!("rf-mac-dot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join(".git")).unwrap();
+        std::fs::write(d.join("visible.txt"), b"x").unwrap();
+        let mut out = Vec::new();
+        list_dir(&d, 16, &|| false, &mut |b| out.extend(b)).unwrap();
+        let git = out.iter().find(|e| e.name.as_ref() == ".git").expect(".git is listed");
+        assert!(git.is_hidden(), "a dot folder is hidden");
+        assert!(!git.is_system(), "but it is not a protected system file");
+        let plain = out.iter().find(|e| e.name.as_ref() == "visible.txt").unwrap();
+        assert!(!plain.is_hidden());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

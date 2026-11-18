@@ -7,8 +7,8 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Signed macOS updates for Brysk.</description>
     <item>
       <title>Brysk 0.1.0-alpha.1</title>
-      <pubDate>Wed, 18 Nov 2026 15:14:02 GMT</pubDate>
-      <sparkle:version>2</sparkle:version>
+      <pubDate>Wed, 18 Nov 2026 17:59:27 GMT</pubDate>
+      <sparkle:version>3</sparkle:version>
       <sparkle:shortVersionString>0.1.0-alpha.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <description sparkle:descriptionFormat="plain-text">Initial alpha release of Brysk, a Rust file manager extensively reworked and extended for macOS. Early software: expect rough edges and report issues.
@@ -18,16 +18,16 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 - DirectLook previews for images, video, PDFs, text and archives, with sharper image loading.
 - Fast name search, asynchronous listing and thumbnails, and memory/performance improvements.
 - Optional Finder Dock-click replacement that works after Quit through a small background helper.
-- Signed in-app updates, standard ⌘Q to Quit, and HyperSearch shortcut/focus fixes.
+- Signed in-app updates, standard ⌘Q to Quit, an optional menu-bar icon (off by default), and HyperSearch shortcut/focus fixes.
 
 Download: Developer ID-signed and notarized universal DMG for Apple silicon and Intel. Requires macOS 13 or later.
 
 Based on rustyfiles by Özer Güzel, with extensive macOS-specific changes. See the README for features and known limits.</description>
       <sparkle:fullReleaseNotesLink>https://github.com/rexmont/brysk/releases/tag/v0.1.0-alpha.1</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/rexmont/brysk/releases/download/v0.1.0-alpha.1/Brysk-0.1.0-alpha.1.dmg" length="79376167" type="application/octet-stream" sparkle:edSignature="fJSgRHoATFq1YsvTTZauKXiIgpscgAFY1NGeRTEdovr4v/WlN9mE/W6hgASPtF8p8wioCILpO01KRpVEgCJ1AA=="></enclosure>
+      <enclosure url="https://github.com/rexmont/brysk/releases/download/v0.1.0-alpha.1/Brysk-0.1.0-alpha.1.dmg" length="78699909" type="application/octet-stream" sparkle:edSignature="ZWFgI4//6x3NZKhsWY/DuvivBw/HAwPjFidVzRWguNaFFLMeHVTkVHB+9KUVx4gDbmSxKP6n7kjUJHvoAQQ/Dw=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: TywDrTX2pfFt1bdxNXyuumQlbLOhSDWYIucK7rwH0lmqHQi/1fNalXqw/vh9zBDjWO2Rtz+zRDmGMRgH3L9yBw==
-length: 2309
+edSignature: ZfNviiycHy5YBHSVvHvf0Cx0Cp8KknWsf/T/UHIxFeHKcgSDJo+z/Z+rN/SkqTbNSIZZFyhoUKd2jucfcIgEAw==
+length: 2353
 -->

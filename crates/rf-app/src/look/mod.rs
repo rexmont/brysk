@@ -239,6 +239,26 @@ impl LookManager {
         Self::report_windows(cx);
     }
 
+    pub fn toggle_pin(h: WindowHandle<LookWindow>, cx: &mut App) {
+        let Ok(pinned) = h.read_with(cx, |v, _| v.pinned) else { return };
+        if pinned {
+            // Preserve another following preview before this window takes its place.
+            Self::pin_current(cx);
+            Self::global(cx).pinned.retain(|p| *p != h);
+            Self::global(cx).active = Some(h);
+        } else {
+            if Self::global(cx).active == Some(h) {
+                Self::global(cx).active = None;
+            }
+            Self::global(cx).pinned.push(h);
+        }
+        let _ = h.update(cx, |v, _, cx| {
+            v.pinned = !pinned;
+            cx.notify();
+        });
+        Self::report_windows(cx);
+    }
+
     pub fn is_visible(cx: &mut App) -> bool {
         Self::with_active(cx, |_, _, _| ()).is_some()
     }

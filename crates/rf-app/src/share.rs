@@ -10,6 +10,11 @@ use crate::t;
 
 /// Opens the share sheet for `paths` over the window `hwnd`.
 pub fn open(hwnd: isize, paths: Vec<PathBuf>, cx: &mut App) {
+    open_at(hwnd, paths, None, cx);
+}
+
+/// `anchor` is the pressed control's rectangle in window coordinates, from the top left.
+pub fn open_at(hwnd: isize, paths: Vec<PathBuf>, anchor: Option<[f32; 4]>, cx: &mut App) {
     if paths.is_empty() || hwnd == 0 {
         return;
     }
@@ -20,7 +25,11 @@ pub fn open(hwnd: isize, paths: Vec<PathBuf>, cx: &mut App) {
     let ready = cx.background_executor().spawn(async move { rf_win::share::prepare(&paths) });
     cx.spawn(async move |_| match ready.await {
         Ok(items) => {
-            if let Err(e) = rf_win::share::show(hwnd, items, &title) {
+            #[cfg(target_os = "macos")]
+            let shown = rf_win::share::show_at(hwnd, items, &title, anchor);
+            #[cfg(not(target_os = "macos"))]
+            let shown = { let _ = anchor; rf_win::share::show(hwnd, items, &title) };
+            if let Err(e) = shown {
                 log::warn!("share: {e:#}");
             }
         }

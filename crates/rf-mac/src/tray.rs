@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{NSImage, NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength};
+use objc2_app_kit::{NSFontWeightMedium, NSImage, NSImageScaling, NSImageSymbolConfiguration, NSImageSymbolScale, NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +113,10 @@ pub fn show(labels: Labels) {
         let status = bar.statusItemWithLength(NSVariableStatusItemLength);
         if let Some(button) = status.button(mtm) {
             if let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(&NSString::from_str("folder"), None) {
+                // Let AppKit render the vector at menu-bar size and the display's backing scale.
+                let config = NSImageSymbolConfiguration::configurationWithPointSize_weight_scale(18., unsafe { NSFontWeightMedium }, NSImageSymbolScale::Medium);
+                button.setSymbolConfiguration(Some(&config));
+                button.setImageScaling(NSImageScaling::ScaleNone);
                 image.setTemplate(true);
                 button.setImage(Some(&image));
             }

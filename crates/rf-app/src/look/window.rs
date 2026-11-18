@@ -2,6 +2,8 @@
 //! durunca gizlenir), eylem düğmeleri, tam ekran, sabitleme.
 
 use std::path::PathBuf;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui_kit::assets::IconName as L;
@@ -57,6 +59,7 @@ pub struct LookWindow {
     pub(crate) overlay_titlebar: bool,
     /// The bar over the content is on the screen (only for `overlay_titlebar`; the other bar is always there).
     chrome_shown: bool,
+    share_anchor: Rc<Cell<Option<Bounds<Pixels>>>>,
     more_open: bool,
     pub(crate) busy: bool,
     /// Gövdeden sürükleme dosyayı dışarı sürükler (kendi sürüklemesi olmayan içerikte).
@@ -201,6 +204,7 @@ impl LookWindow {
             topmost,
             overlay_titlebar: false,
             chrome_shown: false,
+            share_anchor: Rc::new(Cell::new(None)),
             more_open: false,
             busy: false,
             drag_by_body: true,
@@ -402,10 +406,8 @@ impl LookWindow {
     /// The native share sheet for the shown file, over DirectLook's window (`rf_win::share`, issue 48).
     fn share(&self, window: &Window, cx: &mut App) {
         let hwnd = hwnd_of(window);
-        // macOS' sheet uses the key window; `share::open` only refuses a zero placeholder.
-        #[cfg(target_os = "macos")]
-        let hwnd = if hwnd == 0 { 1 } else { hwnd };
-        crate::share::open(hwnd, vec![self.path.clone()], cx);
+        let anchor = self.share_anchor.get().map(|b| [b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into()]);
+        crate::share::open_at(hwnd, vec![self.path.clone()], anchor, cx);
     }
 
     fn open_with(&self) {
@@ -466,16 +468,24 @@ impl LookWindow {
         let buttons = h_flex()
             .gap_0p5()
             .items_center()
-            .child(self.button("look-pin", if self.pinned { L::PinOff } else { L::Pin }, t!("Sabitle").into(), self.pinned, p).on_click(
-                cx.listener(|_, _, _, cx| {
-                    cx.defer(super::LookManager::pin_current);
+            .child(self.button("look-pin", if self.pinned { L::PinOff } else { L::Pin }, if self.pinned { t!("Sabitlemeyi kaldır") } else { t!("Sabitle") }.into(), self.pinned, p).on_click(
+                cx.listener(|_, _, window, cx| {
+                    if let Some(h) = window.window_handle().downcast::<LookWindow>() {
+                        cx.defer(move |cx| super::LookManager::toggle_pin(h, cx));
+                    }
                 }),
             ))
             .child(self.button("look-top", L::Layers, t!("Üstte tut").into(), self.topmost, p).on_click(cx.listener(|v, _, _, cx| {
                 let on = !v.topmost;
                 v.set_topmost(on, cx);
             })))
-            .child(self.button("look-share", L::Share, t!("Paylaş").into(), false, p).on_click(cx.listener(|v, _, window, cx| v.share(window, cx))))
+            .child(self.button("look-share", L::Share, t!("Paylaş").into(), false, p)
+                .relative()
+                .child({
+                    let anchor = self.share_anchor.clone();
+                    canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().size_full()
+                })
+                .on_click(cx.listener(|v, _, window, cx| v.share(window, cx))))
             .child(
                 self.button("look-openwith", L::SquareArrowOutUpRight, t!("Birlikte aç").into(), false, p)
                     .on_click(cx.listener(|v, _, _, _| v.open_with())),

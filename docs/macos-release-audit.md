@@ -14,6 +14,9 @@ Reviewed the two supplied audits against `a74d503` on 2026-11-18. Their snapshot
 - macOS search debounces recursive name searches while typing; Home searches the user's home directory. Dotfiles are no longer incorrectly marked SYSTEM in search/tag results.
 - Packages are picked as single items, sorted with files, and retain their suffix during bulk rename. Common document/installer package suffixes were added. Directory symlinks navigate inside Brysk. Finder icons for folders, links and special document types are cached per path. iCloud uses its actual macOS folder.
 - Direct Look uses native ImageIO decoding on dedicated workers. A sharp 2048-pixel representation arrives before the original (still capped at the existing 8192-pixel GPU limit). Cancelled navigation requests are skipped without discarding requests for live pinned windows; originals have their own worker. Probing and preparing macOS previews run off the UI thread. Window resizing after asynchronous preparation and the native toolbar-hover check replace macOS stubs.
+- Icon columns distribute spare width evenly, including when the preview pane is visible; marquee hit testing uses the same column widths. Paste/rename reselection scrolls to the item's grid row rather than treating its file index as a row index. Copy naming remains `Name copy.ext`, then `Name copy 2.ext`, as confirmed by the user.
+- DirectLook's pin button toggles the window it belongs to. Unpinning makes it the following preview and preserves any previous following preview as pinned. Share uses the owning window and the toolbar button's measured rectangle for the native popover anchor.
+- In-app file drag previews include cached icons/thumbnails and names; multiple items use a stack and count badge. Source items remain visible. Settings search results reveal the matching row, open its expander, and briefly highlight it before fading. The menu-bar SF Symbol uses an explicit 18-point medium configuration without bitmap scaling.
 
 ## Already fixed at the starting commit
 
@@ -22,6 +25,8 @@ Packages launch as applications/documents and offer Show Package Contents. App c
 ## Deferred
 
 These are real gaps, but should not be grouped with silent file damage:
+
+- The system capture indicator uses a separate macOS layout from the custom traffic-light positions. No supported small positioning adjustment was found; the app's traffic-light alignment is preserved.
 
 - Spotlight content search and a This Mac/Home/current-folder scope selector. Current search is explicitly recursive **name** search.
 - Native Finder aliases, Show Original, Recents, AirDrop and a populated Open With application list.
@@ -34,7 +39,8 @@ Do not advertise the deferred features as supported. If full Finder metadata pre
 ## Validation and remaining checks
 
 - Both application binaries build on macOS.
-- macOS backend: 82 tests passed, one manual timing benchmark ignored by default.
+- macOS backend: 84 tests passed, one manual timing benchmark ignored by default. This includes two share-anchor coordinate tests and the existing same-folder file/folder copy-name tests.
+- Four focused grid-layout and settings-highlight checks passed using the actual source functions. The queued changes build into an ad-hoc signed `target/Brysk.app`; signature verification passed. UI verification of pin/unpin, Share placement, drag appearance, settings reveal/fade and menu-bar sharpness is left to the user as requested.
 - Archive unit suite: 66 passed, one ignored; three additional Unix package/security integration tests passed.
 - Core suite: 390 passed and 57 failed. The identical 57 failures reproduce at the untouched starting commit; they concern existing Windows-path/platform assumptions. No new core failures were introduced.
 - The app unit-test target has 13 macOS compile errors in existing Windows-only test code. The identical errors reproduce at the starting commit. UI smoke tests and a standalone shortcut assertion check cover the touched app behavior instead.

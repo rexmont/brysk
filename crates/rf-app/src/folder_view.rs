@@ -403,6 +403,7 @@ pub struct FolderView {
     pub(crate) images: Entity<ImageCache>,
     pub view_mode: ViewMode,
     grid_cols: usize,
+    grid_cell_width: Pixels,
     /// Index into GRID_SIZES.
     grid_size: u8,
     /// Index into ROW_SIZES (Details row height), the "Size" slider in Details.
@@ -603,6 +604,7 @@ impl FolderView {
                 crate::settings::DefaultView::Columns => ViewMode::Columns,
             },
             grid_cols: 1,
+            grid_cell_width: px(GRID_SIZES[DEFAULT_GRID_SIZE as usize].0),
             grid_size: DEFAULT_GRID_SIZE,
             row_size: DEFAULT_ROW_SIZE,
             col_drag: None,
@@ -1683,7 +1685,7 @@ impl FolderView {
                 }
                 self.cursor = found.first().copied();
                 self.anchor = found.first().copied();
-                self.scroll.scroll_to_item(self.list_row(found[0]), ScrollStrategy::Center);
+                self.scroll.scroll_to_item(self.scroll_row(found[0]), ScrollStrategy::Nearest);
                 cx.notify();
             }
             // keep waiting for the rest while the watcher catches up
@@ -1700,7 +1702,7 @@ impl FolderView {
         if let Some(name) = self.reselect.take() {
             if let Some(vi) = self.visible.iter().position(|&i| &*self.entries[i as usize].name == name) {
                 self.select_only(vi);
-                self.scroll.scroll_to_item(self.list_row(vi), ScrollStrategy::Nearest);
+                self.scroll.scroll_to_item(self.scroll_row(vi), ScrollStrategy::Nearest);
                 if std::mem::take(&mut self.rename_after_load) {
                     self.pending_rename = true;
                 }
@@ -2123,12 +2125,54 @@ impl FolderView {
 }
 
 #[cfg(target_os = "macos")]
-struct FileDragGhost(String);
+struct FileDragItem {
+    image: Option<Arc<RenderImage>>,
+    category: Category,
+    label: String,
+    link: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl FileDragItem {
+    fn visual(&self, size: Pixels, p: &Palette) -> AnyElement {
+        let icon = match &self.image {
+            Some(image) => img(image.clone()).size(size).object_fit(ObjectFit::Contain).into_any_element(),
+            None => Icon::new(icons::icon_for(self.category)).size(size).text_color(theme::kind_color(self.category, p.dark)).into_any_element(),
+        };
+        link_marked(icon, size, self.link)
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct FileDragGhost {
+    items: Vec<FileDragItem>,
+    count: usize,
+    tiles: bool,
+    width: Pixels,
+    height: Pixels,
+    icon_size: Pixels,
+}
 
 #[cfg(target_os = "macos")]
 impl Render for FileDragGhost {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().px_3().py_1().rounded_md().bg(rgb(0x303030)).text_color(white()).text_sm().child(self.0.clone())
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::for_window(window);
+        let stacked = self.items.len().saturating_sub(1) as f32 * 5.;
+        let visual = div().relative().w(self.icon_size + px(stacked)).h(self.icon_size + px(stacked)).flex_shrink_0()
+            .children(self.items.iter().enumerate().rev().map(|(i, item)| {
+                div().absolute().left(px(i as f32 * 5.)).top(px(i as f32 * 5.)).opacity(0.85).child(item.visual(self.icon_size, &p))
+            }))
+            .when(self.count > 1, |d| d.child(div().absolute().right(px(-6.)).top(px(-5.)).min_w(px(20.)).h(px(20.)).px_1().rounded_full().bg(rgb(0xe53e3e)).text_color(white()).text_xs().flex().items_center().justify_center().child(self.count.to_string())));
+        let label = div().min_w_0().px_1().rounded(px(3.)).bg(p.accent).text_color(p.accent_text)
+            .child(self.items.first().map(|i| crate::rtl::display_text(&i.label)).unwrap_or_default());
+        if self.tiles {
+            v_flex().w(self.width).h(self.height).p_1().gap_1().items_center()
+                .child(div().h(self.icon_size + px(4.)).child(visual))
+                .child(label.text_xs().text_center().line_clamp(2).text_ellipsis()).into_any_element()
+        } else {
+            h_flex().w(self.width).h(self.height).px_2().gap_2().items_center()
+                .child(visual).child(label.text_sm().whitespace_nowrap().overflow_hidden().text_ellipsis()).into_any_element()
+        }
     }
 }
 
@@ -2215,9 +2259,15 @@ impl FolderView {
         self.view_mode == ViewMode::Details && !self.rows.is_empty()
     }
 
-    /// Details-list row for a visible index (accounts for group headers).
-    fn list_row(&self, vi: usize) -> usize {
-        if self.grouped() { self.row_of_vi.get(vi).copied().unwrap_or(vi) } else { vi }
+    /// Virtual-list row for a visible item, including grid columns and group headers.
+    fn scroll_row(&self, vi: usize) -> usize {
+        if self.view_mode == ViewMode::Grid {
+            vi / self.grid_cols.max(1)
+        } else if self.grouped() {
+            self.row_of_vi.get(vi).copied().unwrap_or(vi)
+        } else {
+            vi
+        }
     }
 
     pub fn set_query(&mut self, q: String, cx: &mut Context<Self>) {
@@ -2311,10 +2361,10 @@ impl FolderView {
         } else {
             self.select_only(next);
         }
-        let row = if self.view_mode == ViewMode::Grid { next / self.grid_cols.max(1) } else { self.list_row(next) };
+        let row = self.scroll_row(next);
         // After the user scrolls the selected item out of view, an arrow key must bring the
         // selection back into sight: centre it rather than scrolling by one edge row.
-        let old_row = self.cursor.map(|c| if self.view_mode == ViewMode::Grid { c / self.grid_cols.max(1) } else { self.list_row(c) }).unwrap_or(row);
+        let old_row = self.cursor.map(|c| self.scroll_row(c)).unwrap_or(row);
         let strategy = if self.row_is_visible(old_row) { ScrollStrategy::Nearest } else { ScrollStrategy::Center };
         self.scroll.scroll_to_item(row, strategy);
         cx.notify();
@@ -2446,7 +2496,7 @@ impl FolderView {
     fn render_grid_rows(&mut self, range: std::ops::Range<usize>, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let p = Palette::for_window(window);
         let cols = self.grid_cols.max(1);
-        let (tile_w, row_h, thumb_px) = (self.grid_tile_w(), self.grid_row_h(), self.grid_thumb_px());
+        let (tile_w, row_h, thumb_px) = (self.grid_cell_width, self.grid_row_h(), self.grid_thumb_px());
         let style = self.grid_style;
         let visual_px = match style {
             GridStyle::Tiles => px(thumb_px as f32 * 0.75),
@@ -2572,6 +2622,7 @@ impl FolderView {
                 let cell = base
                     .id(("cell", vi))
                     .w(tile_w)
+                    .flex_shrink_0()
                     .h(row_h - px(4.))
                     .rounded(theme::RADIUS)
                     // tiles: quiet fill + a thin accent outline (a pill would read as a crop)
@@ -2703,22 +2754,33 @@ impl FolderView {
             if self.renaming.is_some() || self.picking || !matches!(self.location(), Location::Path(_)) {
                 return element;
             }
-            let indices: Vec<u32> = if self.selected.contains(&ei) { self.selected.iter().copied().collect() } else { vec![ei] };
+            let indices: Vec<u32> = std::iter::once(ei).chain(self.visible.iter().copied().filter(|&i| i != ei && self.selected.contains(&ei) && self.selected.contains(&i))).collect();
             let files = FileDragPaths::new(indices.iter().filter_map(|&i| Some((self.path_of(i)?, self.entries[i as usize].is_dir()))));
             let paths = ExternalPaths(files.entries().iter().map(|(p, _)| p.clone()).collect());
             let me = cx.entity().downgrade();
             element
-                .on_drag(paths, move |paths, _, _, cx| {
-                    let _ = me.update(cx, |v, _| {
+                .on_drag(paths, move |_, offset, _, cx| {
+                    let ghost = me.update(cx, |v, cx| {
                         v.drag_origin = None;
                         v.slow_click = None;
+                        let settings = cx.global::<crate::settings::Settings>();
+                        let (thumbs, show_ext) = (settings.show_thumbnails, settings.show_extensions);
+                        let grid = v.view_mode == ViewMode::Grid;
+                        let tiles = grid && v.grid_style == GridStyle::Tiles;
+                        let icon_size = if tiles { px(v.grid_thumb_px() as f32 * 0.75) } else if grid && v.grid_style == GridStyle::Cards { px(60.) } else { px(16.) };
+                        let items = indices.iter().take(3).filter_map(|&i| {
+                            let e = v.entries.get(i as usize)?;
+                            let dir = v.parent_of(i)?;
+                            let image = v.images.update(cx, |cache, cx| if grid && thumbs { cache.thumbnail(dir, e, v.grid_thumb_px(), cx) } else { cache.icon(dir, e, cx) });
+                            Some(FileDragItem { image, category: icons::category(e), label: row_name(e, show_ext, v.renamed.as_ref()), link: e.link })
+                        }).collect();
+                        FileDragGhost {
+                            items, count: indices.len(), tiles, icon_size,
+                            width: if grid { v.grid_cell_width } else { px(300.).max(offset.x + px(100.)) },
+                            height: if grid { v.grid_row_h() - px(4.) } else if v.view_mode == ViewMode::Columns { px(28.) } else { v.row_h() },
+                        }
                     });
-                    let label = if paths.paths().len() == 1 {
-                        paths.paths()[0].file_name().unwrap_or_default().to_string_lossy().into_owned()
-                    } else {
-                        crate::i18n::items(paths.paths().len())
-                    };
-                    cx.new(|_| FileDragGhost(label))
+                    cx.new(|_| ghost.unwrap_or(FileDragGhost { items: Vec::new(), count: 0, tiles: false, width: px(1.), height: px(1.), icon_size: px(16.) }))
                 })
                 .external_drag_payload(move |_: &ExternalPaths, _, _| Some(ExternalDragPayload::Files(files.clone())))
         }
@@ -2793,7 +2855,7 @@ impl FolderView {
                 ViewMode::Columns => {}
                 ViewMode::Grid => {
                     let (pt, pl) = (8.0, 6.0);
-                    let cw = f32::from(self.grid_tile_w() + GRID_GAP);
+                    let cw = f32::from(self.grid_cell_width + GRID_GAP);
                     let rh = f32::from(self.grid_row_h());
                     let cols = self.grid_cols.max(1);
                     if y1 >= pt && x1 >= pl {
@@ -2907,7 +2969,7 @@ impl FolderView {
             let name = rf_core::entry::fold_case(self.entries[self.visible[vi] as usize].shown());
             if name.starts_with(&needle) {
                 self.select_only(vi);
-                let row = if self.view_mode == ViewMode::Grid { vi / self.grid_cols.max(1) } else { self.list_row(vi) };
+                let row = self.scroll_row(vi);
                 self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
                 cx.notify();
                 cx.stop_propagation();
@@ -4028,9 +4090,9 @@ impl FolderView {
         } else if self.view_mode == ViewMode::Columns {
             self.render_columns(p, cx)
         } else if self.view_mode == ViewMode::Grid {
-            let avail = self.content_width - px(12.);
-            let cols = ((avail / (self.grid_tile_w() + GRID_GAP)).floor() as usize).max(1);
+            let (cols, cell_width) = grid_layout(f32::from(self.content_width) - 12., f32::from(self.grid_tile_w()), f32::from(GRID_GAP));
             self.grid_cols = cols;
+            self.grid_cell_width = px(cell_width);
             let rows = count.div_ceil(cols);
             list_body = true;
             uniform_list("grid", rows, cx.processor(|this, range, window, cx| this.render_grid_rows(range, window, cx)))
@@ -4719,6 +4781,51 @@ fn static_column(
         }
     };
     div().w(COL_W).flex_shrink_0().h_full().border_r_1().border_color(p.divider).child(body)
+}
+
+/// Fill the row with equal column slots; partial rows keep those same column positions.
+fn grid_layout(avail: f32, min_width: f32, gap: f32) -> (usize, f32) {
+    let avail = avail.max(1.);
+    let cols = ((avail + gap) / (min_width + gap)).floor().max(1.) as usize;
+    (cols, (avail - gap * (cols - 1) as f32) / cols as f32)
+}
+
+#[cfg(test)]
+mod grid_layout_tests {
+    use super::grid_layout;
+
+    #[test]
+    fn columns_fill_the_available_width_at_every_icon_size() {
+        for min_width in [76., 92., 124., 172., 236., 240., 300.] {
+            for avail in [1., 40., 124., 252., 628., 734., 746., 1000., 1800.] {
+                let (cols, width) = grid_layout(avail, min_width, 4.);
+                assert!(cols >= 1);
+                assert!(width > 0.);
+                assert!((cols as f32 * width + (cols - 1) as f32 * 4. - avail).abs() < 0.001);
+                assert!(width >= min_width || cols == 1);
+                assert!((cols + 1) as f32 * min_width + cols as f32 * 4. > avail);
+            }
+        }
+        assert_eq!(grid_layout(0., 124., 4.), (1, 1.));
+    }
+
+    #[test]
+    fn exact_fit_does_not_require_a_trailing_gap() {
+        assert_eq!(grid_layout(636., 124., 4.), (5, 124.));
+        assert_eq!(grid_layout(635., 124., 4.).0, 4);
+    }
+
+    #[test]
+    fn rightmost_hit_testing_uses_the_expanded_column_slots() {
+        let (cols, width) = grid_layout(734., 124., 4.);
+        assert_eq!(cols, 5);
+        let stride = width + 4.;
+        for col in 0..cols {
+            let center = col as f32 * stride + width / 2.;
+            assert_eq!((center / stride) as usize, col);
+        }
+        assert_eq!(((734. - 1.) / stride) as usize, cols - 1);
+    }
 }
 
 const GRID_GAP: Pixels = px(4.);

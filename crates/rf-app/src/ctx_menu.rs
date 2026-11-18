@@ -493,13 +493,9 @@ impl FolderView {
         }
     }
 
-    /// The share sheet for the selection (`rf_win::share`: the context menu's verb failed, issue 48). Windows anchors it to the
-    /// window's HWND; macOS uses the key window, and `hwnd_of` has no handle to give there, so a placeholder lets the sheet open.
+    /// The native share sheet for the selection, over its owning window.
     pub(crate) fn share(&self, window: &Window, cx: &mut App) {
         let hwnd = crate::look::window::hwnd_of(window);
-        // (macOS' sheet ignores the handle, but `share::open` refuses a zero one)
-        #[cfg(target_os = "macos")]
-        let hwnd = if hwnd == 0 { 1 } else { hwnd };
         crate::share::open(hwnd, self.selection_paths(), cx);
     }
 

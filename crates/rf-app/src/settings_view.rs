@@ -98,6 +98,10 @@ struct Ui {
     /// Bumped when another page is opened: the page's scroll container gets a new id, so the
     /// new page starts at the top instead of inheriting the old page's offset.
     scroll_gen: u64,
+    scroll: ScrollHandle,
+    reveal: Option<SettingReveal>,
+    reveal_gen: u64,
+    reveal_pending: bool,
 }
 impl Global for Ui {}
 
@@ -115,7 +119,7 @@ pub(crate) fn nav_is_strip(pane_w: f32) -> bool {
 
 fn ui(cx: &mut App) -> &mut Ui {
     if !cx.has_global::<Ui>() {
-        cx.set_global(Ui { page: Page::General, open: HashSet::new(), search: None, hg_focus: Vec::new(), pane_w: 0.0, scroll_gen: 0 });
+        cx.set_global(Ui { page: Page::General, open: HashSet::new(), search: None, hg_focus: Vec::new(), pane_w: 0.0, scroll_gen: 0, scroll: ScrollHandle::new(), reveal: None, reveal_gen: 0, reveal_pending: false });
     }
     cx.global_mut::<Ui>()
 }
@@ -130,10 +134,36 @@ struct Found {
     expander: Option<&'static str>,
 }
 
+#[derive(Clone)]
+struct SettingReveal {
+    title: String,
+    anchor: ScrollAnchor,
+    generation: u64,
+}
+
 thread_local! {
     /// Some while the pages are being built to list their settings (see [`collect`]).
     static COLLECT: std::cell::RefCell<Option<Vec<Found>>> = const { std::cell::RefCell::new(None) };
     static COLLECT_AT: std::cell::Cell<(Page, Option<&'static str>)> = const { std::cell::Cell::new((Page::General, None)) };
+    static DRAW_REVEAL: std::cell::RefCell<Option<SettingReveal>> = const { std::cell::RefCell::new(None) };
+}
+
+fn reveal_setting(row: Div, title: &str, p: &Palette) -> Div {
+    let reveal = DRAW_REVEAL.with(|r| r.borrow().as_ref().filter(|r| r.title == title).cloned());
+    let Some(reveal) = reveal else { return row };
+    let accent = p.accent;
+    row.relative().child(
+        div().id(("settings-reveal", reveal.generation as usize)).absolute().inset_0()
+            .anchor_scroll(Some(reveal.anchor)).rounded(theme::RADIUS_SM)
+            .bg(accent).border_1().border_color(accent)
+            .with_animation("fade", Animation::new(std::time::Duration::from_millis(1800)), |d, t| {
+                d.opacity(reveal_opacity(t))
+            }),
+    )
+}
+
+fn reveal_opacity(progress: f32) -> f32 {
+    0.18 * (1. - ((progress - 0.25) / 0.75).clamp(0., 1.))
 }
 
 fn collecting() -> bool {
@@ -232,9 +262,12 @@ fn build_page(page: Page, p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyEle
 
 pub fn open_page(page: Page, cx: &mut App) {
     let u = ui(cx);
+    u.reveal = None;
+    u.reveal_pending = false;
     if u.page != page {
         u.page = page;
         u.scroll_gen = u.scroll_gen.wrapping_add(1);
+        u.scroll = ScrollHandle::new();
     }
 }
 
@@ -344,6 +377,7 @@ pub(crate) fn beside(control: AnyElement) -> Div {
 
 pub(crate) fn card_body(p: &Palette, icon: L, title: SharedString, desc: Option<SharedString>, control: Option<AnyElement>) -> Div {
     note_setting(&title, desc.as_deref());
+    let target_title = title.clone();
     h_flex()
         .min_h(px(64.))
         .px_4()
@@ -370,6 +404,7 @@ pub(crate) fn card_body(p: &Palette, icon: L, title: SharedString, desc: Option<
                 ),
         )
         .children(control.map(beside))
+        .map(|row| reveal_setting(row, &target_title, p))
 }
 
 pub(crate) fn shell(p: &Palette) -> Div {
@@ -437,6 +472,7 @@ fn sub(p: &Palette, title: &str, desc: Option<&str>, control: AnyElement) -> Any
                 .children(desc.map(|d| div().text_xs().text_color(p.text_secondary).child(d.to_string()))),
         )
         .child(beside(control))
+        .map(|row| reveal_setting(row, title, p))
         .into_any_element()
 }
 
@@ -538,7 +574,14 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
         );
     }
     let (title, body): (String, Vec<AnyElement>) = if query.is_empty() {
-        (PAGES.iter().find(|x| x.0 == page).map(|x| page_title(x.0, crate::i18n::t(x.2))).unwrap_or_default(), build_page(page, p, &s, cx))
+        DRAW_REVEAL.with(|r| *r.borrow_mut() = ui(cx).reveal.clone());
+        let body = build_page(page, p, &s, cx);
+        DRAW_REVEAL.with(|r| *r.borrow_mut() = None);
+        let u = ui(cx);
+        if std::mem::take(&mut u.reveal_pending) && let Some(reveal) = u.reveal.clone() {
+            reveal.anchor.scroll_to(window, cx);
+        }
+        (PAGES.iter().find(|x| x.0 == page).map(|x| page_title(x.0, crate::i18n::t(x.2))).unwrap_or_default(), body)
     } else {
         let found = matching(collect(p, &s, cx), &query);
         let mut rows: Vec<AnyElement> = Vec::new();
@@ -549,6 +592,7 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
             let (pg, key) = (f.page, f.expander);
             let page_label = PAGES.iter().find(|x| x.0 == pg).map(|x| crate::i18n::t(x.2)).unwrap_or_default();
             let search = search.clone();
+            let target_title = f.title.clone();
             rows.push(
                 shell(p)
                     .id(("set-found", i))
@@ -559,6 +603,10 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
                         if let Some(k) = key {
                             ui(cx).open.insert(k);
                         }
+                        let u = ui(cx);
+                        u.reveal_gen = u.reveal_gen.wrapping_add(1);
+                        u.reveal = Some(SettingReveal { title: target_title.clone(), anchor: ScrollAnchor::for_handle(u.scroll.clone()), generation: u.reveal_gen });
+                        u.reveal_pending = true;
                         search.update(cx, |s, cx| s.set_value("", window, cx));
                         window.refresh();
                     })
@@ -614,7 +662,7 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
         .child(
             // A new page (and returning to an earlier one) starts at the top: the scroll
             // container's id carries the page generation, so it cannot inherit the offset.
-            div().id(("settings-page", ui(cx).scroll_gen as usize)).flex_1().min_w_0().h_full().overflow_y_scroll().child(
+            div().id(("settings-page", ui(cx).scroll_gen as usize)).flex_1().min_w_0().h_full().overflow_y_scroll().track_scroll(&ui(cx).scroll).child(
                 v_flex()
                     .w_full()
                     .max_w(px(980.))
@@ -3460,6 +3508,19 @@ mod search_tests {
     use super::{COLLECT, COLLECT_AT, Found, PAGES, Page, matching};
     use crate::settings::Settings;
     use crate::theme::Palette;
+
+    #[test]
+    fn search_highlight_holds_then_fades_away() {
+        assert_eq!(super::reveal_opacity(0.), 0.18);
+        assert_eq!(super::reveal_opacity(0.25), 0.18);
+        let mut previous = 0.18;
+        for step in 26..=100 {
+            let opacity = super::reveal_opacity(step as f32 / 100.);
+            assert!((0. ..=previous).contains(&opacity));
+            previous = opacity;
+        }
+        assert_eq!(super::reveal_opacity(1.), 0.);
+    }
 
     #[test]
     fn settings_are_found_by_every_word_of_the_query() {

@@ -1444,8 +1444,18 @@ pub mod share {
         Ok(Prepared { paths: paths.to_vec() })
     }
 
-    /// The macOS share sheet (`NSSharingServicePicker`), anchored to the key window.
-    pub fn show(_hwnd: isize, items: Prepared, _title: &str) -> anyhow::Result<()> {
+    pub fn show(hwnd: isize, items: Prepared, title: &str) -> anyhow::Result<()> {
+        show_at(hwnd, items, title, None)
+    }
+
+    fn anchor_rect(bounds: NSRect, flipped: bool, anchor: Option<[f32; 4]>) -> NSRect {
+        let [x, y, w, h] = anchor.unwrap_or([bounds.size.width as f32 / 2., bounds.size.height as f32 / 2., 1., 1.]);
+        let y = if flipped { y as f64 } else { bounds.size.height - y as f64 - h as f64 };
+        NSRect::new(NSPoint::new(bounds.origin.x + x as f64, bounds.origin.y + y), NSSize::new(w as f64, h as f64))
+    }
+
+    /// Anchors the native picker to a control in the owning GPUI content view.
+    pub fn show_at(hwnd: isize, items: Prepared, _title: &str, anchor: Option<[f32; 4]>) -> anyhow::Result<()> {
         if items.paths.is_empty() {
             return Ok(());
         }
@@ -1457,16 +1467,36 @@ pub mod share {
             let array: &NSArray<AnyObject> = unsafe { &*(&*urls as *const NSArray<NSURL> as *const NSArray<AnyObject>) };
             let picker = unsafe { NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), array) };
             let app = NSApplication::sharedApplication(mtm);
-            let Some(window) = app.keyWindow() else { return };
-            let Some(view) = window.contentView() else { return };
-            unsafe {
-                picker.showRelativeToRect_ofView_preferredEdge(NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)), &view, NSRectEdge::MaxY);
-            }
+            // Resolve the handle among live windows: its owner may have closed while preparing.
+            let Some(view) = app.windows().iter().filter_map(|w| w.contentView()).find(|v| Retained::as_ptr(v) as isize == hwnd) else { return };
+            let rect = anchor_rect(view.bounds(), view.isFlipped(), anchor);
+            let edge = if view.isFlipped() { NSRectEdge::MaxY } else { NSRectEdge::MinY };
+            picker.showRelativeToRect_ofView_preferredEdge(rect, &view, edge);
             // The picker owns itself while its menu is up; leaking one small object per share
             // keeps it alive for the whole interaction.
             std::mem::forget(picker);
         });
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn toolbar_anchor_converts_from_top_left_in_both_view_orientations() {
+            let bounds = NSRect::new(NSPoint::new(5., 7.), NSSize::new(800., 600.));
+            let button = Some([650., 8., 28., 28.]);
+            assert_eq!(anchor_rect(bounds, true, button), NSRect::new(NSPoint::new(655., 15.), NSSize::new(28., 28.)));
+            assert_eq!(anchor_rect(bounds, false, button), NSRect::new(NSPoint::new(655., 571.), NSSize::new(28., 28.)));
+        }
+
+        #[test]
+        fn callers_without_a_control_anchor_use_the_window_center() {
+            let bounds = NSRect::new(NSPoint::new(0., 0.), NSSize::new(800., 600.));
+            let rect = anchor_rect(bounds, true, None);
+            assert_eq!(rect.origin, NSPoint::new(400., 300.));
+        }
     }
 }
 

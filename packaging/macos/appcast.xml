@@ -6,6 +6,16 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <link>https://github.com/rexmont/brysk/releases</link>
     <description>Signed macOS updates for Brysk.</description>
     <item>
+      <title>Brysk 0.1.1</title>
+      <pubDate>Wed, 18 Nov 2026 19:14:58 GMT</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <description sparkle:descriptionFormat="plain-text">Minor fixes.</description>
+      <sparkle:fullReleaseNotesLink>https://github.com/rexmont/brysk/releases/tag/v0.1.1</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/rexmont/brysk/releases/download/v0.1.1/Brysk-0.1.1.dmg" length="78736297" type="application/octet-stream" sparkle:edSignature="JqRb4rf8zzR5jkxYSz3NNAY0uCWDzdEWwydHveBmMEo4geTPpw68UX6YV84UAIA2rsZqADeTD1qJtjd0l4QZBg=="></enclosure>
+    </item>
+    <item>
       <title>Brysk 0.1.0</title>
       <pubDate>Wed, 18 Nov 2026 18:38:30 GMT</pubDate>
       <sparkle:version>4</sparkle:version>
@@ -28,6 +38,6 @@ Based on rustyfiles by Özer Güzel, with extensive macOS-specific changes. See 
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: NYXm3bRcuT/sHMLeFGbSJdjVt/72kr1Ed5jLV6IzXVbU2I4h8biYuKEoHTmlFf/+ygItxFY7+6QBH9VPsyq6Dw==
-length: 2196
+edSignature: P0nylFtSEaAUTTJhqj5qoODP0ZMIBul5SpOYBgtKJr+qFeo8PL2XC5klaNThsUKy2N3wbKepMZn99d1wbfzACQ==
+length: 2967
 -->

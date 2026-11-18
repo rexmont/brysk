@@ -51,7 +51,7 @@ impl Default for LookSettings {
         Self {
             look_system_wide: false,
             look_ignore_quicklook: false,
-            look_tray_icon: true,
+            look_tray_icon: cfg!(windows),
             look_backdrop: LookBackdrop::Mica,
             look_backdrop_color: None,
             look_topmost: true,

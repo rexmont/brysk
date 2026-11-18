@@ -53,8 +53,14 @@ fn open_settings() {
     });
 }
 
-/// DirectLook's own icon: when its setting is on and Brysk has none (Brysk running in
-/// the background has one, with the settings in its menu): one icon, not two.
+/// macOS has only Brysk's menu-bar item; DirectLook stays a background helper.
+#[cfg(target_os = "macos")]
+fn tray_wanted(_: &App) -> bool {
+    false
+}
+
+/// Windows retains DirectLook's optional standalone tray icon.
+#[cfg(not(target_os = "macos"))]
 fn tray_wanted(cx: &App) -> bool {
     cx.global::<LookSettings>().look_tray_icon && !cx.global::<crate::settings::Settings>().run_in_background
 }

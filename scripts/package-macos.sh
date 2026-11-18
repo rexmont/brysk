@@ -36,7 +36,7 @@ else
 fi
 
 # The licence and attribution must be sealed into both signed bundles. Copy them again here
-# so a stale or hand-built target/Brysk.app cannot produce a release without them.
+# so a stale or hand-built bundle cannot produce a release without them.
 for bundle in "$APP" "$APP/Contents/Helpers/DirectLook.app"; do
     mkdir -p "$bundle/Contents/Resources"
     cp LICENSE NOTICE "$bundle/Contents/Resources/"
@@ -60,7 +60,7 @@ ln -s /Applications "$STAGING/image/Applications"
 hdiutil create -quiet -volname Brysk -srcfolder "$STAGING/image" -format UDZO "$STAGING/Brysk.dmg"
 codesign --force --timestamp --sign "$IDENTITY" "$STAGING/Brysk.dmg"
 
-SUBMISSION="$STAGING/submission.json"
+SUBMISSION="dist/Brysk-$VERSION.submission.json"
 if ! xcrun notarytool submit "$STAGING/Brysk.dmg" --keychain-profile "$BRYSK_NOTARY_PROFILE" --wait \
         --output-format json > "$SUBMISSION"; then
     cat "$SUBMISSION" >&2
@@ -78,5 +78,5 @@ xcrun stapler validate "$STAGING/Brysk.dmg"
 spctl -a -vv -t open --context context:primary-signature "$STAGING/Brysk.dmg"
 hdiutil verify -quiet "$STAGING/Brysk.dmg"
 mv -f "$STAGING/Brysk.dmg" "$DMG"
-shasum -a 256 "$DMG" | tee "$DMG.sha256"
+(cd dist && shasum -a 256 "Brysk-$VERSION.dmg") | tee "$DMG.sha256"
 echo "$DMG"

@@ -2643,10 +2643,11 @@ fn look(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
         card(p, L::PictureInPicture, t!("Her zaman üstte"), None, lsw("look-top", p, l.look_topmost, |s, v| s.look_topmost = v)),
         #[cfg(windows)]
         card(p, L::PanelBottom, t!("Görev çubuğunda göster"), None, lsw("look-taskbar", p, l.look_show_in_taskbar, |s, v| s.look_show_in_taskbar = v)),
+        #[cfg(windows)]
         card(
             p,
             L::AppWindow,
-            if cfg!(target_os = "macos") { t!("Menü çubuğunda DirectLook simgesi") } else { t!("Bildirim alanında DirectLook simgesi") },
+            t!("Bildirim alanında DirectLook simgesi"),
             Some(t!("Brysk arka planda çalışırken gösterilmez: tek simge Brysk'ınkidir")),
             lsw("look-tray", p, l.look_tray_icon, |s, v| s.look_tray_icon = v),
         ),

@@ -79,6 +79,10 @@ pub fn spawn_checks(cx: &mut App, changed: impl Fn(&mut App) + 'static) {
         use futures::StreamExt;
         while let Some(event) = rx.next().await {
             cx.update(|cx| {
+                if matches!(event, Event::Failed(_) | Event::Cancelled) && matches!(state(), State::Installing) {
+                    rf_win::handover::GATE.resume();
+                    rf_win::finder_replace::resume_after_update_failure();
+                }
                 let installing = event == Event::InstallRequested;
                 let mut state = STATE.lock().unwrap();
                 *state = after_event(state.clone(), event);
@@ -98,6 +102,7 @@ fn after_event(state: State, event: Event) -> State {
         Event::Available(version) => State::Available(version),
         Event::UpToDate => State::UpToDate,
         Event::Failed(error) => State::Failed(error),
+        Event::Cancelled => State::Idle,
         Event::InstallRequested => State::Installing,
         Event::SessionFinished if matches!(state, State::Available(_) | State::Checking) => {
             State::Idle
@@ -144,6 +149,7 @@ fn prepare_install(cx: &mut App) {
     cx.spawn(async move |cx| {
         cx.background_executor()
             .spawn(async {
+                rf_win::finder_replace::stop_for_update();
                 rf_win::single_instance::send_to(
                     &crate::look::ipc::app_name(),
                     &crate::look::ipc::Msg::Quit.encode(),
@@ -182,6 +188,7 @@ mod tests {
 
     #[test]
     fn cancelled_sessions_clear_the_badge_but_keep_meaningful_results() {
+        assert_eq!(after_event(State::Installing, Event::Cancelled), State::Idle);
         assert_eq!(
             after_event(State::Available("2".into()), Event::SessionFinished),
             State::Idle

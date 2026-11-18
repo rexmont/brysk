@@ -18,7 +18,6 @@ pub enum TrayEvent {
     Open,
     NewWindow,
     Settings,
-    Close,
     Quit,
 }
 
@@ -28,7 +27,6 @@ pub struct Labels {
     pub open: String,
     pub new_window: String,
     pub settings: String,
-    pub close: String,
     pub quit: String,
 }
 
@@ -102,10 +100,6 @@ define_class!(
             fire(TrayEvent::Quit);
         }
 
-        #[unsafe(method(close:))]
-        fn close(&self, _sender: &AnyObject) {
-            fire(TrayEvent::Close);
-        }
     }
 );
 
@@ -142,10 +136,7 @@ pub fn show(labels: Labels) {
             menu.addItem(&item(&labels.settings, sel!(settings:), "", &target, mtm));
             menu.addItem(&NSMenuItem::separatorItem(mtm));
         }
-        if !labels.close.is_empty() {
-            menu.addItem(&item(&labels.close, sel!(close:), "q", &target, mtm));
-        }
-        menu.addItem(&item(&labels.quit, sel!(quit:), "", &target, mtm));
+        menu.addItem(&item(&labels.quit, sel!(quit:), "q", &target, mtm));
 
         let bar = NSStatusBar::systemStatusBar();
         let status = bar.statusItemWithLength(NSVariableStatusItemLength);

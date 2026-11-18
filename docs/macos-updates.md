@@ -8,8 +8,10 @@ Automatic checks can be turned off in About; downloading and installation requir
 the user's choice. Sparkle owns scheduling; Brysk does not poll for updates.
 
 Before relaunch, Brysk waits for running file operations through their completion
-notifications, saves the session, closes file-manager windows, and stops DirectLook
-and the index. Sparkle verifies the signed archive and handles replacement and
+notifications, saves the session, closes file-manager windows, and stops DirectLook,
+the Finder LaunchAgent and the index. Cancelled or failed installations resume the
+Finder helper; a successful relaunch registers the updated helper when opted in.
+Sparkle verifies the signed archive and handles replacement and
 relaunch. A bare Cargo binary cannot update itself. An app run from a DMG or an
 unwritable location receives Sparkle's normal move/authorization guidance.
 

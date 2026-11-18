@@ -26,8 +26,6 @@ fn labels() -> rf_win::tray::Labels {
         open: t!("Brysk'ı aç").into(),
         new_window: t!("Yeni pencere").into(),
         settings: t!("Ayarlar").into(),
-        #[cfg(target_os = "macos")]
-        close: crate::i18n::tx("Kapat", "Close").into(),
         quit: if cfg!(target_os = "macos") { crate::i18n::tx("Çık", "Quit") } else { t!("Çıkış") }.into(),
     }
 }
@@ -62,22 +60,7 @@ pub fn sync_tray(on: bool) {
     crate::look::ipc::send(crate::look::ipc::Msg::Reload, false);
 }
 
-/// Close the macOS interface while its menu-bar item and Finder redirection stay alive.
-pub(crate) fn close_app(cx: &mut App) {
-    #[cfg(target_os = "macos")]
-    cx.defer(|cx| {
-        QUITTING.store(false, Ordering::Relaxed);
-        crate::settings::update(cx, |s| s.run_in_background = true);
-        crate::workspace::save_all_sessions(cx);
-        for window in cx.windows() {
-            let _ = window.update(cx, |_, window, _| window.remove_window());
-        }
-    });
-    #[cfg(not(target_os = "macos"))]
-    crate::quit_when_idle(cx);
-}
-
-/// A deliberate full exit; the macOS Quit menu item has no default shortcut.
+/// A deliberate full exit; the Finder helper has an independent opt-in lifetime.
 pub(crate) fn quit_app(cx: &mut App) {
     #[cfg(target_os = "macos")]
     cx.defer(|cx| on_tray(rf_win::tray::TrayEvent::Quit, cx));
@@ -90,14 +73,11 @@ pub fn init(cx: &mut App) {
     #[cfg(target_os = "macos")]
     {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        rf_win::finder_replace::start(move |event| { let _ = tx.unbounded_send(event); });
+        rf_win::finder_replace::start(move || { let _ = tx.unbounded_send(()); });
         cx.spawn(async move |cx| {
             use futures::StreamExt;
-            while let Some(event) = rx.next().await {
-                cx.update(|cx| match event {
-                    rf_win::finder_replace::Event::Open => on_tray(rf_win::tray::TrayEvent::Open, cx),
-                    rf_win::finder_replace::Event::StatusChanged => cx.refresh_windows(),
-                });
+            while rx.next().await.is_some() {
+                cx.update(|cx| cx.refresh_windows());
             }
         }).detach();
     }
@@ -135,8 +115,6 @@ fn on_tray(e: rf_win::tray::TrayEvent, cx: &mut App) {
         TrayEvent::Settings => {
             crate::workspace::show_settings(cx);
         }
-        #[cfg(target_os = "macos")]
-        TrayEvent::Close => close_app(cx),
         TrayEvent::Quit => {
             QUITTING.store(true, Ordering::Relaxed);
             let windows = cx.windows();

@@ -21,7 +21,6 @@ pub fn install(cx: &mut App) {
         MenuItem::action(t!("Diğerlerini gizle"), HideOthers),
         MenuItem::action(t!("Tümünü göster"), ShowAllApps),
         MenuItem::separator(),
-        MenuItem::action(crate::i18n::tx("Kapat", "Close"), CloseApp),
         MenuItem::action(crate::i18n::tx("Çık", "Quit"), Quit),
     ]);
     let file = Menu::new(t!("Dosya")).items([

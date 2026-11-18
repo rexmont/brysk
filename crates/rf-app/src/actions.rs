@@ -110,7 +110,6 @@ gpui_kit::actions!(
         OrganizeFolder,
         About,
         CheckForUpdates,
-        CloseApp,
         Quit,
     ]
 );
@@ -149,7 +148,7 @@ pub fn bind(cx: &mut App) {
         // written in menus (with `shortcuts::hint`) map to these.
         let f = Some(FOLDER_CTX);
         cx.bind_keys([
-            KeyBinding::new("cmd-q", CloseApp, None),
+            KeyBinding::new("cmd-q", Quit, None),
             KeyBinding::new("cmd-c", CopyItems, f),
             KeyBinding::new("cmd-x", CutItems, f),
             KeyBinding::new("cmd-v", PasteItems, f),

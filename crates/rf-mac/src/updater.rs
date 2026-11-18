@@ -15,6 +15,7 @@ pub enum Event {
     UpToDate,
     Failed(String),
     SessionFinished,
+    Cancelled,
     InstallRequested,
 }
 
@@ -66,8 +67,8 @@ define_class!(
 
         #[unsafe(method(updater:didAbortWithError:))]
         fn failed(&self, _updater: &AnyObject, error: &NSError) {
-            // No update and cancelled authorization are normal outcomes, not failures.
-            if !matches!(error.code(), 1001 | 4007 | 4008) {
+            if matches!(error.code(), 4007 | 4008) { emit(Event::Cancelled); }
+            else if error.code() != 1001 {
                 emit(Event::Failed(error.localizedDescription().to_string()));
             }
         }

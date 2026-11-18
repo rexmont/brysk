@@ -47,6 +47,7 @@ done
 # Sign the nested helper first, then the app. `--deep` is only for verification: signing it
 # that way leaves the helper with the parent's identity requirements.
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/Helpers/DirectLook.app"
+codesign --force --options runtime --timestamp --sign "$IDENTITY" --identifier com.rexmont.brysk.finder-agent "$APP/Contents/MacOS/brysk-finder-agent"
 CODESIGN_ID="$IDENTITY" ./scripts/sign-sparkle.sh "$APP"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" \
     --entitlements packaging/macos/Brysk.entitlements "$APP"

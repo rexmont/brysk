@@ -31,7 +31,7 @@ Contents/Resources/Sparkle-LICENSE and inside Sparkle.framework.
 
 Finder Dock-click integration
 -----------------------------
-Portions of crates/rf-mac/src/finder_replace.rs are adapted into Rust from
+Portions of crates/rf-mac/src/finder_hook.rs are adapted into Rust from
 finder-replace by Mikhail Khrustik (mishamyrt).
 https://github.com/mishamyrt/finder-replace
 Upstream revision: a1f1cadf0f288e8ddae4035ee2bb39a5aeaaafbc

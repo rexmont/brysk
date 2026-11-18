@@ -30,13 +30,14 @@ if [ "$UNIVERSAL" = "1" ]; then
     # One .app for Apple silicon and Intel. Rust needs the second target once:
     #   rustup target add x86_64-apple-darwin
     for target in aarch64-apple-darwin x86_64-apple-darwin; do
-        cargo build --profile "$CARGO_PROFILE" --target "$target" -p rf-app --bin brysk --bin directlook
+        cargo build --profile "$CARGO_PROFILE" --target "$target" -p rf-app -p rf-mac --bin brysk --bin directlook --bin brysk-finder-agent
     done
     mkdir -p "$BIN"
     lipo -create -output "$BIN/brysk" "target/aarch64-apple-darwin/$PROFILE_DIR/brysk" "target/x86_64-apple-darwin/$PROFILE_DIR/brysk"
     lipo -create -output "$BIN/directlook" "target/aarch64-apple-darwin/$PROFILE_DIR/directlook" "target/x86_64-apple-darwin/$PROFILE_DIR/directlook"
+    lipo -create -output "$BIN/brysk-finder-agent" "target/aarch64-apple-darwin/$PROFILE_DIR/brysk-finder-agent" "target/x86_64-apple-darwin/$PROFILE_DIR/brysk-finder-agent"
 else
-    cargo build --profile "$CARGO_PROFILE" -p rf-app --bin brysk --bin directlook
+    cargo build --profile "$CARGO_PROFILE" -p rf-app -p rf-mac --bin brysk --bin directlook --bin brysk-finder-agent
 fi
 
 rm -rf "$APP"
@@ -49,6 +50,9 @@ ditto target/sparkle/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framewo
 ./scripts/sign-sparkle.sh "$APP"
 cp packaging/macos/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/brysk" "$APP/Contents/MacOS/brysk"
+cp "$BIN/brysk-finder-agent" "$APP/Contents/MacOS/brysk-finder-agent"
+mkdir -p "$APP/Contents/Library/LaunchAgents"
+cp packaging/macos/com.rexmont.brysk.finder-agent.plist "$APP/Contents/Library/LaunchAgents/"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # DirectLook is an app of its own (a nested agent bundle): run as a bare binary inside
@@ -93,6 +97,8 @@ else
 fi
 # shellcheck disable=SC2086
 codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" "$APP/Contents/Helpers/DirectLook.app"
+# shellcheck disable=SC2086
+codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" --identifier com.rexmont.brysk.finder-agent "$APP/Contents/MacOS/brysk-finder-agent"
 # shellcheck disable=SC2086
 codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" "$APP"
 

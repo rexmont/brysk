@@ -70,7 +70,7 @@ pub fn peer_is_stale(app: &str, executable: &std::path::Path) -> Option<bool> {
     process_is_stale(pid, executable)
 }
 
-fn process_is_stale(pid: i32, executable: &std::path::Path) -> Option<bool> {
+pub(crate) fn process_is_stale(pid: i32, executable: &std::path::Path) -> Option<bool> {
     use std::os::unix::ffi::OsStrExt;
     let mut path = [0u8; 4096];
     if unsafe { libc::proc_pidpath(pid, path.as_mut_ptr().cast(), path.len() as u32) } <= 0 { return None; }

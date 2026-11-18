@@ -34,12 +34,27 @@ impl Gate {
         *self.lock() = true;
     }
 
+    /// Sparkle cancelled an installation: this process can accept launches again.
+    pub fn resume(&self) { *self.lock() = false; }
+
     pub fn is_leaving(&self) -> bool {
         *self.lock()
     }
 }
 
 pub static GATE: Gate = Gate::new();
+
+#[cfg(test)]
+mod gate_tests {
+    #[test]
+    fn cancelled_updates_allow_a_later_launch_again() {
+        let gate = super::Gate::new();
+        assert!(gate.try_leave());
+        assert!(gate.is_leaving());
+        gate.resume();
+        assert!(!gate.is_leaving());
+    }
+}
 
 fn trace_sink() -> Option<&'static PathBuf> {
     static SINK: OnceLock<Option<PathBuf>> = OnceLock::new();

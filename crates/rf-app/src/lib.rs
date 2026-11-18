@@ -292,7 +292,7 @@ fn mac_onboarding(cx: &mut App) {
     use std::cell::Cell;
     use std::rc::Rc;
     let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
-    let message = "Allow folder access when macOS asks. Full Disk Access is optional for browsing the Trash.\n\nThe Finder option below needs Accessibility access and keeps Brysk running in the background.";
+    let message = "Allow folder access when macOS asks. Full Disk Access is optional for browsing the Trash.\n\nThe Finder option uses a small background helper and needs Accessibility access.";
     let checked = Rc::new(Cell::new(cx.global::<settings::Settings>().finder_dock_redirect));
     let check = crate::prompt::Check {
         label: "Finder Dock icon opens Brysk".into(),
@@ -1032,14 +1032,7 @@ pub fn main() {
                 }
             });
             cx.on_action(|_: &crate::actions::Quit, cx| {
-                if !workspace::any_main_window(cx) {
-                    background::quit_app(cx);
-                }
-            });
-            cx.on_action(|_: &crate::actions::CloseApp, cx| {
-                if !workspace::any_main_window(cx) {
-                    background::close_app(cx);
-                }
+                background::quit_app(cx);
             });
         }
         quick_search::init(cx);

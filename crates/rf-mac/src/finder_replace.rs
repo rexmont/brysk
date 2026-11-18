@@ -1,38 +1,37 @@
-//! Optional Finder Dock-click redirection, ported from mishamyrt/finder-replace (MIT).
-//! Copyright (c) 2026 Mikhail Khrustik. See NOTICE for the full upstream licence.
-//! AX hit testing and the event tap run on a dedicated thread, never the app's UI thread.
+//! An opt-in, per-user SMAppService agent owns Finder clicks independently of Brysk's UI.
+use objc2::{
+    msg_send,
+    rc::Retained,
+    runtime::{AnyClass, AnyObject, Bool},
+};
+use objc2_foundation::{NSBundle, NSError, NSString};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    fs,
+    os::unix::{
+        fs::{DirBuilderExt, MetadataExt, PermissionsExt},
+        net::UnixDatagram,
+    },
+    path::{Path, PathBuf},
+    sync::{
+        OnceLock,
+        atomic::{AtomicBool, AtomicU8, Ordering},
+        mpsc,
+    },
+    time::Duration,
+};
 
-use std::ffi::{CStr, c_void};
-use std::ptr;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::time::{Duration, Instant};
-
-use core_foundation::base::{CFType, CFTypeRef, TCFType};
-use core_foundation::boolean::CFBoolean;
-use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
-use core_foundation::mach_port::{CFMachPort, CFMachPortInvalidate, CFMachPortRef};
-use core_foundation::runloop::{CFRunLoop, CFRunLoopRef, CFRunLoopWakeUp, kCFRunLoopCommonModes};
-use core_foundation::string::{CFString, CFStringRef};
-use core_foundation::url::CFURL;
-use core_graphics::display::CGDisplay;
-use core_graphics::geometry::{CGPoint, CGRect};
-
-const FINDER: &str = "/System/Library/CoreServices/Finder.app";
-const DOCK: &[u8] = b"/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock";
-const DOWN: u32 = 1;
-const UP: u32 = 2;
-const DRAG: u32 = 6;
-const MODIFIERS: u64 = 0x0002_0000 | 0x0004_0000 | 0x0008_0000 | 0x0010_0000;
-const AX_BUDGET: Duration = Duration::from_millis(250);
-
+const PLIST: &str = "com.rexmont.brysk.finder-agent.plist";
 static ENABLED: AtomicBool = AtomicBool::new(false);
-static APP_AVAILABLE: AtomicBool = AtomicBool::new(false);
+static SUSPENDED: AtomicBool = AtomicBool::new(false);
 static STATUS: AtomicU8 = AtomicU8::new(0);
-static WORKER: OnceLock<std::thread::Thread> = OnceLock::new();
-static RUNLOOP: OnceLock<CFRunLoop> = OnceLock::new();
+static CONTROL: OnceLock<mpsc::Sender<Command>> = OnceLock::new();
+static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
+static ENABLED_FILE: OnceLock<PathBuf> = OnceLock::new();
+static MARKER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Status {
     Off,
@@ -40,611 +39,551 @@ pub enum Status {
     Active,
     TapUnavailable,
     AppUnavailable,
+    NeedsBackgroundApproval,
+    Starting,
 }
-
-pub enum Event {
-    Open,
-    StatusChanged,
+#[derive(Serialize, Deserialize)]
+struct Snapshot {
+    pid: i32,
+    status: Status,
+}
+enum Command {
+    Refresh,
+    Permission,
+    Suspend(mpsc::Sender<()>),
 }
 
 pub fn status() -> Status {
-    match STATUS.load(Ordering::SeqCst) {
+    match STATUS.load(Ordering::Relaxed) {
         1 => Status::NeedsAccessibility,
         2 => Status::Active,
         3 => Status::TapUnavailable,
         4 => Status::AppUnavailable,
+        5 => Status::NeedsBackgroundApproval,
+        6 => Status::Starting,
         _ => Status::Off,
     }
 }
-
 pub fn set_enabled(enabled: bool) {
-    if ENABLED.swap(enabled, Ordering::SeqCst) != enabled {
-        wake_worker();
-    }
-}
-
-/// Recheck permissions after returning from System Settings or explicitly retrying.
-pub fn retry() {
-    if ENABLED.load(Ordering::SeqCst) && status() != Status::Active {
-        wake_worker();
-    }
-}
-
-fn wake_worker() {
-    if status() == Status::Active
-        && let Some(runloop) = RUNLOOP.get()
-    {
-        stop_runloop(runloop);
-    }
-    if let Some(thread) = WORKER.get() {
-        thread.unpark();
-    }
-}
-
-fn stop_runloop(runloop: &CFRunLoop) {
-    let target = runloop.clone();
-    let stop = block2::RcBlock::new(move || target.stop());
-    // Queue the stop as work, so a notification arriving just before Run cannot be lost.
-    unsafe {
-        CFRunLoopPerformBlock(
-            runloop.as_concrete_TypeRef(),
-            kCFRunLoopCommonModes.cast(),
-            &*stop,
-        );
-        CFRunLoopWakeUp(runloop.as_concrete_TypeRef());
-    }
-}
-
-/// Called only by the main Brysk process. No permission prompt or tap while disabled.
-pub fn start(on_event: impl Fn(Event) + Send + 'static) {
-    WORKER.get_or_init(|| {
-        let executable = std::env::current_exe().ok();
-        std::thread::spawn(move || {
-            let _ = RUNLOOP.set(CFRunLoop::get_current());
-            loop {
-                let available = executable.as_deref().is_some_and(std::path::Path::is_file);
-                APP_AVAILABLE.store(available, Ordering::SeqCst);
-                if !ENABLED.load(Ordering::SeqCst) {
-                    publish(Status::Off, &on_event);
-                    std::thread::park();
-                } else if !available {
-                    publish(Status::AppUnavailable, &on_event);
-                    std::thread::park();
-                } else if !trusted() {
-                    publish(Status::NeedsAccessibility, &on_event);
-                    std::thread::park();
-                } else if !run_tap(executable.as_deref().unwrap(), &on_event) {
-                    publish(Status::TapUnavailable, &on_event);
-                    std::thread::park();
-                }
+    if ENABLED.swap(enabled, Ordering::Relaxed) != enabled {
+        if !enabled && let Some(directory) = DIRECTORY.get() {
+            if let Some(marker) = ENABLED_FILE.get() {
+                let _ = write_enabled(marker);
             }
+            let _ = UnixDatagram::unbound()
+                .and_then(|s| s.send_to(b"s", directory.join("control.sock")));
+        }
+        retry();
+    }
+}
+pub fn retry() {
+    if let Some(tx) = CONTROL.get() {
+        let _ = tx.send(Command::Refresh);
+    }
+}
+pub fn request_permission() {
+    if let Some(tx) = CONTROL.get() {
+        let _ = tx.send(Command::Permission);
+    }
+}
+
+struct AgentPaths {
+    bundle: PathBuf,
+    helper: PathBuf,
+    directory: PathBuf,
+    marker: PathBuf,
+}
+impl AgentPaths {
+    fn current() -> anyhow::Result<Self> {
+        let executable = std::env::current_exe()?;
+        let contents = executable
+            .parent()
+            .and_then(Path::parent)
+            .filter(|p| p.file_name().is_some_and(|n| n == "Contents"))
+            .ok_or_else(|| anyhow::anyhow!("Finder integration needs its app bundle"))?;
+        let bundle = contents.parent().unwrap().to_path_buf();
+        let info = NSBundle::bundleWithPath(&NSString::from_str(&bundle.to_string_lossy()))
+            .ok_or_else(|| anyhow::anyhow!("Missing app bundle"))?;
+        let identifier = info
+            .bundleIdentifier()
+            .ok_or_else(|| anyhow::anyhow!("Missing app identifier"))?
+            .to_string();
+        let directory = runtime_directory(&identifier);
+        secure_directory(&directory)?;
+        let hash = format!("{:x}", Sha256::digest(identifier.as_bytes()));
+        let persistent = dirs::data_local_dir()
+            .ok_or_else(|| anyhow::anyhow!("Missing application data directory"))?
+            .join("Brysk/FinderAgents");
+        fs::create_dir_all(&persistent)?;
+        let persistent = persistent.join(&hash[..16]);
+        secure_directory(&persistent)?;
+        Ok(Self {
+            helper: contents.join("MacOS/brysk-finder-agent"),
+            bundle,
+            directory,
+            marker: persistent.join("enabled"),
         })
-        .thread()
-        .clone()
+    }
+    fn snapshot(&self) -> Option<Snapshot> {
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        fs::File::open(self.directory.join("status.json"))
+            .ok()?
+            .take(1025)
+            .read_to_end(&mut bytes)
+            .ok()?;
+        if bytes.len() > 1024 {
+            return None;
+        }
+        let state: Snapshot = serde_json::from_slice(&bytes).ok()?;
+        (crate::single_instance::process_is_stale(state.pid, &self.helper) == Some(false))
+            .then_some(state)
+    }
+    fn send(&self, command: u8) -> bool {
+        UnixDatagram::unbound()
+            .and_then(|s| s.send_to(&[command], self.directory.join("control.sock")))
+            .is_ok()
+    }
+    fn publish(&self, state: Status) {
+        if let Ok(data) = serde_json::to_vec(&Snapshot {
+            pid: std::process::id() as i32,
+            status: state,
+        }) {
+            let temporary = self.directory.join("status.tmp");
+            if fs::write(&temporary, data).is_ok() {
+                let _ = fs::rename(temporary, self.directory.join("status.json"));
+            }
+        }
+    }
+}
+
+fn runtime_directory(identifier: &str) -> PathBuf {
+    let hash = format!("{:x}", Sha256::digest(identifier.as_bytes()));
+    PathBuf::from(format!(
+        "/tmp/brysk-finder-{}-{}",
+        unsafe { libc::geteuid() },
+        &hash[..16]
+    ))
+}
+fn secure_directory(path: &Path) -> std::io::Result<()> {
+    match fs::DirBuilder::new().mode(0o700).create(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e),
+    }
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.is_dir()
+        || metadata.uid() != unsafe { libc::geteuid() }
+        || metadata.permissions().mode() & 0o077 != 0
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "Unsafe Finder helper directory",
+        ));
+    }
+    Ok(())
+}
+
+fn write_enabled(marker: &Path) -> std::io::Result<()> {
+    let _guard = MARKER.lock().unwrap();
+    let temporary = marker.with_extension("tmp");
+    fs::write(
+        &temporary,
+        if ENABLED.load(Ordering::Relaxed) {
+            b"1"
+        } else {
+            b"0"
+        },
+    )?;
+    fs::rename(temporary, marker)
+}
+
+fn service_class() -> anyhow::Result<&'static AnyClass> {
+    // Loading Apple's framework explicitly also supports the small non-AppKit agent executable.
+    unsafe {
+        anyhow::ensure!(
+            !libc::dlopen(
+                c"/System/Library/Frameworks/ServiceManagement.framework/ServiceManagement"
+                    .as_ptr(),
+                libc::RTLD_NOW | libc::RTLD_LOCAL
+            )
+            .is_null(),
+            "Service Management is unavailable"
+        );
+    }
+    AnyClass::get(c"SMAppService")
+        .ok_or_else(|| anyhow::anyhow!("Service Management is unavailable"))
+}
+fn service() -> anyhow::Result<Retained<AnyObject>> {
+    Ok(unsafe {
+        msg_send![service_class()?, agentServiceWithPlistName: &*NSString::from_str(PLIST)]
+    })
+}
+fn service_status(service: &AnyObject) -> isize {
+    unsafe { msg_send![service, status] }
+}
+fn register(service: &AnyObject) -> anyhow::Result<()> {
+    let mut error: *mut NSError = std::ptr::null_mut();
+    let ok: Bool = unsafe { msg_send![service, registerAndReturnError: &mut error] };
+    if ok.as_bool() || service_status(service) == 1 {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{}",
+        unsafe { error.as_ref() }
+            .map(|e| e.localizedDescription().to_string())
+            .unwrap_or("Could not register Finder helper".into())
+    )
+}
+fn unregister(service: &AnyObject) -> anyhow::Result<()> {
+    if service_status(service) == 0 {
+        return Ok(());
+    }
+    let (tx, rx) = mpsc::channel();
+    let done = block2::RcBlock::new(move |error: *mut NSError| {
+        let _ = tx.send(unsafe { error.as_ref() }.map(|e| e.localizedDescription().to_string()));
+    });
+    unsafe {
+        let _: () = msg_send![service, unregisterWithCompletionHandler: &*done];
+    }
+    if let Some(error) = rx.recv_timeout(Duration::from_secs(10))? {
+        anyhow::bail!("{error}");
+    }
+    Ok(())
+}
+pub fn open_background_settings() {
+    dispatch2::DispatchQueue::main().exec_async(|| {
+        if let Ok(class) = service_class() {
+            unsafe {
+                let _: () = msg_send![class, openSystemSettingsLoginItems];
+            }
+        }
     });
 }
 
-fn publish(status: Status, on_event: &dyn Fn(Event)) {
-    if STATUS.swap(status as u8, Ordering::SeqCst) != status as u8 {
-        on_event(Event::StatusChanged);
-    }
+/// All registration and status I/O stays off the UI thread. Filesystem events redraw the status row.
+pub fn start(changed: impl Fn() + Send + 'static) {
+    CONTROL.get_or_init(|| {
+        let (tx, rx) = mpsc::channel();
+        let watcher_tx = tx.clone();
+        std::thread::Builder::new()
+            .name("finder-service".into())
+            .spawn(move || {
+                let publish = |state: Status| {
+                    if STATUS.swap(state as u8, Ordering::Relaxed) != state as u8 {
+                        changed();
+                    }
+                };
+                let paths = match AgentPaths::current() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        publish(Status::AppUnavailable);
+                        return;
+                    }
+                };
+                let _ = DIRECTORY.set(paths.directory.clone());
+                let _ = ENABLED_FILE.set(paths.marker.clone());
+                let service = match service() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::warn!("Finder service: {e:#}");
+                        publish(Status::TapUnavailable);
+                        return;
+                    }
+                };
+                use notify::Watcher;
+                let watcher =
+                    notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                        if event.is_ok_and(|e| {
+                            e.paths
+                                .iter()
+                                .any(|p| p.file_name().is_some_and(|n| n == "status.json"))
+                        }) {
+                            let _ = watcher_tx.send(Command::Refresh);
+                        }
+                    });
+                let mut watcher = match watcher {
+                    Ok(w) => w,
+                    Err(e) => {
+                        log::warn!("Finder status watch: {e}");
+                        publish(Status::TapUnavailable);
+                        return;
+                    }
+                };
+                if watcher
+                    .watch(&paths.directory, notify::RecursiveMode::NonRecursive)
+                    .is_err()
+                {
+                    publish(Status::TapUnavailable);
+                    return;
+                }
+                let mut permission = false;
+                let mut registered_here = false;
+                while let Ok(command) = rx.recv() {
+                    if let Command::Suspend(done) = command {
+                        SUSPENDED.store(true, Ordering::Relaxed);
+                        if let Err(e) = unregister(&service) {
+                            log::warn!("Finder helper shutdown: {e:#}");
+                        }
+                        let _ = done.send(());
+                        continue;
+                    }
+                    if matches!(command, Command::Permission) {
+                        permission = true;
+                    }
+                    if SUSPENDED.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let state = (|| -> anyhow::Result<Status> {
+                        write_enabled(&paths.marker)?;
+                        if !ENABLED.load(Ordering::Relaxed) {
+                            permission = false;
+                            unregister(&service)?;
+                            return Ok(Status::Off);
+                        }
+                        anyhow::ensure!(
+                            paths.helper.is_file(),
+                            "The Finder helper is missing from this app bundle"
+                        );
+                        let snapshot = paths.snapshot();
+                        if service_status(&service) == 1 && snapshot.is_none() && !registered_here {
+                            unregister(&service)?;
+                        }
+                        if service_status(&service) != 1 {
+                            registered_here = true;
+                            register(&service)?;
+                        }
+                        if service_status(&service) == 2 {
+                            return Ok(Status::NeedsBackgroundApproval);
+                        }
+                        if permission && snapshot.is_some() && paths.send(b'p') {
+                            permission = false;
+                        } else if snapshot.is_some() {
+                            paths.send(b'r');
+                        }
+                        Ok(paths.snapshot().map_or(Status::Starting, |s| s.status))
+                    })();
+                    match state {
+                        Ok(state) => publish(state),
+                        Err(e) => {
+                            log::warn!("Finder service: {e:#}");
+                            publish(if service_status(&service) == 2 {
+                                Status::NeedsBackgroundApproval
+                            } else {
+                                Status::TapUnavailable
+                            });
+                        }
+                    }
+                }
+            })
+            .expect("Finder service worker");
+        let _ = tx.send(Command::Refresh);
+        tx
+    });
 }
 
-fn trusted() -> bool {
-    unsafe { AXIsProcessTrusted() }
-}
-
-/// Only an explicit opt-in or the permission button calls this; checking status never prompts.
-pub fn request_permission() {
-    let key = unsafe { CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt) };
-    let options =
-        CFDictionary::from_CFType_pairs(&[(key.as_CFType(), CFBoolean::true_value().as_CFType())]);
-    unsafe {
-        AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef());
+/// Call on the install worker before Sparkle replaces the executable. Settings retain the opt-in.
+pub fn stop_for_update() {
+    if let Some(tx) = CONTROL.get() {
+        let (done, wait) = mpsc::channel();
+        if tx.send(Command::Suspend(done)).is_ok() {
+            let _ = wait.recv_timeout(Duration::from_secs(12));
+        }
     }
+}
+pub fn resume_after_update_failure() {
+    SUSPENDED.store(false, Ordering::Relaxed);
     retry();
 }
 
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    fn CFRunLoopPerformBlock(
-        runloop: CFRunLoopRef,
-        mode: CFTypeRef,
-        block: &block2::Block<dyn Fn()>,
+pub fn run_agent() -> anyhow::Result<()> {
+    let paths = std::sync::Arc::new(AgentPaths::current()?);
+    use std::io::Read;
+    let mut enabled = Vec::new();
+    if fs::File::open(&paths.marker)
+        .and_then(|f| f.take(2).read_to_end(&mut enabled))
+        .is_err()
+        || enabled != b"1"
+    {
+        return Ok(());
+    }
+    // Keep a flock for the lifetime of the agent; never unlink another running agent's socket.
+    use std::os::fd::AsRawFd;
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(paths.directory.join("agent.lock"))?;
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        return Ok(());
+    }
+    let socket = paths.directory.join("control.sock");
+    let _ = fs::remove_file(&socket);
+    let control = UnixDatagram::bind(socket)?;
+    let launch_pending = std::sync::Arc::new(AtomicBool::new(false));
+    let launch_flag = launch_pending.clone();
+    let bundle = paths.bundle.clone();
+    let (launch, requests) = mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        while requests.recv().is_ok() {
+            let bundle = bundle.clone();
+            let launch_flag = launch_flag.clone();
+            dispatch2::DispatchQueue::main().exec_async(move || open_brysk(&bundle, launch_flag));
+        }
+    });
+    std::thread::spawn(move || {
+        let mut command = [0u8; 8];
+        while let Ok(size) = control.recv(&mut command) {
+            if size == 1 {
+                match command[0] {
+                    b'p' => crate::finder_hook::request_permission(),
+                    b'r' => crate::finder_hook::retry(),
+                    b's' => std::process::exit(0),
+                    _ => {}
+                }
+            }
+        }
+    });
+    let target = paths.bundle.join("Contents/MacOS/brysk");
+    crate::finder_hook::set_enabled(true);
+    crate::finder_hook::start(
+        target,
+        move || {
+            if launch_pending.swap(true, Ordering::Relaxed) {
+                return true;
+            }
+            if launch.try_send(()).is_ok() {
+                true
+            } else {
+                launch_pending.store(false, Ordering::Relaxed);
+                false
+            }
+        },
+        move |state| {
+            let state = match state {
+                crate::finder_hook::Status::Off => Status::Off,
+                crate::finder_hook::Status::NeedsAccessibility => Status::NeedsAccessibility,
+                crate::finder_hook::Status::Active => Status::Active,
+                crate::finder_hook::Status::TapUnavailable => Status::TapUnavailable,
+                crate::finder_hook::Status::AppUnavailable => Status::AppUnavailable,
+            };
+            paths.publish(state);
+            if state == Status::AppUnavailable {
+                std::process::exit(0);
+            }
+        },
     );
-}
-
-type AxRef = *const c_void;
-type EventRef = *mut c_void;
-type TapCallback = unsafe extern "C" fn(*const c_void, u32, EventRef, *mut c_void) -> EventRef;
-
-#[link(name = "ApplicationServices", kind = "framework")]
-unsafe extern "C" {
-    fn AXIsProcessTrusted() -> bool;
-    fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
-    static kAXTrustedCheckOptionPrompt: CFStringRef;
-    fn AXUIElementCreateSystemWide() -> AxRef;
-    fn AXUIElementGetTypeID() -> usize;
-    fn AXUIElementGetPid(element: AxRef, pid: *mut i32) -> i32;
-    fn AXUIElementSetMessagingTimeout(element: AxRef, timeout: f32) -> i32;
-    fn AXUIElementCopyElementAtPosition(element: AxRef, x: f32, y: f32, result: *mut AxRef) -> i32;
-    fn AXUIElementCopyAttributeValue(
-        element: AxRef,
-        name: CFStringRef,
-        value: *mut CFTypeRef,
-    ) -> i32;
-    fn CGEventTapCreate(
-        location: u32,
-        placement: u32,
-        options: u32,
-        mask: u64,
-        callback: TapCallback,
-        context: *mut c_void,
-    ) -> CFMachPortRef;
-    fn CGEventTapEnable(tap: CFMachPortRef, enabled: bool);
-    fn CGEventGetFlags(event: EventRef) -> u64;
-    fn CGEventGetLocation(event: EventRef) -> CGPoint;
-    fn proc_pidpath(pid: i32, buffer: *mut c_void, size: u32) -> i32;
-}
-
-struct TapContext<'a> {
-    system: CFType,
-    tap: CFMachPortRef,
-    swallowing: bool,
-    on_event: &'a dyn Fn(Event),
-}
-
-fn run_tap(executable: &std::path::Path, on_event: &dyn Fn(Event)) -> bool {
-    let _watch = match watch_application(executable, || {
-        if APP_AVAILABLE.swap(false, Ordering::SeqCst) {
-            wake_worker();
-        }
-    }) {
-        Ok(watch) => watch,
-        Err(e) => {
-            log::warn!("Finder click app watch: {e}");
-            return false;
-        }
+    use core_foundation::{
+        base::TCFType,
+        runloop::{
+            CFRunLoop, CFRunLoopSource, CFRunLoopSourceContext, CFRunLoopSourceCreate,
+            kCFRunLoopCommonModes,
+        },
     };
-    let system = unsafe { AXUIElementCreateSystemWide() };
-    if system.is_null() {
-        return false;
-    }
-    let mut context = TapContext {
-        system: unsafe { CFType::wrap_under_create_rule(system) },
-        tap: ptr::null_mut(),
-        swallowing: false,
-        on_event,
+    extern "C" fn idle(_: *const std::ffi::c_void) {}
+    let mut context = CFRunLoopSourceContext {
+        version: 0,
+        info: std::ptr::null_mut(),
+        retain: None,
+        release: None,
+        copyDescription: None,
+        equal: None,
+        hash: None,
+        schedule: None,
+        cancel: None,
+        perform: idle,
     };
-    // The core-graphics crate's tap wrapper treats None as "pass"; the raw callback is
-    // needed here to return null and suppress a matched click.
-    let tap = unsafe {
-        CGEventTapCreate(
-            1,
+    let source = unsafe {
+        CFRunLoopSource::wrap_under_create_rule(CFRunLoopSourceCreate(
+            std::ptr::null(),
             0,
-            0,
-            (1 << DOWN) | (1 << UP) | (1 << DRAG),
-            on_mouse,
-            &mut context as *mut _ as *mut c_void,
-        )
+            &mut context,
+        ))
     };
-    if tap.is_null() {
-        return false;
-    }
-    let tap = unsafe { CFMachPort::wrap_under_create_rule(tap) };
-    context.tap = tap.as_concrete_TypeRef();
-    let Ok(source) = tap.create_runloop_source(0) else {
-        unsafe {
-            CFMachPortInvalidate(context.tap);
-        }
-        return false;
-    };
-    let runloop = CFRunLoop::get_current();
     unsafe {
-        runloop.add_source(&source, kCFRunLoopCommonModes);
-        CGEventTapEnable(context.tap, true);
+        CFRunLoop::get_current().add_source(&source, kCFRunLoopCommonModes);
     }
-    publish(Status::Active, on_event);
-    if ENABLED.load(Ordering::SeqCst) && APP_AVAILABLE.load(Ordering::SeqCst) {
-        CFRunLoop::run_current();
-    }
-    unsafe {
-        CGEventTapEnable(context.tap, false);
-        runloop.remove_source(&source, kCFRunLoopCommonModes);
-        CFMachPortInvalidate(context.tap);
-    }
-    true
+    CFRunLoop::run_current();
+    Ok(())
 }
 
-fn watch_application(
-    executable: &std::path::Path,
-    unavailable: impl Fn() + Send + 'static,
-) -> notify::Result<notify::RecommendedWatcher> {
-    use notify::{RecursiveMode, Watcher};
-    let path = executable.to_path_buf();
-    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-        if event.is_err() || !path.is_file() {
-            unavailable();
+fn open_brysk(bundle: &Path, pending: std::sync::Arc<AtomicBool>) {
+    use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
+    use objc2_foundation::NSURL;
+    let config = NSWorkspaceOpenConfiguration::configuration();
+    config.setActivates(true);
+    config.setCreatesNewApplicationInstance(false);
+    let done = block2::RcBlock::new(move |_: *mut NSRunningApplication, error: *mut NSError| {
+        pending.store(false, Ordering::Relaxed);
+        if let Some(error) = unsafe { error.as_ref() } {
+            log::warn!("Finder redirect launch failed: {error}");
+            // A failed launch must not leave the user's Finder click swallowed.
+            let _ = crate::shell::open(Path::new("/System/Library/CoreServices/Finder.app"));
         }
-    })?;
-    // Watch both the executable and the bundle root: Trash usually renames the whole .app.
-    watcher.watch(executable, RecursiveMode::NonRecursive)?;
-    if let Some(bundle) = executable
-        .ancestors()
-        .find(|p| p.extension().is_some_and(|ext| ext == "app"))
-    {
-        watcher.watch(bundle, RecursiveMode::NonRecursive)?;
-    }
-    // Close the race between registering the watch and installing the tap.
-    if !executable.is_file() {
-        return Err(notify::Error::path_not_found());
-    }
-    Ok(watcher)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum Action {
-    Pass,
-    Swallow,
-    Open,
-}
-
-fn mouse_action(active: &mut bool, kind: u32, finder: bool) -> Action {
-    match kind {
-        DOWN => {
-            *active = finder;
-            if finder { Action::Open } else { Action::Pass }
-        }
-        UP => {
-            if std::mem::take(active) {
-                Action::Swallow
-            } else {
-                Action::Pass
-            }
-        }
-        DRAG if *active => Action::Swallow,
-        _ => Action::Pass,
-    }
-}
-
-fn plain_click(enabled: bool, app_available: bool, flags: u64) -> bool {
-    enabled && app_available && flags & MODIFIERS == 0
-}
-
-unsafe extern "C" fn on_mouse(
-    _: *const c_void,
-    kind: u32,
-    event: EventRef,
-    context: *mut c_void,
-) -> EventRef {
-    // The tap invokes this only on its owning run loop; context outlives the invalidated tap.
-    let context = unsafe { &mut *(context as *mut TapContext<'_>) };
-    if kind == 0xffff_fffe || kind == 0xffff_ffff {
-        if !trusted() {
-            CFRunLoop::get_current().stop();
-            return event;
-        }
-        unsafe {
-            CGEventTapEnable(context.tap, ENABLED.load(Ordering::SeqCst));
-        }
-        return event;
-    }
-    if event.is_null() {
-        return event;
-    }
-    let finder = kind == DOWN
-        && plain_click(
-            ENABLED.load(Ordering::SeqCst),
-            APP_AVAILABLE.load(Ordering::SeqCst),
-            unsafe { CGEventGetFlags(event) },
-        )
-        && finder_at(&context.system, unsafe { CGEventGetLocation(event) });
-    match mouse_action(&mut context.swallowing, kind, finder) {
-        Action::Pass => event,
-        Action::Swallow => ptr::null_mut(),
-        Action::Open => {
-            (context.on_event)(Event::Open);
-            ptr::null_mut()
-        }
-    }
-}
-
-fn time_left(system: &CFType, deadline: Instant) -> bool {
-    let remaining = deadline
-        .saturating_duration_since(Instant::now())
-        .as_secs_f32();
-    remaining > 0.
-        && unsafe { AXUIElementSetMessagingTimeout(system.as_CFTypeRef(), remaining.min(0.1)) == 0 }
-}
-
-fn attribute(system: &CFType, element: &CFType, name: &str, deadline: Instant) -> Option<CFType> {
-    if !time_left(system, deadline) {
-        return None;
-    }
-    let mut value = ptr::null();
-    let error = unsafe {
-        AXUIElementCopyAttributeValue(
-            element.as_CFTypeRef(),
-            CFString::new(name).as_concrete_TypeRef(),
-            &mut value,
-        )
-    };
-    owned_value(error, value)
-}
-
-fn owned_value(error: i32, value: CFTypeRef) -> Option<CFType> {
-    if value.is_null() {
-        return None;
-    }
-    let value = unsafe { CFType::wrap_under_create_rule(value) };
-    (error == 0).then_some(value)
-}
-
-fn string_is(value: Option<CFType>, expected: &str) -> bool {
-    value
-        .and_then(|v| v.downcast_into::<CFString>())
-        .is_some_and(|v| v == CFString::new(expected))
-}
-
-fn finder_url(value: Option<CFType>) -> bool {
-    value
-        .and_then(|v| v.downcast_into::<CFURL>())
-        .and_then(|url| url.to_path())
-        .is_some_and(|p| p == std::path::Path::new(FINDER))
-}
-
-fn element_at(system: &CFType, mut point: CGPoint, deadline: Instant) -> Option<CFType> {
-    let mut retried = false;
-    for _ in 0..3 {
-        if !time_left(system, deadline) {
-            break;
-        }
-        let mut element = ptr::null();
-        let error = unsafe {
-            AXUIElementCopyElementAtPosition(
-                system.as_CFTypeRef(),
-                point.x as f32,
-                point.y as f32,
-                &mut element,
-            )
-        };
-        let element = owned_value(error, element);
-        if error == 0 {
-            return element;
-        }
-        if error == -25204 && !retried {
-            // kAXErrorCannotComplete: a cold Dock may miss once.
-            retried = true;
-            continue;
-        }
-        if error == -25212 {
-            // kAXErrorNoValue at the Dock's outer edge.
-            let displays: Vec<_> = CGDisplay::active_displays()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|id| CGDisplay::new(id).bounds())
-                .collect();
-            let adjusted = screen_point(point, &displays);
-            if adjusted.x != point.x || adjusted.y != point.y {
-                point = adjusted;
-                continue;
-            }
-        }
-        break;
-    }
-    None
-}
-
-fn finder_at(system: &CFType, point: CGPoint) -> bool {
-    let deadline = Instant::now() + AX_BUDGET;
-    let Some(mut element) = element_at(system, point, deadline) else {
-        return false;
-    };
-    let mut pid = 0;
-    let mut executable = [0u8; 4096];
-    if unsafe { AXUIElementGetPid(element.as_CFTypeRef(), &mut pid) } != 0
-        || unsafe { proc_pidpath(pid, executable.as_mut_ptr().cast(), executable.len() as u32) }
-            <= 0
-        || CStr::from_bytes_until_nul(&executable)
-            .ok()
-            .map(CStr::to_bytes)
-            != Some(DOCK)
-    {
-        return false;
-    }
-    // Recheck the live Dock item, rather than caching a rectangle that magnification changes.
-    for _ in 0..6 {
-        if string_is(
-            attribute(system, &element, "AXRole", deadline),
-            "AXDockItem",
-        ) {
-            return string_is(
-                attribute(system, &element, "AXSubrole", deadline),
-                "AXApplicationDockItem",
-            ) && finder_url(attribute(system, &element, "AXURL", deadline))
-                && Instant::now() < deadline;
-        }
-        let Some(parent) = attribute(system, &element, "AXParent", deadline) else {
-            break;
-        };
-        if parent.type_of() != unsafe { AXUIElementGetTypeID() } {
-            break;
-        }
-        element = parent;
-    }
-    false
-}
-
-fn screen_point(point: CGPoint, displays: &[CGRect]) -> CGPoint {
-    let mut adjusted = point;
-    for bounds in displays {
-        let (x, y, w, h) = (
-            bounds.origin.x,
-            bounds.origin.y,
-            bounds.size.width,
-            bounds.size.height,
-        );
-        if w <= 0. || h <= 0. || point.x < x || point.x > x + w || point.y < y || point.y > y + h {
-            continue;
-        }
-        // shortcut: Dock AX stops a few points short of the edge; use live item geometry if that gap grows.
-        adjusted = CGPoint::new(
-            if point.x >= x + w - 1. {
-                x + w - 8.
-            } else {
-                point.x
-            },
-            if point.y >= y + h - 1. {
-                y + h - 8.
-            } else {
-                point.y
-            },
-        );
-        if point.x < x + w && point.y < y + h {
-            return adjusted;
-        }
-    }
-    adjusted
+    });
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&bundle.to_string_lossy()));
+    NSWorkspace::sharedWorkspace().openApplicationAtURL_configuration_completionHandler(
+        &url,
+        &config,
+        Some(&done),
+    );
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use core_foundation::url::kCFURLPOSIXPathStyle;
-
+    use super::{runtime_directory, secure_directory};
     #[test]
-    fn file_notifications_report_executable_deletion_and_whole_app_move() {
-        for remove_file in [true, false] {
-            let root = std::env::temp_dir().join(format!(
-                "brysk-finder-watch-{}-{remove_file}",
-                std::process::id()
-            ));
-            std::fs::create_dir(&root).unwrap();
-            let bundle = root.join("Brysk.app");
-            let exe = bundle.join("Contents/MacOS/brysk");
-            std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
-            std::fs::write(&exe, b"test executable").unwrap();
-            let (tx, rx) = std::sync::mpsc::channel();
-            let watch = watch_application(&exe, move || {
-                let _ = tx.send(());
+    fn status_rejects_unbounded_payloads_and_unrelated_processes() {
+        let directory = runtime_directory(&format!("status-test-{}", std::process::id()));
+        secure_directory(&directory).unwrap();
+        let paths = super::AgentPaths {
+            bundle: directory.clone(),
+            helper: std::env::current_exe().unwrap(),
+            marker: directory.join("enabled"),
+            directory: directory.clone(),
+        };
+        std::fs::write(
+            directory.join("status.json"),
+            serde_json::to_vec(&super::Snapshot {
+                pid: std::process::id() as i32,
+                status: super::Status::Active,
             })
-            .unwrap();
-            if remove_file {
-                std::fs::remove_file(exe).unwrap();
-            } else {
-                std::fs::rename(bundle, root.join("Removed.app")).unwrap();
-            }
-            let reported = rx.recv_timeout(Duration::from_secs(5));
-            drop(watch);
-            std::fs::remove_dir_all(root).unwrap();
-            reported.expect("native file event must stop redirection");
-        }
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(paths.snapshot().unwrap().status, super::Status::Active);
+        std::fs::write(
+            directory.join("status.json"),
+            b"{\"pid\":-1,\"status\":\"Active\"}",
+        )
+        .unwrap();
+        assert!(paths.snapshot().is_none());
+        std::fs::write(directory.join("status.json"), vec![b' '; 1025]).unwrap();
+        assert!(paths.snapshot().is_none());
+        std::fs::remove_dir_all(directory).unwrap();
     }
-
     #[test]
-    fn wake_queued_before_run_is_not_lost() {
-        use core_foundation::runloop::{CFRunLoopTimer, kCFRunLoopDefaultMode};
-        extern "C" fn unused_timer(_: core_foundation::runloop::CFRunLoopTimerRef, _: *mut c_void) {
-        }
-        let (tx, rx) = std::sync::mpsc::channel();
-        let (go_tx, go_rx) = std::sync::mpsc::channel();
-        let (done_tx, done_rx) = std::sync::mpsc::channel();
-        let thread = std::thread::spawn(move || {
-            let runloop = CFRunLoop::get_current();
-            // An inert source keeps this test loop alive; production has the mouse event tap.
-            let timer = CFRunLoopTimer::new(
-                unsafe { core_foundation::date::CFAbsoluteTimeGetCurrent() } + 60.,
-                0.,
-                0,
-                0,
-                unused_timer,
-                ptr::null_mut(),
-            );
-            unsafe {
-                runloop.add_timer(&timer, kCFRunLoopDefaultMode);
-            }
-            tx.send(runloop.clone()).unwrap();
-            go_rx.recv().unwrap();
-            CFRunLoop::run_current();
-            unsafe {
-                runloop.remove_timer(&timer, kCFRunLoopDefaultMode);
-            }
-            let _ = done_tx.send(());
-        });
-        stop_runloop(&rx.recv().unwrap());
-        go_tx.send(()).unwrap();
-        done_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("notification must wake the worker");
-        thread.join().unwrap();
+    fn control_paths_are_short_and_separate_qa_from_the_installed_app() {
+        let main = runtime_directory("com.rexmont.brysk");
+        assert_ne!(main, runtime_directory("com.rexmont.brysk.qa"));
+        assert_eq!(main, runtime_directory("com.rexmont.brysk"));
+        assert!(main.join("control.sock").as_os_str().len() < 104);
     }
-
     #[test]
-    fn only_plain_clicks_are_candidates() {
-        assert!(plain_click(true, true, 0));
-        assert!(plain_click(true, true, 0x10000)); // Caps Lock is not a click modifier.
-        assert!(!plain_click(false, true, 0));
-        assert!(!plain_click(true, false, 0)); // An uninstalled/moved app cannot swallow clicks.
-        for flag in [0x20000, 0x40000, 0x80000, 0x100000] {
-            assert!(!plain_click(true, true, flag));
-        }
-    }
-
-    #[test]
-    fn matched_mouse_sequence_is_consumed_and_unrelated_clicks_pass() {
-        let mut active = false;
-        assert_eq!(mouse_action(&mut active, DOWN, true), Action::Open);
-        assert_eq!(mouse_action(&mut active, DRAG, false), Action::Swallow);
-        assert_eq!(mouse_action(&mut active, UP, false), Action::Swallow);
-        assert_eq!(mouse_action(&mut active, UP, false), Action::Pass);
-        assert_eq!(mouse_action(&mut active, DOWN, false), Action::Pass);
-        assert_eq!(mouse_action(&mut active, DRAG, false), Action::Pass);
-        assert_eq!(mouse_action(&mut active, 3, true), Action::Pass); // Right-click.
-        assert_eq!(mouse_action(&mut active, DOWN, true), Action::Open);
-        assert_eq!(mouse_action(&mut active, DOWN, false), Action::Pass); // Reset a stale down.
-        assert!(!active);
-    }
-
-    #[test]
-    fn finder_identity_requires_a_file_url_to_the_system_application() {
-        assert!(!finder_url(None));
-        assert!(!finder_url(Some(CFString::new(FINDER).as_CFType())));
-        for (path, expected) in [
-            (FINDER, true),
-            ("/Applications/Finder.app", false),
-            ("/System/Library/CoreServices/Finder.app.evil", false),
-        ] {
-            let url = CFURL::from_file_system_path(CFString::new(path), kCFURLPOSIXPathStyle, true);
-            assert_eq!(finder_url(Some(url.as_CFType())), expected);
-        }
-    }
-
-    #[test]
-    fn edge_probe_handles_multiple_displays_and_does_not_pull_in_offscreen_points() {
-        let displays = [
-            CGRect::new(
-                &CGPoint::new(0., 0.),
-                &core_graphics::geometry::CGSize::new(1920., 1080.),
-            ),
-            CGRect::new(
-                &CGPoint::new(204., 1080.),
-                &core_graphics::geometry::CGSize::new(1512., 982.),
-            ),
-            CGRect::new(
-                &CGPoint::new(-1280., 0.),
-                &core_graphics::geometry::CGSize::new(1280., 1024.),
-            ),
-        ];
-        for (point, expected) in [
-            ((521., 2062.), (521., 2054.)),
-            ((1919.999, 500.), (1912., 500.)),
-            ((521., 1080.), (521., 1080.)),
-            ((-500., 1024.), (-500., 1016.)),
-            ((-1280., 500.), (-1280., 500.)),
-            ((521., 2063.), (521., 2063.)),
-        ] {
-            let actual = screen_point(CGPoint::new(point.0, point.1), &displays);
-            assert_eq!((actual.x, actual.y), expected);
-        }
+    fn helper_directory_rejects_symlinks_and_shared_permissions() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let base =
+            std::env::temp_dir().join(format!("brysk-agent-directory-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir(&base).unwrap();
+        let safe = base.join("safe");
+        secure_directory(&safe).unwrap();
+        let alias = base.join("alias");
+        symlink(&safe, &alias).unwrap();
+        assert!(secure_directory(&alias).is_err());
+        std::fs::set_permissions(&safe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(secure_directory(&safe).is_err());
+        std::fs::remove_dir_all(base).unwrap();
     }
 }

@@ -80,15 +80,12 @@ with the search index enabled; the other measurements used debug builds.
 Download the latest DMG from [Releases](https://github.com/rexmont/brysk/releases), open it and
 drag **Brysk** to Applications. The build is signed and notarised; no Gatekeeper bypass is needed.
 
-Onboarding and Settings → General offer an optional Finder Dock-click replacement. It needs
-Accessibility access and enables background mode. Plain left-clicks open Brysk; right-clicks
-and modified clicks keep their usual behavior. **Close** (⌘Q) closes Brysk's windows and keeps
-it running in the menu bar, so Finder redirection remains available. **Quit**, directly below
-Close in either Brysk menu, exits completely and has no default shortcut. Turning redirection
-off or choosing Quit restores normal Finder clicks. It needs no system patches or SIP changes.
-If Brysk is moved or removed while still running, native filesystem notifications stop
-redirection. There is no periodic file check or separate replacement service. After granting
-Accessibility access, return to Brysk to activate the integration.
+Onboarding and Settings → General offer an optional Finder Dock-click replacement. A small
+macOS-managed background helper opens Brysk even after **Quit (⌘Q)**. It needs Accessibility
+access and intercepts plain left-clicks only; right-clicks and modified clicks keep their usual
+Finder behavior. Turning the option off unregisters the helper. Native filesystem notifications
+restore Finder clicks if Brysk is moved or removed. There is no polling, system patch or SIP
+change. After granting Accessibility access, return to Brysk to activate the integration.
 
 ## Build from source
 

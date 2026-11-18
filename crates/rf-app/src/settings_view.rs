@@ -927,21 +927,25 @@ fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     let mut cards = vec![
         section(p, "macOS"),
         card(p, L::FolderOpen, tx("Finder Dock simgesinden Brysk'ı aç", "Open Brysk from the Finder Dock icon"),
-            Some(tx("Finder'ın Dock simgesine normal sol tıklamayı yönlendirir ve Brysk'ı arka planda tutar. Erişilebilirlik izni gerekir. Sağ tık ve değiştirici tuşlarla tıklamalar Finder'da kalır.", "Redirect plain left-clicks on Finder in the Dock and keep Brysk running in the background. Requires Accessibility access. Right-clicks and modified clicks keep their Finder behavior.")),
+            Some(tx("Küçük bir arka plan yardımcısı, Brysk kapalıyken de Finder tıklamalarını yönlendirir. Erişilebilirlik izni gerekir. Sağ tık ve değiştirici tuşlarla tıklamalar Finder'da kalır.", "A small background helper opens Brysk from Finder clicks, even after Quit. Requires Accessibility access. Right-clicks and modified clicks keep their Finder behavior.")),
             switch("finder-dock-redirect", p, enabled, move |_, cx| settings::set_finder_dock_redirect(!enabled, cx))),
     ];
     if enabled {
         let status = match finder_replace::status() {
-            Status::Active => tx("Etkin. Kapat, Brysk'ı çalışır tutar; Çık tamamen kapatır ve Finder tıklamalarını geri yükler.", "Active. Close keeps Brysk running; Quit fully exits and restores Finder clicks."),
+            Status::Active => tx("Etkin. Finder'a tıklamak, Brysk'tan çıktıktan sonra da Brysk'ı açar.", "Active. Finder clicks open Brysk, including after Quit."),
             Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin, ardından Brysk'a dönün.", "Allow Brysk in System Settings → Privacy & Security → Accessibility, then return to Brysk."),
             Status::TapUnavailable => tx("Finder tıklama erişimi başlatılamadı. Erişilebilirlik iznini ve gerekirse Giriş İzleme'yi denetleyip Brysk'a dönün. Finder tıklamaları değiştirilmez.", "Finder click access could not start. Check Accessibility and, if needed, Input Monitoring, then return to Brysk. Finder clicks pass through."),
             Status::AppUnavailable => tx("Brysk kullanılamıyor veya konumu değişti. Finder tıklamaları normale döndü. Brysk'ı kurulu konumundan yeniden açın.", "Brysk is unavailable or its location changed. Finder clicks have been restored. Reopen Brysk from its installed location."),
-            Status::Off => tx("Başlatılıyor…", "Starting…"),
+            Status::NeedsBackgroundApproval => tx("Sistem Ayarları'nda Brysk'ın arka plan etkinliğine izin verin.", "Allow Brysk’s background activity in System Settings."),
+            Status::Off | Status::Starting => tx("Başlatılıyor…", "Starting…"),
         };
         cards.push(card(p, L::ShieldCheck, tx("Finder tıklama erişimi", "Finder click access"), Some(status),
-            button("finder-accessibility", p, tx("Erişilebilirlik ayarları", "Accessibility settings"), |_, _| {
-                finder_replace::request_permission();
-                open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+            button("finder-accessibility", p, if finder_replace::status() == Status::NeedsBackgroundApproval { tx("Arka plan etkinliği", "Background Activity") } else { tx("Erişilebilirlik ayarları", "Accessibility settings") }, |_, _| {
+                if finder_replace::status() == Status::NeedsBackgroundApproval { finder_replace::open_background_settings(); }
+                else {
+                    finder_replace::request_permission();
+                    open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+                }
             })));
     }
     cards
@@ -2868,7 +2872,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             L::PanelBottom,
             t!("Pencere kapatılınca arka planda çalışmaya devam et"),
             Some(if cfg!(target_os = "macos") {
-                crate::i18n::tx("Kapat (⌘Q), Brysk'ı menü çubuğunda çalışır tutar. Çık tamamen kapatır.", "Close (⌘Q) keeps Brysk running in the menu bar. Quit exits completely.")
+                crate::i18n::tx("Pencereler kapanınca menü çubuğu simgesini koru. Çık (⌘Q), Brysk'ı kapatır.", "Keep the menu-bar icon when windows close. Quit (⌘Q) exits Brysk.")
             } else {
                 t!("Bildirim alanında bir simge kalır; yeni pencere anında açılır")
             }),

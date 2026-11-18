@@ -1240,10 +1240,7 @@ pub fn update(cx: &mut App, f: impl FnOnce(&mut Settings)) {
 
 #[cfg(target_os = "macos")]
 pub fn set_finder_dock_redirect(enabled: bool, cx: &mut App) {
-    update(cx, |s| {
-        s.finder_dock_redirect = enabled;
-        if enabled { s.run_in_background = true; }
-    });
+    update(cx, |s| s.finder_dock_redirect = enabled);
     if enabled { rf_win::finder_replace::request_permission(); }
 }
 

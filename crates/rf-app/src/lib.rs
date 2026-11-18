@@ -122,7 +122,7 @@ use crate::workspace::Workspace;
 /// tab-actions icon (a 14 px button at y = 17 in the 40 px bar has its centre 24 px from the
 /// top, exactly the icon's), with a 16 px left margin.
 pub(crate) fn titlebar_options() -> TitlebarOptions {
-    TitlebarOptions { traffic_light_position: Some(point(px(16.), px(17.))), ..TitleBar::title_bar_options() }
+    TitlebarOptions { traffic_light_position: Some(point(px(16.), px(16.))), ..TitleBar::title_bar_options() }
 }
 
 /// Window placement from the last session (ignored if it is implausibly small). Windows

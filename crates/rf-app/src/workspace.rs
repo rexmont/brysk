@@ -3438,9 +3438,13 @@ impl Workspace {
                     .h(px(22.))
                     .px_2()
                     .gap_1()
+                    .flex_shrink_0()
                     .items_center()
                     .rounded(theme::RADIUS_SM)
-                    .hover(|s| s.bg(p.hover).text_color(p.text))
+                    .bg(p.hover)
+                    .text_color(p.text)
+                    .cursor_pointer()
+                    .hover(|s| s.bg(p.pressed).text_color(p.text))
                     .tooltip(|w, cx| gpui_kit::component::tooltip::Tooltip::new(t!("Klasörü düzenleyicide aç")).build(w, cx))
                     .child(Icon::new(L::Code).size(px(12.)))
                     .child(t!("Aç"))
@@ -3503,6 +3507,7 @@ impl Workspace {
             .child(
                 h_flex()
                     .gap_3()
+                    .flex_shrink_0()
                     .items_center()
                     .children(git.map(|g| {
                         // Files-style git controls: ↑↓ (sync menu) and the branch (branch menu)

@@ -1023,7 +1023,18 @@ impl FolderView {
         let d = dir.clone();
         let work = cx.background_spawn(async move {
             let root = rf_win::git::repo_root(&d)?;
-            Some((rf_win::git::status(&root).ok().map(Arc::new)?, root))
+            let st = match rf_win::git::status(&root) {
+                Ok(st) => {
+                    log::debug!("git: {} ({} changed)", root.display(), st.files.len());
+                    Arc::new(st)
+                }
+                Err(e) => {
+                    // (the status bar's "open in editor" button and the git columns need this)
+                    log::warn!("git status {}: {e:#}", root.display());
+                    return None;
+                }
+            };
+            Some((st, root))
         });
         self._git_task = Some(cx.spawn(async move |this, cx| {
             let got = work.await;

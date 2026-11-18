@@ -108,6 +108,10 @@ impl AgentPaths {
             .bundleIdentifier()
             .ok_or_else(|| anyhow::anyhow!("Missing app identifier"))?
             .to_string();
+        validate_agent_identity(
+            &fs::read(contents.join("Library/LaunchAgents").join(PLIST))?,
+            &identifier,
+        )?;
         let directory = runtime_directory(&identifier);
         secure_directory(&directory)?;
         let hash = format!("{:x}", Sha256::digest(identifier.as_bytes()));
@@ -155,6 +159,38 @@ impl AgentPaths {
             }
         }
     }
+}
+
+fn validate_agent_identity(bytes: &[u8], identifier: &str) -> anyhow::Result<()> {
+    use objc2_foundation::{
+        NSArray, NSData, NSDictionary, NSPropertyListMutabilityOptions, NSPropertyListSerialization,
+    };
+    let plist = unsafe {
+        NSPropertyListSerialization::propertyListWithData_options_format_error(
+            &NSData::with_bytes(bytes),
+            NSPropertyListMutabilityOptions(0),
+            std::ptr::null_mut(),
+        )
+    }
+    .map_err(|e| anyhow::anyhow!("Invalid Finder helper plist: {e}"))?;
+    let dictionary = plist
+        .downcast::<NSDictionary>()
+        .map_err(|_| anyhow::anyhow!("Finder helper plist is not a dictionary"))?;
+    let label = dictionary
+        .objectForKey(&NSString::from_str("Label"))
+        .and_then(|v| v.downcast::<NSString>().ok());
+    let association = dictionary
+        .objectForKey(&NSString::from_str("AssociatedBundleIdentifiers"))
+        .and_then(|v| v.downcast::<NSArray>().ok())
+        .filter(|ids| ids.count() == 1)
+        .and_then(|ids| ids.objectAtIndex(0).downcast::<NSString>().ok());
+    // A renamed screenshot/QA bundle must never unregister the installed app's LaunchAgent.
+    anyhow::ensure!(
+        label.is_some_and(|v| v.to_string() == format!("{identifier}.finder-agent"))
+            && association.is_some_and(|v| v.to_string() == identifier),
+        "Finder helper identifiers do not match this app bundle"
+    );
+    Ok(())
 }
 
 fn runtime_directory(identifier: &str) -> PathBuf {
@@ -276,7 +312,8 @@ pub fn start(changed: impl Fn() + Send + 'static) {
                 };
                 let paths = match AgentPaths::current() {
                     Ok(p) => p,
-                    Err(_) => {
+                    Err(e) => {
+                        log::warn!("Finder service: {e:#}");
                         publish(Status::AppUnavailable);
                         return;
                     }
@@ -533,6 +570,34 @@ fn open_brysk(bundle: &Path, pending: std::sync::Arc<AtomicBool>) {
 #[cfg(test)]
 mod tests {
     use super::{runtime_directory, secure_directory};
+    #[test]
+    fn copied_app_cannot_control_another_bundles_finder_service() {
+        let production =
+            include_bytes!("../../../packaging/macos/com.rexmont.brysk.finder-agent.plist");
+        super::validate_agent_identity(production, "com.rexmont.brysk").unwrap();
+        assert!(super::validate_agent_identity(production, "com.rexmont.brysk.diskshot").is_err());
+        let qa = std::str::from_utf8(production)
+            .unwrap()
+            .replace("com.rexmont.brysk", "com.rexmont.brysk.qa");
+        super::validate_agent_identity(qa.as_bytes(), "com.rexmont.brysk.qa").unwrap();
+        assert!(super::validate_agent_identity(qa.as_bytes(), "com.rexmont.brysk").is_err());
+        let wrong_parent = qa.replace(
+            "<string>com.rexmont.brysk.qa</string>",
+            "<string>com.rexmont.brysk</string>",
+        );
+        assert!(
+            super::validate_agent_identity(wrong_parent.as_bytes(), "com.rexmont.brysk.qa")
+                .is_err()
+        );
+        for invalid in [
+            b"not a plist".as_slice(),
+            b"<plist><array/></plist>",
+            b"<plist><dict/></plist>",
+        ] {
+            assert!(super::validate_agent_identity(invalid, "com.rexmont.brysk").is_err());
+        }
+    }
+
     #[test]
     fn status_rejects_unbounded_payloads_and_unrelated_processes() {
         let directory = runtime_directory(&format!("status-test-{}", std::process::id()));

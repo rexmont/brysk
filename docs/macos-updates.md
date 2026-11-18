@@ -46,3 +46,8 @@ and signed loopback feed. Keep production's app and preferences untouched. Exerc
 no update, available update, cancellation, signed download, installation/relaunch,
 and operation completion before replacement. Do not use a fake version badge as
 evidence that an installation works.
+
+A renamed QA bundle must also use `<bundle identifier>.finder-agent` as its LaunchAgent
+`Label` and its own identifier in `AssociatedBundleIdentifiers`. Both the app and agent
+reject mismatched identities before accessing SMAppService, so a copied test app cannot
+unregister the installed app's Finder helper.

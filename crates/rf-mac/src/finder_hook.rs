@@ -90,7 +90,7 @@ fn stop_runloop(runloop: &CFRunLoop) {
     }
 }
 
-/// Called only by the main Brysk process. No permission prompt or tap while disabled.
+/// Called only by the Finder agent. No permission prompt or tap while disabled.
 pub fn start(
     executable: std::path::PathBuf,
     open: impl Fn() -> bool + Send + Sync + 'static,

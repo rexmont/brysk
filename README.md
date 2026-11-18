@@ -58,7 +58,7 @@ performance and interface changes.
 | Open in Terminal / editor | Services | Context menu + status bar; editor auto-detected |
 | Shortcuts | macOS | macOS Cmd **and** Explorer Ctrl keys |
 
-Current source builds include Sparkle for in-app updates: check in Settings → About,
+Current builds include Sparkle for in-app updates: check in Settings → About,
 or use the title-bar **Update available** button when a newer build is found. The
 first published alpha predates this updater and needs one manual installation of
 an updater-enabled build. See [macOS updates](docs/macos-updates.md).

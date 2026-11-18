@@ -25,8 +25,11 @@ def build_feed(archive, info, version, notes, signature, previous=None):
         ET.SubElement(channel, "link").text = "https://github.com/rexmont/brysk/releases"
         ET.SubElement(channel, "description").text = "Signed macOS updates for Brysk."
     build = info["CFBundleVersion"]
+    url = f"https://github.com/rexmont/brysk/releases/download/v{urllib.parse.quote(version, safe='')}/{urllib.parse.quote(archive.name, safe='')}"
     for item in list(channel.findall("item")):
-        if item.findtext(f"{{{SPARKLE}}}version") == build:
+        enclosure = item.find("enclosure")
+        # A replacement asset has a new signature; never retain its old signature at the same URL.
+        if item.findtext(f"{{{SPARKLE}}}version") == build or (enclosure is not None and enclosure.get("url") == url):
             channel.remove(item)
     item = ET.Element("item")
     channel.insert(3, item)
@@ -37,7 +40,6 @@ def build_feed(archive, info, version, notes, signature, previous=None):
     ET.SubElement(item, f"{{{SPARKLE}}}minimumSystemVersion").text = info["LSMinimumSystemVersion"]
     ET.SubElement(item, "description", {f"{{{SPARKLE}}}descriptionFormat": "plain-text"}).text = notes
     ET.SubElement(item, f"{{{SPARKLE}}}fullReleaseNotesLink").text = f"https://github.com/rexmont/brysk/releases/tag/v{version}"
-    url = f"https://github.com/rexmont/brysk/releases/download/v{urllib.parse.quote(version, safe='')}/{urllib.parse.quote(archive.name, safe='')}"
     ET.SubElement(item, "enclosure", {
         "url": url, "length": str(archive.stat().st_size), "type": "application/octet-stream",
         f"{{{SPARKLE}}}edSignature": signature,

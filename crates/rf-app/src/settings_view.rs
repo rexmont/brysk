@@ -2008,7 +2008,10 @@ fn files(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
             p,
             s.decimal_sizes,
             vec![(false, t!("İkili (1 KB = 1024 bayt)").into()), (true, t!("Ondalık (1 KB = 1000 bayt)").into())],
-            |s, v| s.decimal_sizes = v,
+            |s, v| {
+                s.decimal_sizes = v;
+                s.size_format_chosen = true;
+            },
         ),
     ));
     let pp = *p;

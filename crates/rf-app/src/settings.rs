@@ -533,7 +533,13 @@ pub struct Settings {
     pub select_on_hover: bool,
     pub double_click_up: bool,
     pub select_previous_on_up: bool,
+    /// Decimal units (1 KB = 1000 bytes) rather than binary (1024). macOS starts on decimal,
+    /// like Finder; Windows keeps binary.
     pub decimal_sizes: bool,
+    /// The user picked a size format themselves, so the platform's starting choice is not
+    /// applied over it on the next load.
+    #[serde(default)]
+    pub size_format_chosen: bool,
     pub calculate_folder_sizes: bool,
     /// Folders show their size on disk (files rounded up to whole clusters) instead of the sum
     /// of their file sizes.
@@ -793,7 +799,8 @@ impl Default for Settings {
             select_on_hover: false,
             double_click_up: true,
             select_previous_on_up: true,
-            decimal_sizes: false,
+            decimal_sizes: cfg!(target_os = "macos"),
+            size_format_chosen: false,
             calculate_folder_sizes: false,
             folder_size_on_disk: false,
             fast_file_ops: true,
@@ -1015,6 +1022,12 @@ impl Settings {
         if !self.restore_session && self.startup == StartupPref::Continue {
             self.startup = StartupPref::NewTab;
             self.restore_session = true;
+        }
+        // macOS sizes are decimal like Finder's. A file from before the choice marker did
+        // not record one, so it moves once; a later explicit choice is kept.
+        #[cfg(target_os = "macos")]
+        if !self.size_format_chosen {
+            self.decimal_sizes = true;
         }
         // "details" was the default before 0.3.3, so it says nothing about a choice: move it
         // once to "adaptive" (plain folders still open as details). Grid and columns stay.

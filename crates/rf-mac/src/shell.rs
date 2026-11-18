@@ -65,9 +65,18 @@ pub fn open_terminal_admin(dir: &Path) -> Result<()> {
 }
 
 /// Opens Terminal.app in `dir`.
+///
+/// Through LaunchServices, not AppleScript: `open -a Terminal <folder>` asks Terminal itself
+/// to open a window at that folder and activates the app, so the window comes to the front of
+/// Brysk. `tell application "Terminal" to do script` made a window but often left Terminal
+/// behind the active app.
 pub fn open_terminal(dir: &Path) -> Result<()> {
-    let script = format!("tell application \"Terminal\" to do script \"cd {}\"", dir.display().to_string().replace('"', "\\\""));
-    let status = std::process::Command::new("/usr/bin/osascript").args(["-e", &script]).status().context("Terminal açılamadı")?;
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("-a")
+        .arg("Terminal")
+        .arg(dir)
+        .status()
+        .context("Terminal açılamadı")?;
     anyhow::ensure!(status.success(), "Terminal açılamadı");
     Ok(())
 }

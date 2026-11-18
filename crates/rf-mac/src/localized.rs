@@ -69,7 +69,10 @@ pub fn label_if_known(dir: &Path) -> Option<Arc<str>> {
     KnownFolder::PINNED_DEFAULTS
         .iter()
         .find(|k| k.path_unchecked().as_deref() == Some(dir))
-        .map(|k| label(k.title()))
+        .and_then(|k| match k {
+            KnownFolder::Profile => dir.file_name().map(|name| Arc::from(name.to_string_lossy().as_ref())),
+            _ => Some(label(k.title())),
+        })
 }
 
 pub fn is_known(dir: &Path) -> bool {
@@ -105,4 +108,13 @@ pub fn expand_env(s: &str) -> String {
         out = out.replace("$HOME", &home.display().to_string());
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn home_label_is_the_username() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(super::label_if_known(&home).as_deref(), Some(home.file_name().unwrap().to_string_lossy().as_ref()));
+    }
 }

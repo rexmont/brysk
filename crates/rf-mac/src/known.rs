@@ -16,8 +16,9 @@ pub enum KnownFolder {
 }
 
 impl KnownFolder {
-    pub const PINNED_DEFAULTS: [KnownFolder; 7] = [
+    pub const PINNED_DEFAULTS: [KnownFolder; 8] = [
         KnownFolder::Applications,
+        KnownFolder::Profile,
         KnownFolder::Desktop,
         KnownFolder::Downloads,
         KnownFolder::Documents,
@@ -71,6 +72,15 @@ pub fn known_folders() -> Vec<(KnownFolder, PathBuf)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn home_is_pinned_just_below_applications() {
+        use super::KnownFolder;
+        let folders = super::known_folders();
+        let apps = folders.iter().position(|(k, _)| *k == KnownFolder::Applications).unwrap();
+        assert_eq!(folders[apps + 1], (KnownFolder::Profile, dirs::home_dir().unwrap()));
+        assert_eq!(folders.iter().filter(|(k, _)| *k == KnownFolder::Profile).count(), 1);
+    }
+
     #[test]
     fn resolves_desktop() {
         // Not every account has a Desktop folder, but the profile always exists.

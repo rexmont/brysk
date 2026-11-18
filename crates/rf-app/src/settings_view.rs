@@ -821,7 +821,7 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
                 .iter()
                 .enumerate()
                 .map(|(i, page)| {
-                    let shown = if page.is_empty() { t!("Ana Sayfa").to_string() } else { page.clone() };
+                    let shown = if page.is_empty() { t!("Gösterge paneli").to_string() } else { page.clone() };
                     sub(
                         &pp,
                         &shown,
@@ -1033,7 +1033,7 @@ fn hidden_drives_card(p: &Palette, s: &Settings) -> AnyElement {
         p,
         L::HardDrive,
         t!("Gizlenen sürücüler"),
-        Some(t!("Gizlediğiniz sürücü kenar çubuğunda, Ana Sayfa'da ve adres çubuğunun sürücü listesinde görünmez; adresini yazarak yine açabilirsiniz. Explorer'ın gizlediği sürücüler burada da gizlidir.")),
+        Some(t!("Gizlediğiniz sürücü kenar çubuğunda, gösterge panelinde ve adres çubuğunun sürücü listesinde görünmez; adresini yazarak yine açabilirsiniz. Explorer'ın gizlediği sürücüler burada da gizlidir.")),
         row.into_any_element(),
     )
 }
@@ -1779,8 +1779,8 @@ fn appearance(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     v.push(expander(
         "home-sections",
         p,
-        L::House,
-        t!("Ana sayfa bölümleri"),
+        L::LayoutDashboard,
+        t!("Gösterge paneli bölümleri"),
         None,
         None,
         move || {

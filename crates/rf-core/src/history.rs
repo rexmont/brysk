@@ -105,7 +105,7 @@ impl Location {
 
     pub fn title(&self) -> String {
         match self {
-            Location::Home => "Ana Sayfa".into(),
+            Location::Home => "Gösterge paneli".into(),
             Location::RecycleBin => "Geri Dönüşüm Kutusu".into(),
             Location::Settings => "Ayarlar".into(),
             Location::Tag(_) => "Etiket".into(),

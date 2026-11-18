@@ -233,8 +233,7 @@ fn update_jump_list(places: &crate::places::Places) {
     if !places.loaded || !places.extras_loaded || std::env::var_os("RUSTYFILES_MULTI_INSTANCE").is_some() || std::env::var_os("RUSTYFILES_INSTANCE").is_some() {
         return;
     }
-    // in the UI language, as the sidebar shows them (a default pin's title is its Turkish name)
-    let pins: Vec<(String, PathBuf)> = places.pinned.iter().map(|p| (crate::i18n::td(&p.title), p.path.clone())).collect();
+    let pins: Vec<(String, PathBuf)> = places.pinned.iter().map(|p| (p.title.clone(), p.path.clone())).collect();
     // the folders used last (Windows' recent items), without the pinned ones
     let recent: Vec<(String, PathBuf)> = places
         .recent
@@ -3124,7 +3123,7 @@ impl Workspace {
             .py_0p5()
             .rounded(theme::RADIUS_SM)
             .hover(|s| s.bg(p.hover))
-            .child(Icon::new(L::House).size(px(14.)).text_color(p.text_secondary))
+            .child(Icon::new(L::LayoutDashboard).size(px(14.)).text_color(p.text_secondary))
             .on_click(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 this.navigate(Location::Home, window, cx);
@@ -3358,9 +3357,9 @@ impl Workspace {
             }));
         col = col.child(self.sidebar_item(
             "sb-home".into(),
-            L::House,
+            L::LayoutDashboard,
             p.accent,
-            t!("Ana Sayfa").into(),
+            t!("Gösterge paneli").into(),
             Location::Home,
             cur == Location::Home,
             None,
@@ -3382,7 +3381,7 @@ impl Workspace {
         for (i, f) in pinned.into_iter().enumerate() {
             let loc = Location::Path(f.path.clone());
             let active = cur == loc;
-            let title = crate::i18n::td(&f.title);
+            let title = f.title;
             let drag = PinDrag { ix: i, path: f.path.clone(), title: title.clone().into() };
             let target_path = f.path.clone();
             let item = self.sidebar_item(("sb-pin", i).into(), f.icon, p.accent, title, loc, active, None, p, cx);
@@ -3958,7 +3957,7 @@ fn parse_location(text: &str) -> Option<Location> {
         return None;
     }
     let lower = t.to_lowercase();
-    if lower == "home" || lower == "ana sayfa" {
+    if matches!(lower.as_str(), "dashboard" | "gösterge paneli" | "home" | "ana sayfa") {
         return Some(Location::Home);
     }
     // Environment variables like %USERPROFILE%
@@ -4861,6 +4860,17 @@ mod tests {
     use super::{CLOSED_MAX, breadcrumbs, parse_location, remember_closed};
     use rf_core::Location;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn dashboard_address_keeps_existing_home_aliases_and_sessions() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        assert_eq!(crate::i18n::td(&Location::Home.title()), "Dashboard");
+        for address in ["Dashboard", "gösterge paneli", "home", "Ana Sayfa"] {
+            assert_eq!(parse_location(address), Some(Location::Home));
+        }
+        assert_eq!(super::session_text(&Location::Home), "");
+        assert_eq!(super::parse_launch("").0, Location::Home);
+    }
 
     #[test]
     fn the_closed_tab_list_keeps_the_newest_places() {

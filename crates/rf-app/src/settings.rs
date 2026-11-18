@@ -430,6 +430,9 @@ pub struct Settings {
     /// removal is kept: the migration never puts it back.
     #[serde(default)]
     pub apps_pinned: bool,
+    /// The macOS home folder was pinned below Applications once; later changes are kept.
+    #[serde(default)]
+    pub home_pinned: bool,
     /// Folder aliases: `@name` in the address box (Files' folder aliases).
     pub folder_aliases: std::collections::BTreeMap<String, PathBuf>,
     /// The drives that are not listed (the sidebar, the Home page, the address bar's list of drives), as letters ("V"). A drive
@@ -748,6 +751,7 @@ impl Default for Settings {
             saved_sessions: Vec::new(),
             pinned: None,
             apps_pinned: false,
+            home_pinned: false,
             folder_aliases: Default::default(),
             hidden_drives: Vec::new(),
             accent_color: String::new(),
@@ -1052,6 +1056,17 @@ impl Settings {
             }
             self.apps_pinned = true;
         }
+        #[cfg(target_os = "macos")]
+        if !self.home_pinned {
+            if let Some(home) = dirs::home_dir() {
+                if let Some(list) = &mut self.pinned {
+                    list.retain(|path| *path != home);
+                    let after_apps = list.iter().position(|path| path == std::path::Path::new("/Applications")).map_or(0, |i| i + 1);
+                    list.insert(after_apps, home);
+                }
+                self.home_pinned = true;
+            }
+        }
         // "details" was the default before 0.3.3, so it says nothing about a choice: move it
         // once to "adaptive" (plain folders still open as details). Grid and columns stay.
         if !self.adaptive_offered {
@@ -1275,6 +1290,45 @@ pub fn update_live(cx: &mut App, f: impl FnOnce(&mut Settings)) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn home_is_pinned_below_applications_once() {
+        use std::path::PathBuf;
+        let home = dirs::home_dir().unwrap();
+        let apps = PathBuf::from("/Applications");
+        let downloads = home.join("Downloads");
+        for pins in [vec![downloads.clone()], vec![home.clone(), apps.clone(), downloads.clone(), home.clone()]] {
+            let mut settings = super::Settings { pinned: Some(pins), ..Default::default() };
+            settings.migrate();
+            assert_eq!(settings.pinned, Some(vec![apps.clone(), home.clone(), downloads.clone()]));
+            assert!(settings.home_pinned);
+
+            // Removing it later survives saving and loading the settings again.
+            settings.pinned.as_mut().unwrap().retain(|path| *path != home);
+            let mut restored = super::Settings::parse_lenient(&toml::to_string(&settings).unwrap()).unwrap();
+            restored.migrate();
+            assert_eq!(restored.pinned, Some(vec![apps.clone(), downloads.clone()]));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn home_pin_keeps_default_pins_and_an_earlier_applications_removal() {
+        let mut defaults = super::Settings::default();
+        defaults.migrate();
+        assert!(defaults.pinned.is_none());
+        assert!(defaults.home_pinned);
+
+        let home = dirs::home_dir().unwrap();
+        let downloads = home.join("Downloads");
+        let mut settings = super::Settings { pinned: Some(vec![downloads.clone()]), apps_pinned: true, ..Default::default() };
+        settings.migrate();
+        assert_eq!(settings.pinned, Some(vec![home.clone(), downloads.clone()]));
+        settings.pinned = Some(vec![downloads.clone(), home.clone()]);
+        settings.migrate();
+        assert_eq!(settings.pinned, Some(vec![downloads, home]));
+    }
+
     #[test]
     fn menu_bar_icon_is_opt_in_and_persists_independently_of_background_mode() {
         use super::Settings;

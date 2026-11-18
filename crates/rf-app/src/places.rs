@@ -49,7 +49,11 @@ pub struct Pinned {
 /// A known folder's name in the UI language. The platform layer returns the Turkish source key
 /// of the string table (`KnownFolder::title`), because it cannot see the language setting, so
 /// every label made from it goes through the translator here.
-fn known_title(k: KnownFolder) -> String {
+fn known_title(k: KnownFolder, _path: &std::path::Path) -> String {
+    #[cfg(target_os = "macos")]
+    if k == KnownFolder::Profile {
+        return rf_core::history::display_name(_path);
+    }
     crate::i18n::t(k.title()).to_string()
 }
 
@@ -242,12 +246,12 @@ impl Places {
             let pinned = match user_pins {
                 None => known
                     .into_iter()
-                    .map(|(k, path)| Pinned { title: known_title(k), path, icon: known_icon(k) })
+                    .map(|(k, path)| Pinned { title: known_title(k, &path), path, icon: known_icon(k) })
                     .collect::<Vec<_>>(),
                 Some(paths) => paths
                     .into_iter()
                     .map(|path| match known.iter().find(|(_, p)| *p == path) {
-                        Some((k, _)) => Pinned { title: known_title(*k), path, icon: known_icon(*k) },
+                        Some((k, _)) => Pinned { title: known_title(*k, &path), path, icon: known_icon(*k) },
                         None => Pinned {
                             title: rf_core::history::display_name(&path),
                             path,
@@ -354,6 +358,17 @@ pub fn pins_follow(cx: &mut App, from: &std::path::Path, to: Option<&std::path::
 mod pins_follow_tests {
     use super::pins_after;
     use std::path::{Path, PathBuf};
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn home_pin_shows_the_username_and_a_house() {
+        crate::i18n::set(crate::i18n::Lang::En);
+        for username in ["alex", "Müzik", "Özer"] {
+            let path = PathBuf::from("/Users").join(username);
+            assert_eq!(super::known_title(rf_win::KnownFolder::Profile, &path), username);
+        }
+        assert_eq!(super::known_icon(rf_win::KnownFolder::Profile), gpui_kit::assets::IconName::House);
+    }
 
     #[test]
     fn a_pin_goes_with_its_folder_or_follows_it() {

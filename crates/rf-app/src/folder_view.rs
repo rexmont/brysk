@@ -742,7 +742,7 @@ impl FolderView {
 
     pub fn tab_icon(&self) -> L {
         match self.location() {
-            Location::Home => L::House,
+            Location::Home => L::LayoutDashboard,
             Location::Settings => L::Settings,
             Location::RecycleBin => L::Trash,
             Location::Search { .. } => L::Search,
@@ -750,6 +750,8 @@ impl FolderView {
             Location::Library { .. } => L::Library,
             Location::Shell { .. } => L::Usb,
             Location::DiskUsage(_) => L::ChartPie,
+            #[cfg(target_os = "macos")]
+            Location::Path(p) if rf_win::KnownFolder::Profile.path_unchecked().as_ref() == Some(p) => L::House,
             Location::Path(p) if rf_win::network::server_root(p).is_some() => L::Server,
             // the archive itself or a folder inside it (name check only: no disk access here, not even for a `.001` name)
             Location::Path(p) if crate::archive_view::is_browsable_path_by_name(p) => L::FileArchive,
@@ -4308,7 +4310,7 @@ impl FolderView {
             pinned_grid = pinned_grid.child(
                 card(("pin", i).into())
                     .child(Icon::new(f.icon).size(px(28.)).text_color(p.accent))
-                    .child(div().text_sm().child(crate::i18n::td(&f.title)))
+                    .child(div().text_sm().child(f.title))
                     .on_click(cx.listener(move |this, _, _, cx| this.navigate(Location::Path(path.clone()), cx))),
             );
         }

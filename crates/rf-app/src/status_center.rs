@@ -1480,7 +1480,7 @@ fn render_op(ops: &Entity<Ops>, op: &OpState, p: &Palette) -> AnyElement {
                         .gap_2()
                         .text_xs()
                         .text_color(p.text_secondary)
-                        .child(div().flex_shrink_0().text_color(color).child(status))
+                        .child(div().flex_1().min_w_0().whitespace_normal().text_color(color).child(status))
                         .children(op.current.clone().filter(|_| running).map(|c| {
                             div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(c)
                         }))

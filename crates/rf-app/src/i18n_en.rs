@@ -2064,4 +2064,11 @@ pub const EN: &[(&str, &str)] = &[
         "Items other applications put in the Trash are listed only when Brysk has Full Disk Access.",
     ),
     ("Tam Disk Erişimi ayarlarını aç", "Open Full Disk Access settings"),
+    ("git push başarısız", "git push failed"),
+    ("git pull başarısız", "git pull failed"),
+    ("git fetch başarısız", "git fetch failed"),
+    ("git clone başarısız", "git clone failed"),
+    ("git status başarısız", "git status failed"),
+    ("Uzak depolar okunamadı", "Could not read the remotes"),
+    ("Depo başlatılamadı", "Could not initialize the repository"),
 ];

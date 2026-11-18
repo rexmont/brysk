@@ -26,15 +26,49 @@ pub enum UndoOp {
 static STACK: Mutex<Vec<UndoOp>> = Mutex::new(Vec::new());
 static REDO: Mutex<Vec<UndoOp>> = Mutex::new(Vec::new());
 const MAX: usize = 50;
+/// (source, target) path pairs kept across the whole stack. One operation is never split: an
+/// operation larger than this stays undoable by itself, and older ones go instead. Fifty copies
+/// of a 100k-file move used to keep ten million paths alive (hundreds of MB); a move of a folder
+/// is still undone whole.
+const MAX_PAIRS: usize = 20_000;
+
+/// How many paths an operation keeps (the pairs it would move back, or the files it made).
+fn pairs(op: &UndoOp) -> usize {
+    match op {
+        UndoOp::Renamed { .. } | UndoOp::Created { .. } => 1,
+        UndoOp::Transferred { pairs, .. } | UndoOp::Recycled { pairs } => pairs.len(),
+        UndoOp::Flattened { rec, .. } => rec.moves.len() + rec.removed.len(),
+        #[cfg(windows)]
+        UndoOp::Organized { rec } => rec.count(),
+    }
+}
+
+/// Caps a stack: at most [`MAX`] operations and [`MAX_PAIRS`] paths, oldest first. The newest
+/// operation is always kept whole (undo of it must work, even if it alone exceeds the budget).
+fn trim(stack: &mut Vec<UndoOp>) {
+    while stack.len() > MAX {
+        stack.remove(0);
+    }
+    let mut total: usize = stack.iter().map(pairs).sum();
+    while stack.len() > 1 && total > MAX_PAIRS {
+        total -= pairs(&stack[0]);
+        stack.remove(0);
+    }
+}
 
 /// Records a new user operation (a new operation drops whatever could be redone).
 pub fn push(op: UndoOp) {
     REDO.lock().clear();
     let mut s = STACK.lock();
     s.push(op);
-    if s.len() > MAX {
-        s.remove(0);
-    }
+    trim(&mut s);
+}
+
+/// Keeps an undone operation for Ctrl+Y, under the same caps.
+fn push_redo(op: UndoOp) {
+    let mut r = REDO.lock();
+    r.push(op);
+    trim(&mut r);
 }
 
 /// A short name for what an operation did, for a menu entry that says what it would undo ("Geri al: Silme").
@@ -79,7 +113,14 @@ fn top_made(stack: &[UndoOp], path: &std::path::Path) -> bool {
 #[cfg(test)]
 mod tests {
     // (not `use super::*`: the toolkit's glob brings an attribute named `test` that shadows the real one)
-    use super::{PathBuf, Transfer, UndoOp, top_made};
+    use super::{MAX, MAX_PAIRS, PathBuf, Transfer, UndoOp, pairs, top_made, trim};
+
+    fn made(n: usize) -> UndoOp {
+        UndoOp::Transferred {
+            kind: Transfer::Copy,
+            pairs: (0..n).map(|i| (PathBuf::from(format!("/tmp/src/{i}")), PathBuf::from(format!("/tmp/dst/{i}")))).collect(),
+        }
+    }
 
     #[test]
     fn the_undo_button_of_a_card_needs_its_own_record_on_top_of_the_stack() {
@@ -93,6 +134,36 @@ mod tests {
         // a newer operation on top: the button would undo that one instead
         assert!(!top_made(&[copy.clone(), UndoOp::Created { path: PathBuf::from(r"C:\rf-test-card\other") }], &made));
         assert!(top_made(&[bin, copy], &made));
+    }
+
+    #[test]
+    fn the_stack_keeps_fifty_operations() {
+        let mut s: Vec<UndoOp> = (0..MAX + 7).map(|i| UndoOp::Created { path: PathBuf::from(format!("/tmp/{i}")) }).collect();
+        trim(&mut s);
+        assert_eq!(s.len(), MAX);
+        assert!(matches!(&s[0], UndoOp::Created { path } if path == std::path::Path::new("/tmp/7")), "the oldest went");
+    }
+
+    #[test]
+    fn a_huge_operation_is_not_split_and_older_ones_make_room() {
+        // ten copies of 5k files: only four fit the 20k-path budget
+        let mut s: Vec<UndoOp> = (0..10).map(|_| made(5_000)).collect();
+        trim(&mut s);
+        assert_eq!(s.len(), MAX_PAIRS / 5_000);
+        assert_eq!(s.iter().map(pairs).sum::<usize>(), MAX_PAIRS);
+        assert_eq!(s.len(), 4, "the newest four stayed, whole");
+        // a single operation bigger than the budget is still undoable
+        let mut one = vec![made(MAX_PAIRS * 3)];
+        trim(&mut one);
+        assert_eq!(one.len(), 1);
+        assert_eq!(pairs(&one[0]), MAX_PAIRS * 3);
+    }
+
+    #[test]
+    fn small_operations_are_kept() {
+        let mut s: Vec<UndoOp> = (0..MAX).map(|i| UndoOp::Renamed { from: PathBuf::from(format!("/tmp/a{i}")), to: PathBuf::from(format!("/tmp/b{i}")) }).collect();
+        trim(&mut s);
+        assert_eq!(s.len(), MAX, "50 single files never reach the path budget");
     }
 }
 
@@ -111,7 +182,7 @@ pub fn forget_organized(token: u64) -> bool {
     };
     match op {
         Some(op) => {
-            REDO.lock().push(op);
+            push_redo(op);
             true
         }
         None => false,
@@ -121,7 +192,7 @@ pub fn forget_organized(token: u64) -> bool {
 fn undo_op(op: UndoOp, cx: &mut App) {
     // creating an item can't be replayed (its contents may have changed), everything else can
     if !matches!(op, UndoOp::Created { .. }) {
-        REDO.lock().push(op.clone());
+        push_redo(op.clone());
     }
     match op {
         UndoOp::Renamed { from, to } => {
@@ -168,7 +239,11 @@ fn undo_op(op: UndoOp, cx: &mut App) {
 pub fn redo(cx: &mut App) {
     let Some(op) = REDO.lock().pop() else { return };
     // it becomes undoable again
-    STACK.lock().push(op.clone());
+    {
+        let mut s = STACK.lock();
+        s.push(op.clone());
+        trim(&mut s);
+    }
     match op {
         UndoOp::Renamed { from, to } => {
             let name = to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();

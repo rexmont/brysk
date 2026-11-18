@@ -2063,4 +2063,5 @@ pub const EN: &[(&str, &str)] = &[
         "Başka uygulamaların çöp sepetine attığı öğeler yalnızca Tam Disk Erişimi verildiğinde listelenir.",
         "Items other applications put in the Trash are listed only when Brysk has Full Disk Access.",
     ),
+    ("Tam Disk Erişimi ayarlarını aç", "Open Full Disk Access settings"),
 ];

@@ -2270,8 +2270,28 @@ impl FolderView {
             self.select_only(next);
         }
         let row = if self.view_mode == ViewMode::Grid { next / self.grid_cols.max(1) } else { self.list_row(next) };
-        self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+        // After the user scrolls the selected item out of view, an arrow key must bring the
+        // selection back into sight: centre it rather than scrolling by one edge row.
+        let old_row = self.cursor.map(|c| if self.view_mode == ViewMode::Grid { c / self.grid_cols.max(1) } else { self.list_row(c) }).unwrap_or(row);
+        let strategy = if self.row_is_visible(old_row) { ScrollStrategy::Nearest } else { ScrollStrategy::Center };
+        self.scroll.scroll_to_item(row, strategy);
         cx.notify();
+    }
+
+    /// Whether a list row is inside the visible part of the scrolling list (used to reveal a
+    /// selection after the user has scrolled away from it).
+    fn row_is_visible(&self, row: usize) -> bool {
+        let st = self.scroll.0.borrow();
+        let bounds = st.base_handle.bounds();
+        if bounds.size.height <= px(0.) {
+            return false;
+        }
+        let off = st.base_handle.offset();
+        let row_h = if self.view_mode == ViewMode::Grid { self.grid_row_h() } else { self.row_h() };
+        let top = f32::from(-off.y);
+        let bottom = top + f32::from(bounds.size.height);
+        let y = row as f32 * f32::from(row_h);
+        y + f32::from(row_h) > top && y < bottom
     }
 
     fn grid_tile_w(&self) -> Pixels {
@@ -2315,10 +2335,15 @@ impl FolderView {
     }
 
     pub fn set_layout_size(&mut self, n: u8, cx: &mut Context<Self>) {
+        let before = self.layout_size();
         match (self.view_mode, self.grid_style) {
             (ViewMode::Details, _) => self.row_size = n.min(ROW_SIZES.len() as u8 - 1),
             (ViewMode::Grid, GridStyle::Tiles) => self.grid_size = n.min(GRID_SIZES.len() as u8 - 1),
             _ => return,
+        }
+        if matches!(self.view_mode, ViewMode::Grid) && self.layout_size() != before {
+            // (pictures still being made for the old tile size are not going to be shown)
+            self.images.update(cx, |c, _| c.cancel_pending());
         }
         self.remember_layout(cx);
         cx.notify();
@@ -2341,6 +2366,8 @@ impl FolderView {
         let n = (self.grid_size as i32 + delta).clamp(0, GRID_SIZES.len() as i32 - 1) as u8;
         if n != self.grid_size {
             self.grid_size = n;
+            // (the tiles of the size being left are not going to be shown)
+            self.images.update(cx, |c, _| c.cancel_pending());
             self.remember_layout(cx);
             cx.notify();
         }
@@ -2366,6 +2393,9 @@ impl FolderView {
                 self.rebuild_visible();
             }
             self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+            // (a grid's tiles and a details list's icons are not interchangeable: drop what is
+            // still being made for the view the user just left)
+            self.images.update(cx, |c, _| c.cancel_pending());
             self.remember_layout(cx);
             cx.notify();
         }

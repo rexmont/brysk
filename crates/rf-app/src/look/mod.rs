@@ -142,6 +142,7 @@ impl LookManager {
             window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(r.x), px(r.y)), size: gpui_kit::size(px(r.w), px(r.h)) })),
             window_min_size: Some(gpui_kit::size(px(320.), px(180.))),
             window_background: backdrop(&s),
+            titlebar: Some(crate::titlebar_options()),
             focus: s.look_focus_on_open,
             ..TitleBar::window_options()
         };

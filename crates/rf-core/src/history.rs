@@ -223,6 +223,36 @@ pub struct History {
     forward: Vec<Location>,
 }
 
+/// Entries kept per stack (browser-style depth).
+const MAX_ENTRIES: usize = 200;
+/// Path text kept per stack. Deep histories of very long paths (or searches with long queries)
+/// are capped too, so one pane cannot pin hundreds of KB of places; ordinary histories (a few
+/// thousand characters) never reach it.
+const MAX_TEXT: usize = 64 * 1024;
+
+/// The heap text a place holds, with room for the enum and the `Vec` slot.
+fn text_cost(loc: &Location) -> usize {
+    let len = match loc {
+        Location::Path(p) | Location::DiskUsage(p) => p.as_os_str().len(),
+        Location::Search { root, query } => root.as_os_str().len() + query.len(),
+        Location::Library { file, name } => file.as_os_str().len() + name.len(),
+        Location::Shell { parsing, name } => parsing.len() + name.len(),
+        Location::Home | Location::RecycleBin | Location::Settings | Location::Tag(_) => 0,
+    };
+    len + 24
+}
+
+fn trim(stack: &mut Vec<Location>) {
+    while stack.len() > MAX_ENTRIES {
+        stack.remove(0);
+    }
+    let mut total: usize = stack.iter().map(text_cost).sum();
+    while stack.len() > 1 && total > MAX_TEXT {
+        total -= text_cost(&stack[0]);
+        stack.remove(0);
+    }
+}
+
 impl History {
     pub fn new(start: Location) -> Self {
         Self { back: Vec::new(), current: start.cleaned(), forward: Vec::new() }
@@ -237,9 +267,7 @@ impl History {
         }
         let prev = std::mem::replace(&mut self.current, to);
         self.back.push(prev);
-        if self.back.len() > 200 {
-            self.back.remove(0);
-        }
+        trim(&mut self.back);
         self.forward.clear();
     }
     pub fn can_back(&self) -> bool {
@@ -252,6 +280,7 @@ impl History {
         let prev = self.back.pop()?;
         let cur = std::mem::replace(&mut self.current, prev);
         self.forward.push(cur);
+        trim(&mut self.forward);
         Some(&self.current)
     }
     /// Back entries, most recent first.
@@ -281,6 +310,7 @@ impl History {
         let next = self.forward.pop()?;
         let cur = std::mem::replace(&mut self.current, next);
         self.back.push(cur);
+        trim(&mut self.back);
         Some(&self.current)
     }
 }
@@ -375,6 +405,34 @@ mod tests {
             Some(Location::Path("C:\\".into()))
         );
         assert_eq!(display_name(Path::new("C:\\")), "C:");
+    }
+
+    #[test]
+    fn a_deep_history_keeps_the_newest_entries() {
+        let mut h = History::new(Location::Home);
+        for i in 0..MAX_ENTRIES + 50 {
+            h.navigate(Location::Path(PathBuf::from(format!("/tmp/deep/{i}"))));
+        }
+        assert_eq!(h.back_entries().count(), MAX_ENTRIES);
+        assert_eq!(h.back_entries().next(), Some(&Location::Path(PathBuf::from(format!("/tmp/deep/{}", MAX_ENTRIES + 48)))));
+        assert!(h.back_n(MAX_ENTRIES));
+        assert!(!h.can_back(), "the deepest kept entry is the end of the history");
+        assert_eq!(h.current(), &Location::Path(PathBuf::from("/tmp/deep/49")));
+    }
+
+    #[test]
+    fn a_history_of_very_long_paths_is_capped_by_text() {
+        let mut h = History::new(Location::Home);
+        let long = |i: usize| Location::Path(PathBuf::from(format!("/tmp/{}{i}", "a".repeat(3000))));
+        for i in 0..40 {
+            h.navigate(long(i));
+        }
+        let kept: usize = h.back_entries().map(text_cost).sum();
+        assert!(kept <= MAX_TEXT, "kept {kept} bytes");
+        assert!(h.back_entries().count() > 5, "the budget still holds a useful depth");
+        // and going back from a capped history still works, newest first
+        assert_eq!(h.back(), Some(&long(38)));
+        assert!(h.can_forward());
     }
 }
 

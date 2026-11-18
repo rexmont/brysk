@@ -277,6 +277,21 @@ Next (visible gaps, in order):
   keeps the app alive and Dock/status-bar activation reopens it (GPUI's reopen delegate);
   File/App menu entries that make sense without a window open one. Settings pages no longer
   show Windows-only material/search/start-up/default-manager/dialog rows or wording.
+
+* Performance (macOS 26 arm64; measurements in debug unless noted): the 480k-name index
+  dropped from ~143 MB to ~38 MB of footprint (release with the index on: 208 MB RSS,
+  111 MB physical footprint, 39 MB index; peak 146 MB), its cache from 63 MB to 22 MB, and
+  `git status` in a large repository from 1.38 s to 47 ms. A 96-image grid went from 56 MB
+  to 40 MB of footprint; a 300-preview walk from 279 MB to 198 MB end state (218 → 123 MB
+  footprint) thanks to a fixed 4-worker thumbnail pool and the GPU atlas sweep. Undo/redo's
+  50-operation worst case fell from +100 MB to +4 MB, tag updates from 82 MB to 45 MB peak,
+  and histories/session snapshots/closes now release their state. The remaining startup cost
+  is the once-per-launch index walk (6.6 s of one core here; idle CPU is ~0).
+* Known limits for 1.0: Get Info is read-only (no permission/tag editing yet); the Trash lists
+  items Brysk deleted — Finder/other-app items need Full Disk Access and are not enumerated
+  (the empty state says this and links to the setting); same-folder copy and name clashes keep
+  both instead of prompting; long-operation notifications are off (Status Center cards remain);
+  HyperSearch opens on the main display; browser bookmarks cover stable Chrome/Edge.
 * DirectLook: AVFoundation playback + PDFKit pages (the rustdecoder window route is Windows-only).
 * NSStatusItem menu bar (background mode), Carbon hotkey for quick search, Finder selection hook,
   Carbon/AppKit context-menu verbs ("Open With", "Reveal in Finder", tags).

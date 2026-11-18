@@ -675,10 +675,15 @@ impl Preview {
         if let Some((_, e)) = &self.target {
             self.trace.selected(&e.ext, e.size);
         }
-        // redraw once the hold is over: the icon then shows if the thumbnail still isn't there
+        // redraw once the hold is over: the icon then shows if the thumbnail still isn't there.
+        // (and let go of the stand-in: it was only kept for that short hold, and a 1280 px
+        // Quick Look picture is several MB held by the pane for no one)
         self._hold_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(HOLD).await;
-            let _ = this.update(cx, |_, cx| cx.notify());
+            let _ = this.update(cx, |pv, cx| {
+                pv.last_thumb = None;
+                cx.notify();
+            });
         }));
         self.stop_player();
         self._task = None;
@@ -686,6 +691,9 @@ impl Preview {
         self._media_task = None;
         self.extra = None;
         self._extra_task = None;
+        // (the old file's text is not drawn once the target changes — it is filtered by path —
+        // so let the buffer go now rather than keeping up to TEXT_LIMIT of it resident)
+        self.text = None;
         if let Some((path, e)) = &self.target {
             let p = path.clone();
             let work: Option<Task<Option<Extra>>> = if e.is_dir() || e.is_cloud_placeholder() {
@@ -716,7 +724,8 @@ impl Preview {
                 self._extra_task = Some(cx.spawn(async move |this, cx| {
                     let r = work.await;
                     let _ = this.update(cx, |v, cx| {
-                        if let Some(x) = r {
+                        // (the user may have moved on: that block is not this file's)
+                        if let Some(x) = r.filter(|_| v.target.as_ref().is_some_and(|(tp, _)| *tp == p)) {
                             v.extra = Some((p, x));
                             cx.notify();
                         }
@@ -790,8 +799,10 @@ impl Preview {
                 self._archive_task = Some(cx.spawn(async move |this, cx| {
                     if let Some(real) = work.await {
                         let _ = this.update(cx, |v, cx| {
-                            v.archive_copy = Some((path2, real));
-                            cx.notify();
+                            if v.target.as_ref().is_some_and(|(tp, _)| *tp == path2) {
+                                v.archive_copy = Some((path2, real));
+                                cx.notify();
+                            }
                         });
                     }
                 }));
@@ -807,8 +818,12 @@ impl Preview {
                 self._task = Some(cx.spawn(async move |this, cx| {
                     let text = read.await;
                     let _ = this.update(cx, |v, cx| {
-                        v.text = text.map(|t| (path, t.into()));
-                        cx.notify();
+                        // (a read that finished after the user moved on must not put the old
+                        // file's buffer back: the pane shows only the current target's text)
+                        if v.target.as_ref().is_some_and(|(tp, _)| *tp == path) {
+                            v.text = text.map(|t| (path, t.into()));
+                            cx.notify();
+                        }
                     });
                 }));
             }

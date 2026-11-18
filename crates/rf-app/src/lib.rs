@@ -118,6 +118,12 @@ use rf_core::Location;
 
 use crate::workspace::Workspace;
 
+/// The window title bar's options: the traffic lights sit in the middle of our 40 px custom
+/// title bar (the toolkit default, 9 px from the top, leaves them high up).
+pub(crate) fn titlebar_options() -> TitlebarOptions {
+    TitlebarOptions { traffic_light_position: Some(point(px(9.), px(14.))), ..TitleBar::title_bar_options() }
+}
+
 /// Window placement from the last session (ignored if it is implausibly small).
 pub(crate) fn restored_bounds(cx: &App) -> Option<WindowBounds> {
     let [x, y, w, h, max] = cx.global::<settings::Settings>().window?;
@@ -256,6 +262,7 @@ pub fn open_main_window_made(
         window_bounds: Some(bounds.unwrap_or_else(|| WindowBounds::centered(size(px(1280.), px(800.)), cx))),
         window_min_size: Some(size(px(720.), px(420.))),
         window_background: crate::theme::window_material(WindowBackgroundAppearance::MicaBackdrop),
+        titlebar: Some(titlebar_options()),
         // A window asked for from a menu opens while that menu is closing: make sure it is
         // the one in front afterwards (Cmd+N and the menu item behave the same).
         focus: true,

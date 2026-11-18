@@ -483,6 +483,13 @@ impl Render for RecycleView {
                 .child(div().text_color(p.text_secondary).child(if cfg!(target_os = "macos") { t!("Çöp sepeti boş") } else { t!("Geri dönüşüm kutusu boş") }))
                 .when(cfg!(target_os = "macos"), |d| {
                     d.child(div().pt_2().text_xs().text_color(p.text_tertiary).child(t!("Başka uygulamaların çöp sepetine attığı öğeler yalnızca Tam Disk Erişimi verildiğinde listelenir.")))
+                        .child(
+                            button("rb-fda", L::Settings, t!("Tam Disk Erişimi ayarlarını aç"), true, &p).on_click(|_, _, _| {
+                                let _ = std::process::Command::new("/usr/bin/open")
+                                    .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+                                    .spawn();
+                            }),
+                        )
                 })
                 .into_any_element()
         } else if self.order.is_empty() {

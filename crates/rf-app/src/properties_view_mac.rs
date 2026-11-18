@@ -44,6 +44,7 @@ pub fn open_with(paths: Vec<PathBuf>, images: Entity<ImageCache>, _locked: bool,
         display_id: display,
         window_min_size: Some(size(px(MIN_WIDTH), px(MIN_HEIGHT))),
         window_background: crate::theme::window_material(WindowBackgroundAppearance::MicaBackdrop),
+        titlebar: Some(crate::titlebar_options()),
         // the menu item runs while the context menu is closing: this window must end up in front
         focus: true,
         ..TitleBar::window_options()

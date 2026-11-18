@@ -3,6 +3,7 @@
 //! One watcher and one thread per watched tree; dropping the value stops both.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,6 +24,9 @@ pub struct TreeChanges {
 
 /// More changed paths than this in one burst: looking at the tree again is cheaper.
 const MAX_PATHS: usize = 2048;
+/// Events waiting for the debounce thread (a copy of a huge tree outruns it): past this the
+/// burst becomes one rescan instead of a growing queue.
+const MAX_QUEUE: usize = 1024;
 
 /// Calls `on_change` (from a background thread) once changes in the tree pause for `debounce`,
 /// and during a burst that never pauses at least every `debounce` x 5.
@@ -31,15 +35,23 @@ pub fn watch_tree(dir: &Path, debounce: Duration, on_change: impl Fn(TreeChanges
         Paths(Vec<PathBuf>),
         Rescan,
     }
-    let (tx, rx) = crossbeam_channel::unbounded::<Ev>();
+    let (tx, rx) = crossbeam_channel::bounded::<Ev>(MAX_QUEUE);
+    let overflow = Arc::new(AtomicBool::new(false));
+    let over = overflow.clone();
     let mut w = notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
         Ok(ev) => {
             if !matches!(ev.kind, notify::EventKind::Access(_)) {
-                let _ = tx.send(if ev.need_rescan() || ev.paths.is_empty() { Ev::Rescan } else { Ev::Paths(ev.paths) });
+                let ev = if ev.need_rescan() || ev.paths.is_empty() { Ev::Rescan } else { Ev::Paths(ev.paths) };
+                if let Err(crossbeam_channel::TrySendError::Full(_)) = tx.try_send(ev) {
+                    over.store(true, Ordering::Relaxed);
+                }
             }
         }
         Err(_) => {
-            let _ = tx.send(Ev::Rescan);
+            // wake the debounce thread: the tree may need a full look, not just the paths
+            if let Err(crossbeam_channel::TrySendError::Full(_)) = tx.try_send(Ev::Rescan) {
+                over.store(true, Ordering::Relaxed);
+            }
         }
     })?;
     w.watch(dir, RecursiveMode::Recursive)?;
@@ -63,6 +75,9 @@ pub fn watch_tree(dir: &Path, debounce: Duration, on_change: impl Fn(TreeChanges
                 }
             };
             take(first, &mut ch, &mut seen);
+            if overflow.swap(false, Ordering::Relaxed) {
+                ch.rescan = true;
+            }
             let burst = std::time::Instant::now();
             loop {
                 let left = max_wait.saturating_sub(burst.elapsed());
@@ -74,6 +89,9 @@ pub fn watch_tree(dir: &Path, debounce: Duration, on_change: impl Fn(TreeChanges
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => break,
                     Err(crossbeam_channel::RecvTimeoutError::Disconnected) => return,
                 }
+            }
+            if overflow.swap(false, Ordering::Relaxed) {
+                ch.rescan = true;
             }
             if ch.rescan {
                 ch.paths.clear();

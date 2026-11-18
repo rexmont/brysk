@@ -10,11 +10,15 @@
 //! as safe from any thread, an `NSImage` is created and used on one thread only, and the pixels
 //! go through a Core Graphics bitmap context (no `TIFFRepresentation` and no main-queue hop).
 
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
+
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use parking_lot::Mutex;
 
 use core_graphics::base::{kCGBitmapByteOrder32Little, kCGImageAlphaPremultipliedFirst};
 use core_graphics::geometry::{CGPoint, CGRect, CGSize};
@@ -60,15 +64,30 @@ fn rgba_to_bgra(img: &image::RgbaImage) -> Bgra {
 ///
 /// May block (disk, Quick Look, AppKit): call it on a worker, never on the UI thread.
 pub fn get_image(path: &Path, size: u32, kind: Kind) -> anyhow::Result<Bgra> {
+    get_image_while(path, size, kind, &|| false)
+}
+
+/// [`get_image`] that gives up when `cancel` says the folder changed: a worker stops waiting for
+/// Quick Look instead of holding the queue (and a decode) for a picture nobody will see.
+fn get_image_while(path: &Path, size: u32, kind: Kind, cancel: &dyn Fn() -> bool) -> anyhow::Result<Bgra> {
     if path.is_dir() {
+        if cancel() {
+            anyhow::bail!("iptal edildi");
+        }
         return icon_for(path, size);
     }
     // Thumbnails: Quick Look has providers for video, PDF, Office, HEIC/RAW and the rest, and
     // draws them the way the Finder does. Icons: the picture of the type is enough.
     if kind == Kind::Thumbnail
-        && let Ok(t) = quick_look(path, size)
+        && !cancel()
+        && let Ok(t) = quick_look(path, size, cancel)
     {
         return Ok(t);
+    }
+    // (a full-size decode is the expensive fallback: a navigation between the two steps must not
+    // start it)
+    if cancel() {
+        anyhow::bail!("iptal edildi");
     }
     match image::open(path) {
         Ok(img) => {
@@ -201,7 +220,7 @@ pub(crate) fn cg_image_to_bgra_exact(ptr: *mut c_void, width: u32, height: u32) 
 /// The completion handler runs on a Quick Look worker; the pixels are taken from its `CGImage`
 /// there. Nothing is sent to the main queue (which would make the UI thread do the work, and a
 /// busy UI thread would then time the request out).
-fn quick_look(path: &Path, size: u32) -> anyhow::Result<Bgra> {
+fn quick_look(path: &Path, size: u32, cancel: &dyn Fn() -> bool) -> anyhow::Result<Bgra> {
     use block2::RcBlock;
     use objc2::AnyThread;
     use objc2::rc::Retained;
@@ -211,7 +230,8 @@ fn quick_look(path: &Path, size: u32) -> anyhow::Result<Bgra> {
     };
 
     let (tx, rx) = std::sync::mpsc::channel::<Option<Bgra>>();
-    // 2x: Retina. The size is in points, the picture comes back in pixels.
+    // The picture we keep is `size` pixels on its longer side: asking Quick Look for a larger
+    // representation and downscaling it here would only cost time and memory in quicklookd.
     let points = size.max(16) as f64;
     let request = objc2::rc::autoreleasepool(|_| {
         let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
@@ -220,14 +240,21 @@ fn quick_look(path: &Path, size: u32) -> anyhow::Result<Bgra> {
                 QLThumbnailGenerationRequest::alloc(),
                 &url,
                 objc2_foundation::NSSize::new(points, points),
-                2.0,
+                1.0,
                 QLThumbnailGenerationRequestRepresentationTypes::All,
             )
         }
     });
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    // (set when the worker gives up: the callback then skips the bitmap draw instead of making
+    // pixels nobody will take)
+    let cancelled = std::sync::Arc::new(AtomicBool::new(false));
+    let cancelled_in_block = cancelled.clone();
     let block = RcBlock::new(move |rep: *mut QLThumbnailRepresentation, _err: *mut objc2_foundation::NSError| {
         let Some(tx) = tx.lock().unwrap().take() else { return };
+        if cancelled_in_block.load(Ordering::Relaxed) {
+            return;
+        }
         let out = if rep.is_null() {
             None
         } else {
@@ -241,15 +268,29 @@ fn quick_look(path: &Path, size: u32) -> anyhow::Result<Bgra> {
     unsafe {
         QLThumbnailGenerator::sharedGenerator().generateBestRepresentationForRequest_completionHandler(&request, &block);
     }
-    match rx.recv_timeout(Duration::from_secs(15)) {
-        Ok(Some(b)) => Ok(b),
-        Ok(None) => {
-            log::debug!("quicklook: no representation for {}", path.display());
-            anyhow::bail!("Quick Look tanıtımı yok")
-        }
-        Err(_) => {
-            log::debug!("quicklook: no answer for {} within 15 s", path.display());
-            anyhow::bail!("Quick Look yanıt vermedi")
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Some(b)) => return Ok(b),
+            Ok(None) => {
+                log::debug!("quicklook: no representation for {}", path.display());
+                anyhow::bail!("Quick Look tanıtımı yok")
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                if cancel() {
+                    cancelled.store(true, Ordering::Relaxed);
+                    anyhow::bail!("iptal edildi")
+                }
+                if Instant::now() >= deadline {
+                    cancelled.store(true, Ordering::Relaxed);
+                    log::debug!("quicklook: no answer for {} within 15 s", path.display());
+                    anyhow::bail!("Quick Look yanıt vermedi")
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                cancelled.store(true, Ordering::Relaxed);
+                anyhow::bail!("Quick Look yanıt vermedi")
+            }
         }
     }
 }
@@ -299,11 +340,14 @@ pub struct Request {
     /// The pool generation this request was made in. A request from an older generation (the
     /// folder changed) is dropped when it comes back, so it can never fill a newer entry.
     token: u64,
+    /// Set when the cache no longer wants this picture (its slot was evicted): a worker waiting
+    /// on Quick Look stops without making pixels.
+    cancelled: Arc<AtomicBool>,
 }
 
 impl Request {
     pub fn new(key: u64, path: PathBuf, size: u32, kind: Kind) -> Self {
-        Self { key, path, size, kind, urgent: false, queued: Instant::now(), token: 0 }
+        Self { key, path, size, kind, urgent: false, queued: Instant::now(), token: 0, cancelled: Arc::new(AtomicBool::new(false)) }
     }
 }
 
@@ -321,7 +365,23 @@ pub struct Response {
     pub token: u64,
 }
 
+/// One queued or running picture: how many calls wait for it, and the flag that stops it when
+/// the cache evicts its slot.
+struct Job {
+    waiters: usize,
+    cancelled: Arc<AtomicBool>,
+}
+
+/// (key, generation token) → its job.
+type InFlight = HashMap<(u64, u64), Job>;
+
 /// Icon/thumbnail workers; the callback runs on a worker thread, never on the UI thread.
+///
+/// A fixed set of workers and two queues (the preview's urgent one is taken first): a folder of
+/// tiles queues behind at most `workers * 32` pictures instead of starting an OS thread per
+/// request, which is what made a big folder spike in both CPU and memory (each thread decodes a
+/// whole picture at once). The same picture asked for twice is made once; both callers get an
+/// answer.
 pub struct ThumbPool {
     workers: usize,
     on_done: Arc<dyn Fn(Response) + Send + Sync>,
@@ -329,16 +389,48 @@ pub struct ThumbPool {
     /// Bumped by `clear` (a navigation): answers of the old generation are discarded, and no
     /// worker waits on Quick Look / the Finder for a picture nobody will see.
     generation: Arc<AtomicU64>,
+    urgent_tx: Sender<Request>,
+    urgent_rx: Receiver<Request>,
+    normal_tx: Sender<Request>,
+    normal_rx: Receiver<Request>,
+    inflight: Arc<Mutex<InFlight>>,
+    /// The generation, the queues and `inflight` change together: a `clear` must not take a
+    /// request that was made after it.
+    state: Arc<Mutex<()>>,
 }
 
 impl ThumbPool {
     pub fn new(workers: usize, on_done: impl Fn(Response) + Send + Sync + 'static) -> Self {
         keep_gdiplus_alive();
+        let (urgent_tx, urgent_rx) = crossbeam_channel::unbounded();
+        let (normal_tx, normal_rx) = crossbeam_channel::unbounded();
+        let on_done: Arc<dyn Fn(Response) + Send + Sync> = Arc::new(on_done);
+        let pending = Arc::new(AtomicUsize::new(0));
+        let generation = Arc::new(AtomicU64::new(0));
+        let inflight: Arc<Mutex<InFlight>> = Arc::new(Mutex::new(HashMap::new()));
+        let workers = workers.max(1);
+        for _ in 0..workers {
+            let urgent = urgent_rx.clone();
+            let normal = normal_rx.clone();
+            let on_done = on_done.clone();
+            let pending = pending.clone();
+            let generation = generation.clone();
+            let inflight = inflight.clone();
+            let _ = std::thread::Builder::new().name("rf-thumb".into()).spawn(move || {
+                worker(urgent, normal, on_done, pending, generation, inflight)
+            });
+        }
         Self {
-            workers: workers.max(1),
-            on_done: Arc::new(on_done),
-            pending: Arc::new(AtomicUsize::new(0)),
-            generation: Arc::new(AtomicU64::new(0)),
+            workers,
+            on_done,
+            pending,
+            generation,
+            urgent_tx,
+            urgent_rx,
+            normal_tx,
+            normal_rx,
+            inflight,
+            state: Arc::new(Mutex::new(())),
         }
     }
 
@@ -350,53 +442,151 @@ impl ThumbPool {
     /// Queues a picture; the backlog is bounded the same way the Windows pool bounds it.
     /// Returns the generation token the answer will carry.
     pub fn request(&self, mut req: Request) -> u64 {
-        let token = self.generation();
+        let guard = self.state.lock();
+        // (read under the same lock as `clear`: a request made after a folder change belongs to
+        // the new generation, one made before it is drained by the clear)
+        let token = self.generation.load(Ordering::SeqCst);
         req.token = token;
-        if self.pending.fetch_add(1, Ordering::Relaxed) >= self.workers * 32 {
-            self.pending.fetch_sub(1, Ordering::Relaxed);
-            (self.on_done)(Response {
-                key: req.key,
-                image: None,
-                dropped: true,
-                waited: req.queued.elapsed(),
-                took: Duration::ZERO,
-                urgent: req.urgent,
-                token,
-            });
-            return token;
+        {
+            let mut inflight = self.inflight.lock();
+            // (the same picture is already queued or being made: one answer per caller, one decode)
+            if let Some(job) = inflight.get_mut(&(req.key, token)) {
+                job.waiters += 1;
+                return token;
+            }
+            if self.pending.load(Ordering::Relaxed) >= self.workers * 32 {
+                drop(inflight);
+                drop(guard);
+                (self.on_done)(Response {
+                    key: req.key,
+                    image: None,
+                    dropped: true,
+                    waited: req.queued.elapsed(),
+                    took: Duration::ZERO,
+                    urgent: req.urgent,
+                    token,
+                });
+                return token;
+            }
+            inflight.insert((req.key, token), Job { waiters: 1, cancelled: req.cancelled.clone() });
+            self.pending.fetch_add(1, Ordering::Relaxed);
         }
-        let on_done = self.on_done.clone();
-        let pending = self.pending.clone();
-        let generation = self.generation.clone();
-        let _ = std::thread::Builder::new().name("rf-thumb".into()).spawn(move || {
-            let started = Instant::now();
-            // (a folder change while this was queued: nothing to make)
-            let image = if generation.load(Ordering::SeqCst) == token { get_image(&req.path, req.size, req.kind).ok().map(Arc::new) } else { None };
-            let dropped = generation.load(Ordering::SeqCst) != token;
-            let response = Response {
-                key: req.key,
-                image: if dropped { None } else { image },
-                dropped,
-                waited: started - req.queued,
-                took: started.elapsed(),
-                urgent: req.urgent,
-                token,
-            };
-            pending.fetch_sub(1, Ordering::Relaxed);
-            on_done(response);
-        });
+        let sent = if req.urgent { self.urgent_tx.send(req) } else { self.normal_tx.send(req) };
+        if let Err(crossbeam_channel::SendError(req)) = sent {
+            // (the workers are gone: the process is ending; nobody waits for an answer)
+            self.inflight.lock().remove(&(req.key, token));
+            self.pending.fetch_sub(1, Ordering::Relaxed);
+        }
         token
+    }
+
+    /// The cache dropped this picture's slot (an eviction): no need to make it any more. The
+    /// answer is marked dropped, so a slot that comes back asks again.
+    pub fn cancel(&self, key: u64, token: u64) {
+        if let Some(job) = self.inflight.lock().get(&(key, token)) {
+            job.cancelled.store(true, Ordering::Relaxed);
+        }
     }
 
     /// The folder changed: everything still queued or running belongs to the old one.
     pub fn clear(&self) {
+        let _guard = self.state.lock();
         self.generation.fetch_add(1, Ordering::SeqCst);
+        // Answer the backlog now instead of making each worker walk through it: the cache waits
+        // for one answer per ask, and the folder that asked is already gone.
+        while let Ok(req) = self.urgent_rx.try_recv() {
+            finish(&self.inflight, &self.pending, &*self.on_done, &req, None, true, req.queued.elapsed(), Duration::ZERO);
+        }
+        while let Ok(req) = self.normal_rx.try_recv() {
+            finish(&self.inflight, &self.pending, &*self.on_done, &req, None, true, req.queued.elapsed(), Duration::ZERO);
+        }
+    }
+}
+
+/// A closing window drops its cache: stop the workers waiting on pictures nobody will see
+/// (`clear` bumps the generation, and `quick_look` checks it every 100 ms).
+impl Drop for ThumbPool {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
+
+/// The next picture for a worker: the preview's first, then the list's.
+fn next_request(urgent: &Receiver<Request>, normal: &Receiver<Request>) -> Option<Request> {
+    match urgent.try_recv() {
+        Ok(r) => return Some(r),
+        Err(TryRecvError::Empty) => {}
+        Err(TryRecvError::Disconnected) => return None,
+    }
+    match normal.try_recv() {
+        Ok(r) => return Some(r),
+        Err(TryRecvError::Empty) => {}
+        Err(TryRecvError::Disconnected) => return None,
+    }
+    crossbeam_channel::select_biased! {
+        recv(urgent) -> msg => match msg { Ok(r) => Some(r), Err(_) => None },
+        recv(normal) -> msg => match msg { Ok(r) => Some(r), Err(_) => None },
+    }
+}
+
+fn worker(
+    urgent: Receiver<Request>,
+    normal: Receiver<Request>,
+    on_done: Arc<dyn Fn(Response) + Send + Sync>,
+    pending: Arc<AtomicUsize>,
+    generation: Arc<AtomicU64>,
+    inflight: Arc<Mutex<InFlight>>,
+) {
+    while let Some(req) = next_request(&urgent, &normal) {
+        let started = Instant::now();
+        // (a folder change while this was queued, or while Quick Look is thinking: nothing to make)
+        let cancelled = {
+            let generation = generation.clone();
+            let token = req.token;
+            let flag = req.cancelled.clone();
+            move || flag.load(Ordering::Relaxed) || generation.load(Ordering::SeqCst) != token
+        };
+        let image = if cancelled() {
+            None
+        } else {
+            get_image_while(&req.path, req.size, req.kind, &cancelled).ok().map(Arc::new)
+        };
+        let dropped = cancelled();
+        finish(&inflight, &pending, &*on_done, &req, if dropped { None } else { image }, dropped, started - req.queued, started.elapsed());
+    }
+}
+
+/// Answers one job: every caller that asked for this picture gets a response (and the shared
+/// picture is cloned, not decoded again).
+fn finish(
+    inflight: &Mutex<InFlight>,
+    pending: &AtomicUsize,
+    on_done: &(dyn Fn(Response) + Send + Sync),
+    req: &Request,
+    image: Option<Arc<Bgra>>,
+    dropped: bool,
+    waited: Duration,
+    took: Duration,
+) {
+    let job = inflight.lock().remove(&(req.key, req.token));
+    let waiters = job.as_ref().map_or(1, |j| j.waiters).max(1);
+    pending.fetch_sub(1, Ordering::Relaxed);
+    for _ in 0..waiters {
+        on_done(Response {
+            key: req.key,
+            image: image.clone(),
+            dropped,
+            waited,
+            took,
+            urgent: req.urgent,
+            token: req.token,
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Kind, fit_size, get_image, straighten_bgra};
+    use super::{Kind, fit_size, get_image, get_image_while, straighten_bgra};
 
     /// A picture keeps its proportions inside the box and is never enlarged.
     #[test]
@@ -432,5 +622,130 @@ mod tests {
         let icon = get_image(path, 32, Kind::Icon).unwrap();
         assert!(icon.width > 0 && icon.height > 0, "the icon has pixels");
         assert_eq!(icon.data.len(), (icon.width * icon.height * 4) as usize);
+    }
+
+    use super::{Request, ThumbPool};
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    /// A FIFO whose read side blocks the worker in `image::open` until the test writes to it: a
+    /// deterministic "a picture is being made" state without depending on how fast a decode is.
+    fn blocked_picture(name: &str) -> PathBuf {
+        use std::os::unix::ffi::OsStrExt;
+        let p = std::env::temp_dir().join(format!("rf-thumb-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        let c = std::ffi::CString::new(p.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        p
+    }
+
+    fn release(p: &std::path::Path) {
+        // (the worker already has the read side open and is waiting for a writer)
+        let mut w = std::fs::OpenOptions::new().write(true).open(p).expect("open the writer side");
+        use std::io::Write;
+        let _ = w.write_all(&[]);
+    }
+
+    fn missing(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("rf-thumb-no-such-file-{}-{name}.png", std::process::id()))
+    }
+
+    /// The same picture asked for twice is made once, and both callers get an answer: the pool
+    /// keeps one job per (key, generation) and counts its waiters.
+    #[test]
+    fn a_duplicate_request_is_made_once_and_each_caller_is_answered() {
+        let path = blocked_picture("dedupe");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pool = ThumbPool::new(1, move |r| {
+            let _ = tx.send(r);
+        });
+        let t1 = pool.request(Request::new(7, path.clone(), 64, Kind::Icon));
+        let t2 = pool.request(Request::new(7, path.clone(), 64, Kind::Icon));
+        assert_eq!(t1, t2, "both asks belong to the same generation");
+        std::thread::sleep(Duration::from_millis(50));
+        release(&path);
+        let r1 = rx.recv_timeout(Duration::from_secs(5)).expect("the first caller's answer");
+        let r2 = rx.recv_timeout(Duration::from_secs(5)).expect("the duplicate caller's answer");
+        assert_eq!((r1.key, r2.key, r1.token, r2.token), (7, 7, t1, t2));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err(), "one job answers twice, not three times");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A navigation bumps the generation and answers everything that was queued right away (the
+    /// cache waits for one answer per ask); no request is lost, and none is made afterwards.
+    #[test]
+    fn clearing_a_backlog_answers_every_ask() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pool = ThumbPool::new(1, move |r| {
+            let _ = tx.send(r);
+        });
+        let n = 50;
+        for i in 0..n {
+            pool.request(Request::new(i as u64, missing(&format!("clear-{i}")), 32, Kind::Icon));
+        }
+        let old = pool.generation();
+        pool.clear();
+        assert!(pool.generation() > old);
+        let mut got = 0;
+        while got < n {
+            rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|_| panic!("only {got} of {n} answers came"));
+            got += 1;
+        }
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err(), "no answer for a request that was never made");
+    }
+
+    /// The preview's picture goes before the list's: with one worker busy, the urgent ask is
+    /// taken first when it comes free.
+    #[test]
+    fn the_urgent_ask_is_taken_before_the_queued_tiles() {
+        let blocker = blocked_picture("urgent");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pool = ThumbPool::new(1, move |r| {
+            let _ = tx.send(r);
+        });
+        pool.request(Request::new(1, blocker.clone(), 32, Kind::Icon));
+        std::thread::sleep(Duration::from_millis(50));
+        pool.request(Request::new(2, missing("normal-1"), 32, Kind::Icon));
+        pool.request(Request::new(3, missing("normal-2"), 32, Kind::Icon));
+        let mut urgent = Request::new(99, missing("urgent"), 384, Kind::Icon);
+        urgent.urgent = true;
+        pool.request(urgent);
+        release(&blocker);
+        let first = rx.recv_timeout(Duration::from_secs(5)).expect("the blocker's answer");
+        assert_eq!(first.key, 1);
+        let next = rx.recv_timeout(Duration::from_secs(5)).expect("the urgent answer");
+        assert_eq!((next.key, next.urgent), (99, true), "the pane's picture is not queued behind the list");
+        let _ = std::fs::remove_file(&blocker);
+    }
+
+    /// A picture whose cache slot was evicted is answered as dropped, so the slot that comes back
+    /// asks again instead of showing a stale failure.
+    #[test]
+    fn an_evicted_request_is_answered_as_dropped() {
+        let path = blocked_picture("evict");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pool = ThumbPool::new(1, move |r| {
+            let _ = tx.send(r);
+        });
+        let token = pool.request(Request::new(5, path.clone(), 64, Kind::Icon));
+        std::thread::sleep(Duration::from_millis(50));
+        pool.cancel(5, token);
+        release(&path);
+        let r = rx.recv_timeout(Duration::from_secs(5)).expect("an answer");
+        assert_eq!(r.key, 5);
+        assert!(r.dropped, "the cache was told this ask no longer matters");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A stale ask stops before the expensive fallback decode: the worker is free for the folder
+    /// the user is in now (the picture would be thrown away anyway).
+    #[test]
+    fn a_cancelled_picture_is_not_decoded() {
+        // (the FIFO would block forever in `image::open` if the cancel check did not stop first)
+        let path = blocked_picture("cancel");
+        let started = std::time::Instant::now();
+        assert!(get_image_while(&path, 32, Kind::Icon, &|| true).is_err());
+        assert!(started.elapsed() < Duration::from_secs(2), "the cancelled ask returned at once");
+        let _ = std::fs::remove_file(&path);
     }
 }

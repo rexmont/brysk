@@ -19,20 +19,24 @@ pub fn load() -> Tags {
 
 pub fn update(cx: &mut App, f: impl FnOnce(&mut TagStore)) {
     // The paths tagged before: an item whose last tag goes away leaves `items`, and its
-    // Finder attribute must go too (it would otherwise keep showing the old tag).
+    // Finder attribute must go too (it would otherwise keep showing the old tag). Only the
+    // keys and paths are kept, not a second copy of the whole store.
     #[cfg(target_os = "macos")]
-    let before = cx.global::<Tags>().0.clone();
+    let before: Vec<(String, PathBuf)> =
+        cx.global::<Tags>().0.items.iter().map(|(k, v)| (k.clone(), v.path.clone())).collect();
     cx.update_global::<Tags, _>(|t, _| f(&mut t.0));
-    let snapshot = cx.global::<Tags>().0.clone();
+    // One snapshot for the file and the Finder attribute writer (they share it, instead of
+    // each taking its own copy of every tagged path).
+    let snapshot = std::sync::Arc::new(cx.global::<Tags>().0.clone());
     #[cfg(target_os = "macos")]
-    write_finder(&before, &snapshot);
+    write_finder(before, snapshot.clone());
     #[cfg(not(target_os = "macos"))]
-    write_finder(&snapshot);
+    write_finder(snapshot.clone());
     save_snapshot(snapshot);
     cx.refresh_windows();
 }
 
-fn save_snapshot(snapshot: TagStore) {
+fn save_snapshot(snapshot: std::sync::Arc<TagStore>) {
     std::thread::spawn(move || {
         if let Some(p) = path() {
             if let Err(e) = snapshot.save(&p) {
@@ -43,7 +47,7 @@ fn save_snapshot(snapshot: TagStore) {
 }
 
 fn persist(cx: &App) {
-    save_snapshot(cx.global::<Tags>().0.clone());
+    save_snapshot(std::sync::Arc::new(cx.global::<Tags>().0.clone()));
 }
 
 // ---------------------------------------------------------------- Finder tags (macOS)
@@ -78,9 +82,7 @@ fn finder_color(index: u8) -> u32 {
 /// Writes every tagged item's tags to the Finder's `_kMDItemUserTags` attribute, and clears the
 /// attribute of items that had tags before and have none now (a removed last tag, a deleted tag).
 #[cfg(target_os = "macos")]
-fn write_finder(before: &TagStore, store: &TagStore) {
-    let before = before.clone();
-    let store = store.clone();
+fn write_finder(before: Vec<(String, PathBuf)>, store: std::sync::Arc<TagStore>) {
     std::thread::spawn(move || {
         for item in store.items.values() {
             let tags: Vec<(String, u8)> = item
@@ -92,21 +94,19 @@ fn write_finder(before: &TagStore, store: &TagStore) {
                 log::debug!("finder tags: {}: {e}", item.path.display());
             }
         }
-        // (folded, as the store's own keys are: a case-only rename is the same file on APFS)
-        let live: std::collections::HashSet<String> = store.items.values().map(|i| i.path.to_string_lossy().to_lowercase()).collect();
-        for item in before.items.values() {
-            if live.contains(&item.path.to_string_lossy().to_lowercase()) {
-                continue;
-            }
-            if let Err(e) = rf_win::tags::write(&item.path, &[]) {
-                log::debug!("finder tags (clear): {}: {e}", item.path.display());
+        // (the store's keys are folded: a case-only rename is the same file on APFS)
+        for (key, path) in before {
+            if !store.items.contains_key(&key) {
+                if let Err(e) = rf_win::tags::write(&path, &[]) {
+                    log::debug!("finder tags (clear): {}: {e}", path.display());
+                }
             }
         }
     });
 }
 
 #[cfg(not(target_os = "macos"))]
-fn write_finder(_store: &TagStore) {}
+fn write_finder(_store: std::sync::Arc<TagStore>) {}
 
 /// Merges the Finder tags of `paths` into the app's tags (so a tag given in Finder shows in
 /// the tag menu and the tag views). Capped: a menu on a thousand files stays quick.

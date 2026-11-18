@@ -155,9 +155,14 @@ fn git_cmd(root: &Path) -> Command {
 
 /// Runs `git status` for the repository at `repo_root` (use [`repo_root`] to find it).
 /// Errors when git is not installed or the command fails.
+///
+/// Ignored entries are asked for separately (`ls-files --others --ignored --exclude-standard
+/// --directory`): with a large ignored tree (`target/`, `node_modules/`) `status --ignored=
+/// traditional` walks it to decide what to collapse and took over a second per call in a big
+/// repository, while the listing is a few milliseconds and names the same folders.
 pub fn status(repo_root: &Path) -> Result<GitStatus> {
     let out = git_cmd(repo_root)
-        .args(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal", "--ignored=traditional"])
+        .args(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal", "--ignored=no"])
         .output()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -169,7 +174,50 @@ pub fn status(repo_root: &Path) -> Result<GitStatus> {
     if !out.status.success() {
         bail!("git status başarısız: {}", String::from_utf8_lossy(&out.stderr).trim());
     }
-    Ok(parse_porcelain_v2(repo_root, &out.stdout))
+    let mut st = parse_porcelain_v2(repo_root, &out.stdout);
+    match ignored_paths(repo_root) {
+        Some(ignored) => {
+            for p in ignored {
+                // the status is more specific (added, modified, ...): only fill gaps
+                st.files.entry(p).or_insert(FileState::Ignored);
+            }
+            st.reindex();
+        }
+        None => {
+            // very old git: the one command that reports both
+            let out = git_cmd(repo_root)
+                .args(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal", "--ignored=traditional"])
+                .output()?;
+            if out.status.success() {
+                return Ok(parse_porcelain_v2(repo_root, &out.stdout));
+            }
+        }
+    }
+    Ok(st)
+}
+
+/// Every ignored file and folder, from `git ls-files`: folders whose whole content is ignored
+/// are collapsed (`target/`), so the list stays short. `None` when the command fails.
+fn ignored_paths(repo_root: &Path) -> Option<Vec<PathBuf>> {
+    let out = git_cmd(repo_root)
+        .args(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let mut paths = Vec::new();
+    for raw in out.stdout.split(|&b| b == 0) {
+        if raw.is_empty() {
+            continue;
+        }
+        let text = String::from_utf8_lossy(raw);
+        let p = text.trim_end_matches('/');
+        if !p.is_empty() {
+            paths.push(PathBuf::from(p));
+        }
+    }
+    Some(paths)
 }
 
 fn map_xy(kind: char, x: char, y: char) -> FileState {
@@ -264,7 +312,11 @@ pub fn parse_porcelain_v2(root: &Path, raw: &[u8]) -> GitStatus {
 }
 
 /// `path` relative to `root`, comparing components case-insensitively (Windows).
+/// The exact case is the common one: one allocation, no component-by-component rebuild.
 fn rel_to(root: &Path, path: &Path) -> Option<PathBuf> {
+    if let Ok(rest) = path.strip_prefix(root) {
+        return Some(rest.to_path_buf());
+    }
     let mut rc = root.components();
     let mut pc = path.components();
     loop {
@@ -287,9 +339,24 @@ fn rel_to(root: &Path, path: &Path) -> Option<PathBuf> {
 /// Files report their own state. Folders report the aggregate of their descendants (any
 /// changed descendant -> `Modified`, conflict wins, then `Untracked`); a folder inside an
 /// untracked or ignored folder inherits that state. `None` = clean / not in the repo.
+///
+/// Called for every row of the details view, so a clean repository (nothing in either map)
+/// answers without allocating or walking ancestors at all.
 pub fn state_for_child(status: &GitStatus, dir: &Path, name: &str) -> Option<FileState> {
-    let child = rel_to(&status.root, dir)?.join(name);
-    if let Some(&s) = status.files.get(&child) {
+    if status.files.is_empty() && status.dirs.is_empty() {
+        return None;
+    }
+    let rel = rel_to(&status.root, dir)?;
+    // The repository root is the folder people browse most: look the child up without
+    // building `<empty>/name`.
+    let joined;
+    let child: &Path = if rel.as_os_str().is_empty() {
+        Path::new(name)
+    } else {
+        joined = rel.join(name);
+        &joined
+    };
+    if let Some(&s) = status.files.get(child) {
         return Some(s);
     }
     // Inside a collapsed untracked / ignored folder?
@@ -301,13 +368,16 @@ pub fn state_for_child(status: &GitStatus, dir: &Path, name: &str) -> Option<Fil
             return Some(s);
         }
     }
-    status.dirs.get(&child).copied()
+    status.dirs.get(child).copied()
 }
 
 /// The different states the direct children of `dir` show (what [`state_for_child`] answers for them), found from the status
 /// alone and not child by child: for a list that wants to know what its status column will hold. Empty: every child is clean, or
 /// `dir` is not in the repository.
 pub fn states_in(status: &GitStatus, dir: &Path) -> Vec<FileState> {
+    if status.files.is_empty() && status.dirs.is_empty() {
+        return Vec::new();
+    }
     let Some(rel) = rel_to(&status.root, dir) else { return Vec::new() };
     let mut out: Vec<FileState> = Vec::new();
     let mut add = |s: FileState| {
@@ -1047,10 +1117,12 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
             ("b.txt", "b\n"),
             ("sub/c.txt", "c\n"),
             ("deep/er/d.txt", "d\n"),
-            (".gitignore", "*.log\n"),
+            (".gitignore", "*.log\nbuild/\n"),
         ] {
             std::fs::write(repo.join(f), c).unwrap();
         }
+        std::fs::create_dir_all(repo.join("build/inner")).unwrap();
+        std::fs::write(repo.join("build/inner/out.txt"), "x\n").unwrap();
         assert!(git(&repo, &["add", "-A"]));
         assert!(git(&repo, &["commit", "-q", "-m", "ilk"]));
         assert!(git(&repo, &["remote", "add", "origin", remote.to_str().unwrap()]));
@@ -1081,6 +1153,10 @@ u UU N... 100644 100644 100644 100644 a b c conflict.txt\0\
         assert_eq!(f("sub/c2.txt"), Some(FileState::Renamed));
         assert_eq!(f("untracked.txt"), Some(FileState::Untracked));
         assert_eq!(f("noise.log"), Some(FileState::Ignored));
+        // a folder whose whole content is ignored is one ignored entry, as `git status` showed it
+        assert_eq!(f("build"), Some(FileState::Ignored));
+        assert_eq!(state_for_child(&st, &repo, "build"), Some(FileState::Ignored));
+        assert!(!st.files.contains_key(Path::new("build/inner/out.txt")), "the ignored tree is collapsed");
         assert_eq!(state_for_child(&st, &repo, "sub"), Some(FileState::Modified));
         assert_eq!(state_for_child(&st, &repo, "deep"), Some(FileState::Modified));
         assert_eq!(state_for_child(&st, &repo.join("deep"), "er"), Some(FileState::Modified));

@@ -153,6 +153,7 @@ fn open_window(pipe: File, req: Request, cx: &mut App) {
         window_bounds: Some(WindowBounds::centered(picker_size(cx), cx)),
         window_min_size: Some(size(px(640.), px(400.))),
         window_background: crate::theme::window_material(WindowBackgroundAppearance::MicaBackdrop),
+        titlebar: Some(crate::titlebar_options()),
         ..gpui_kit::component::TitleBar::window_options()
     };
     let pipe = RefCell::new(Some(pipe));

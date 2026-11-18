@@ -1,6 +1,7 @@
-//! Directory change notifications (ReadDirectoryChangesW via `notify`), debounced.
+//! Directory change notifications (ReadDirectoryChangesW / FSEvents via `notify`), debounced.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,6 +24,9 @@ pub struct Changes {
 
 /// More changed names than this in one burst: listing the folder again is cheaper.
 const MAX_NAMES: usize = 256;
+/// Events waiting for the debounce thread. A copy of a huge tree can produce them faster than
+/// they are read; past this the burst is answered with one rescan instead of a growing queue.
+const MAX_QUEUE: usize = 1024;
 
 /// Calls `on_change` (from a background thread) once changes in `dir` pause for `debounce`, and
 /// during a burst that never pauses (files renamed in the background without end) at least every
@@ -37,29 +41,28 @@ pub fn watch_dir_changes(dir: &Path, debounce: Duration, on_change: impl Fn(Chan
         Paths(Vec<std::path::PathBuf>),
         Rescan,
     }
-    let (tx, rx) = crossbeam_channel::unbounded::<Ev>();
+    let (tx, rx) = crossbeam_channel::bounded::<Ev>(MAX_QUEUE);
+    let overflow = Arc::new(AtomicBool::new(false));
+    let over = overflow.clone();
     let mut w = notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
         Ok(ev) => {
             if !matches!(ev.kind, notify::EventKind::Access(_)) {
-                let _ = tx.send(if ev.need_rescan() || ev.paths.is_empty() { Ev::Rescan } else { Ev::Paths(ev.paths) });
+                let ev = if ev.need_rescan() || ev.paths.is_empty() { Ev::Rescan } else { Ev::Paths(ev.paths) };
+                if let Err(crossbeam_channel::TrySendError::Full(_)) = tx.try_send(ev) {
+                    over.store(true, Ordering::Relaxed);
+                }
             }
         }
         Err(_) => {
-            let _ = tx.send(Ev::Rescan);
+            // wake the debounce thread: the folder may need a full look, not just the names
+            if let Err(crossbeam_channel::TrySendError::Full(_)) = tx.try_send(Ev::Rescan) {
+                over.store(true, Ordering::Relaxed);
+            }
         }
     })?;
-    let watched = dir.to_string_lossy().trim_start_matches(r"\\?\").trim_end_matches('\\').to_lowercase();
-    let name_of = move |p: &Path| -> Option<String> {
-        // a direct child of the folder (anything else, the folder itself included: rescan)
-        let parent = p.parent()?.to_string_lossy().trim_start_matches(r"\\?\").trim_end_matches('\\').to_lowercase();
-        if parent != watched {
-            return None;
-        }
-        Some(p.file_name()?.to_str()?.to_string())
-    };
-    // notify opens the directory without the `\\?\` prefix: past MAX_PATH that fails and the
-    // view would silently stop updating. Give it the long form there.
-    // (macOS has no MAX_PATH prefix: the path is used as it is.)
+    // FSEvents reports canonical paths (`/private/var` for `/var`): compare against the same
+    // spelling, or every report looks like it came from outside the folder and rescans it.
+    // (Windows has no `/var`: the path is used as it is.)
     #[cfg(windows)]
     let target = if dir.as_os_str().len() >= 240 {
         use std::os::windows::ffi::OsStringExt;
@@ -70,7 +73,16 @@ pub fn watch_dir_changes(dir: &Path, debounce: Duration, on_change: impl Fn(Chan
         dir.to_path_buf()
     };
     #[cfg(not(windows))]
-    let target = dir.to_path_buf();
+    let target = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let watched = target.to_string_lossy().trim_start_matches(r"\\?\").trim_end_matches('\\').to_lowercase();
+    let name_of = move |p: &Path| -> Option<String> {
+        // a direct child of the folder (anything else, the folder itself included: rescan)
+        let parent = p.parent()?.to_string_lossy().trim_start_matches(r"\\?\").trim_end_matches('\\').to_lowercase();
+        if parent != watched {
+            return None;
+        }
+        Some(p.file_name()?.to_str()?.to_string())
+    };
     w.watch(&target, RecursiveMode::NonRecursive)?;
     let on_change = Arc::new(on_change);
     let max_wait = debounce * 5;
@@ -98,6 +110,9 @@ pub fn watch_dir_changes(dir: &Path, debounce: Duration, on_change: impl Fn(Chan
                 }
             };
             take(first, &mut ch);
+            if overflow.swap(false, Ordering::Relaxed) {
+                ch.rescan = true;
+            }
             // swallow the burst, but not for longer than max_wait
             let burst = std::time::Instant::now();
             loop {
@@ -110,6 +125,9 @@ pub fn watch_dir_changes(dir: &Path, debounce: Duration, on_change: impl Fn(Chan
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => break,
                     Err(crossbeam_channel::RecvTimeoutError::Disconnected) => return,
                 }
+            }
+            if overflow.swap(false, Ordering::Relaxed) {
+                ch.rescan = true;
             }
             if ch.rescan {
                 ch.names.clear();

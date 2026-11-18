@@ -206,8 +206,14 @@ pub struct Workspace {
     /// Window width from the last frame (breadcrumb collapsing).
     viewport_w: f32,
     last_session: Vec<String>,
+    /// A tab or pane was opened, closed, moved or navigated: the session key is built again at the
+    /// next frame. (It used to be built, with a clone of every pane's path, on every frame.)
+    session_dirty: bool,
     _bulk_sub: Option<Subscription>,
     _palette_sub: Option<Subscription>,
+    /// The FolderEvent subscription of each open pane, so closing a tab drops it with the view
+    /// instead of keeping one handle (and its callback) per tab ever opened.
+    _view_subs: Vec<(Entity<FolderView>, Subscription)>,
     _subs: Vec<Subscription>,
 }
 
@@ -597,6 +603,17 @@ fn remember_search(history: &mut Vec<String>, q: &str) {
     history.truncate(10);
 }
 
+/// How many closed tabs Ctrl+Shift+T can bring back. Places are small, but the list used to grow
+/// for the whole run.
+const CLOSED_MAX: usize = 50;
+
+fn remember_closed(closed: &mut Vec<Location>, loc: Location) {
+    closed.push(loc);
+    if closed.len() > CLOSED_MAX {
+        closed.remove(0);
+    }
+}
+
 impl Workspace {
     pub fn new(
         start: Option<Location>,
@@ -835,8 +852,10 @@ impl Workspace {
             picker: None,
             viewport_w: 1300.,
             last_session: Vec::new(),
+            session_dirty: true,
             _bulk_sub: None,
             _palette_sub: None,
+            _view_subs: Vec::new(),
             _subs: { let mut s = subs; s.push(shelf_sub); s },
         };
         match start {
@@ -985,10 +1004,48 @@ impl Workspace {
         self.tabs[ix].left.update(cx, |v, _| v.dual = true);
         self.tabs[ix].right = Some(view);
         self.tabs[ix].right_active = active;
+        self.session_dirty = true;
     }
 
     fn active_tab(&self) -> &Entity<FolderView> {
         self.tabs[self.active].view()
+    }
+
+    /// Drops the FolderEvent subscription of a pane that is leaving its tab (closed, or the
+    /// second pane of a tab that goes back to one pane).
+    fn forget_pane(&mut self, view: &Entity<FolderView>) {
+        self._view_subs.retain(|(v, _)| v != view);
+        if self.tab_anim.as_ref().is_some_and(|(v, _)| v == view) {
+            self.tab_anim = None;
+        }
+    }
+
+    /// Takes tab `ix` out of the window, dropping its panes' subscriptions. `None` for an index
+    /// that is not there.
+    fn remove_tab(&mut self, ix: usize) -> Option<Tab> {
+        if ix >= self.tabs.len() {
+            return None;
+        }
+        let tab = self.tabs.remove(ix);
+        self.session_dirty = true;
+        self.forget_pane(&tab.left);
+        if let Some(right) = &tab.right {
+            self.forget_pane(right);
+        }
+        // a tab waiting to come forward under the pointer moved with the strip
+        if let Some((hover, serial)) = self.drag_hover_tab {
+            if hover == ix {
+                self.drag_hover_tab = None;
+            } else if hover > ix {
+                self.drag_hover_tab = Some((hover - 1, serial));
+            }
+        }
+        Some(tab)
+    }
+
+    /// Keeps a closed tab's place for Ctrl+Shift+T (the newest [`CLOSED_MAX`]).
+    fn remember_closed(&mut self, loc: Location) {
+        remember_closed(&mut self.closed, loc);
     }
 
     /// Tab (`forward`) and Shift+Tab: the keyboard goes round the window's panes, the address bar, the folder tree (when it is on
@@ -1084,8 +1141,12 @@ impl Workspace {
                 cx.notify();
             }
         });
-        self._subs.push(sub);
-        cx.observe(&tab, |_, _, cx| cx.notify()).detach();
+        self._view_subs.push((tab.clone(), sub));
+        cx.observe(&tab, |this, _, cx| {
+            this.session_dirty = true;
+            cx.notify()
+        })
+        .detach();
         tab
     }
 
@@ -1100,6 +1161,7 @@ impl Workspace {
     pub fn open_tab(&mut self, loc: Location, window: &mut Window, cx: &mut Context<Self>) {
         let view = self.new_view(loc, window, cx);
         self.tabs.push(Tab { left: view.clone(), right: None, right_active: false });
+        self.session_dirty = true;
         let ix = self.tabs.len() - 1;
         // Settings → Appearance → Animations: the "+" grows into the new tab, then a new "+"
         // slides out from behind it. Purely visual: the tab is already open and usable.
@@ -1160,7 +1222,9 @@ impl Workspace {
     fn toggle_dual_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let ix = self.active;
         if self.tabs[ix].right.is_some() {
-            self.tabs[ix].right = None;
+            if let Some(right) = self.tabs[ix].right.take() {
+                self.forget_pane(&right);
+            }
             self.tabs[ix].right_active = false;
             self.tabs[ix].left.update(cx, |v, _| v.dual = false);
         } else {
@@ -1171,6 +1235,7 @@ impl Workspace {
             self.tabs[ix].right = Some(view);
             self.tabs[ix].right_active = true;
         }
+        self.session_dirty = true;
         self.focus_active(window, cx);
         cx.notify();
     }
@@ -1223,8 +1288,9 @@ impl Workspace {
             window.remove_window();
             return;
         }
-        let tab = self.tabs.remove(ix);
-        self.closed.push(tab.view().read(cx).location().clone());
+        if let Some(tab) = self.remove_tab(ix) {
+            self.remember_closed(tab.view().read(cx).location().clone());
+        }
         let next = if self.active > ix || self.active >= self.tabs.len() {
             self.active.saturating_sub(1)
         } else {
@@ -1237,8 +1303,9 @@ impl Workspace {
         let keep = self.active;
         for i in (0..self.tabs.len()).rev() {
             if i != keep {
-                let tab = self.tabs.remove(i);
-                self.closed.push(tab.view().read(cx).location().clone());
+                if let Some(tab) = self.remove_tab(i) {
+                    self.remember_closed(tab.view().read(cx).location().clone());
+                }
             }
         }
         self.tab_scrolled_to = None;
@@ -1251,8 +1318,9 @@ impl Workspace {
         self.open_tab(Location::Home, window, cx);
         // (the new tab is the last one)
         for i in (0..old.min(self.tabs.len().saturating_sub(1))).rev() {
-            let tab = self.tabs.remove(i);
-            self.closed.push(tab.view().read(cx).location().clone());
+            if let Some(tab) = self.remove_tab(i) {
+                self.remember_closed(tab.view().read(cx).location().clone());
+            }
         }
         self.tab_scrolled_to = None;
         self.activate(0, window, cx);
@@ -1261,8 +1329,9 @@ impl Workspace {
     fn close_tabs_to_side(&mut self, ix: usize, right: bool, window: &mut Window, cx: &mut Context<Self>) {
         let range: Vec<usize> = if right { (ix + 1..self.tabs.len()).collect() } else { (0..ix).collect() };
         for i in range.into_iter().rev() {
-            let tab = self.tabs.remove(i);
-            self.closed.push(tab.view().read(cx).location().clone());
+            if let Some(tab) = self.remove_tab(i) {
+                self.remember_closed(tab.view().read(cx).location().clone());
+            }
         }
         let ix = if right { ix } else { 0 };
         self.tab_scrolled_to = None;
@@ -1276,6 +1345,7 @@ impl Workspace {
         let active_left = self.tabs[self.active].left.clone();
         let t = self.tabs.remove(from);
         self.tabs.insert(to, t);
+        self.session_dirty = true;
         self.active = self.tabs.iter().position(|t| t.left == active_left).unwrap_or(0);
         let _ = window;
         cx.notify();
@@ -4169,21 +4239,26 @@ impl Render for Workspace {
             window.set_window_title(&title);
             self.last_title = title;
         }
-        // Keep the saved session current (so it survives a crash or forced shutdown).
-        let (session, panes) = self.session_now(cx);
-        let key = session_key(&session, &panes);
-        if key != self.last_session && self.picker.is_none() {
-            self.last_session = key;
-            let active = self.active;
-            cx.defer(move |cx| {
-                cx.update_global::<crate::settings::Settings, _>(|s, _| {
-                    s.session_tabs = session;
-                    s.session_panes = panes;
-                    s.session_active = active;
+        // Keep the saved session current (so it survives a crash or forced shutdown). The key is
+        // built only when a tab or pane changed, not on every frame (a window of ten tabs cloned
+        // every pane's path sixty times a second).
+        if self.session_dirty && self.picker.is_none() {
+            let (session, panes) = self.session_now(cx);
+            let key = session_key(&session, &panes);
+            self.session_dirty = false;
+            if key != self.last_session {
+                self.last_session = key;
+                let active = self.active;
+                cx.defer(move |cx| {
+                    cx.update_global::<crate::settings::Settings, _>(|s, _| {
+                        s.session_tabs = session;
+                        s.session_panes = panes;
+                        s.session_active = active;
+                    });
+                    let snapshot = cx.global::<crate::settings::Settings>().clone();
+                    std::thread::spawn(move || snapshot.save());
                 });
-                let snapshot = cx.global::<crate::settings::Settings>().clone();
-                std::thread::spawn(move || snapshot.save());
-            });
+            }
         }
         let tab_state = self.tabs[self.active].clone();
         let content: AnyElement = match &tab_state.right {
@@ -4562,9 +4637,20 @@ impl Render for Workspace {
 
 #[cfg(test)]
 mod tests {
-    use super::{breadcrumbs, parse_location};
+    use super::{CLOSED_MAX, breadcrumbs, parse_location, remember_closed};
     use rf_core::Location;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn the_closed_tab_list_keeps_the_newest_places() {
+        let mut closed = Vec::new();
+        for i in 0..CLOSED_MAX + 10 {
+            remember_closed(&mut closed, Location::Path(PathBuf::from(format!("/tmp/{i}"))));
+        }
+        assert_eq!(closed.len(), CLOSED_MAX);
+        assert_eq!(closed.first(), Some(&Location::Path(PathBuf::from("/tmp/10"))), "the oldest went");
+        assert_eq!(closed.last(), Some(&Location::Path(PathBuf::from(format!("/tmp/{}", CLOSED_MAX + 9)))));
+    }
 
     #[test]
     fn crumbs() {

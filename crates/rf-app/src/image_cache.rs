@@ -1,7 +1,11 @@
 //! Shared cache of shell icons and thumbnails. Misses are queued to rf-win's low-priority
 //! worker pool; rows render a symbol fallback until the real image arrives.
+//!
+//! The decoded pictures are also uploaded to each window's GPUI sprite atlas, which would
+//! otherwise hold a second full copy of the cache; tiles of pictures that have left the screen
+//! are let go every few seconds and uploaded again if they come back (see `release_stale_atlas`).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
@@ -34,6 +38,12 @@ pub struct ImageCache {
     tick: u64,
     /// Evicted images whose GPU atlas tiles must be released (see `release_evicted`).
     evicted: Vec<Arc<RenderImage>>,
+    /// Pictures whose atlas tile has been let go but whose pixels are still cached: GPUI uploads
+    /// them again when they are drawn (see `release_stale_atlas`).
+    atlas_released: HashSet<u64>,
+    /// The `tick` the last atlas sweep started at: a picture not looked up since then was not on
+    /// screen during the sweep and its atlas tile can go.
+    atlas_sweep_tick: u64,
     /// Pixel budget for thumbnails: Settings → Advanced → thumbnail cache (64 MB unless the user
     /// chose another). By bytes, not count: a 4K screen of small tiles shows hundreds at once (a
     /// count cap would evict on-screen images every frame), large tiles cost ~300 KB each.
@@ -41,18 +51,36 @@ pub struct ImageCache {
     /// What the settings page shows about this cache (see `thumb_cache`).
     stats: Arc<crate::thumb_cache::CacheStats>,
     _task: Task<()>,
+    _atlas_task: Task<()>,
     _settings_sub: Subscription,
 }
 
 fn cost(bytes: usize) -> usize {
     rf_core::thumbcache::charge(bytes)
 }
+
+/// Which tracked pictures were not looked up since `cutoff` and have an atlas tile still:
+/// their GPU copy can go while the pixels stay cached. Pure; [`ImageCache::release_stale_atlas`]
+/// uses it.
+fn atlas_stale(thumb_use: &HashMap<u64, (u64, usize)>, released: &HashSet<u64>, cutoff: u64) -> Vec<u64> {
+    let mut v: Vec<u64> = thumb_use
+        .iter()
+        .filter(|(k, (used, _))| *used <= cutoff && !released.contains(k))
+        .map(|(k, _)| *k)
+        .collect();
+    v.sort_unstable();
+    v
+}
 pub const ICON_PX: u32 = 32;
+/// How often atlas tiles of pictures that left the screen are let go. Long enough that a scroll
+/// back and forth reuses them; short enough that a folder of previews does not keep a second,
+/// GPU-side copy of the whole cache.
+const ATLAS_SWEEP: std::time::Duration = std::time::Duration::from_secs(4);
 
 /// Takes back what `lookup` charged for a picture that was asked for and then dropped before it was made.
 fn forget_pending(thumb_use: &mut HashMap<u64, (u64, usize)>, thumb_cost: &mut usize, key: u64) {
     if let Some((_, bytes)) = thumb_use.remove(&key) {
-        *thumb_cost -= cost(bytes).min(*thumb_cost);
+        *thumb_cost = thumb_cost.saturating_sub(cost(bytes));
     }
 }
 
@@ -67,6 +95,19 @@ fn request_picture(pool: &ThumbPool, make: impl FnOnce() -> Request) -> u64 {
     {
         pool.request(make());
         0
+    }
+}
+
+/// Tells the pool a queued picture is no longer wanted (its slot was evicted). Only macOS has
+/// per-request cancellation; the Windows pool drops the oldest backlog by itself.
+fn cancel_picture(pool: &ThumbPool, key: u64, stamp: u64) {
+    #[cfg(target_os = "macos")]
+    {
+        pool.cancel(key, stamp);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (pool, key, stamp);
     }
 }
 
@@ -124,9 +165,27 @@ pub(crate) fn to_render_image(b: &Bgra) -> Option<Arc<RenderImage>> {
     Some(Arc::new(RenderImage::new(vec![image::Frame::new(buf)])))
 }
 
+/// [`to_render_image`] without a second copy of the pixels when this response is the only owner
+/// (the usual case): a 272 px tile is 300 KB, and the clone was held while the atlas upload ran.
+fn into_render_image(b: Arc<Bgra>) -> Option<Arc<RenderImage>> {
+    match Arc::try_unwrap(b) {
+        Ok(Bgra { width, height, data }) => {
+            let buf = image::RgbaImage::from_raw(width, height, data)?;
+            Some(Arc::new(RenderImage::new(vec![image::Frame::new(buf)])))
+        }
+        Err(b) => to_render_image(&b),
+    }
+}
+
 impl ImageCache {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let (tx, mut rx) = mpsc::unbounded::<Response>();
+        // (Quick Look and AppKit work happens in other processes, so a few more than the core count
+        // keeps the grid filling while one worker waits; still a handful, not one thread per tile.
+        // Windows' shell decodes in these threads: keep its old count.)
+        #[cfg(target_os = "macos")]
+        let workers = std::thread::available_parallelism().map(|n| (n.get() / 2).clamp(2, 6)).unwrap_or(3);
+        #[cfg(not(target_os = "macos"))]
         let workers = std::thread::available_parallelism().map(|n| (n.get() / 4).clamp(2, 4)).unwrap_or(2);
         let pool = ThumbPool::new(workers, move |r| {
             let _ = tx.unbounded_send(r);
@@ -139,7 +198,7 @@ impl ImageCache {
                 }
                 let ok = this
                     .update(cx, |c, cx| {
-                        for r in batch {
+                        for mut r in batch {
                             crate::preview_trace::pool_answer(r.urgent, r.dropped, r.image.is_some(), r.waited, r.took);
                             let waiting = match answer_stamp(&r) {
                                 Some(stamp) => matches!(c.map.get(&r.key), Some(Slot::Pending(t)) if *t == stamp),
@@ -161,11 +220,12 @@ impl ImageCache {
                             if !waiting {
                                 continue;
                             }
-                            let slot = match r.image.as_deref().and_then(to_render_image) {
+                            let bytes = r.image.as_ref().map_or(0, |b| b.data.len());
+                            let slot = match r.image.take().and_then(into_render_image) {
                                 Some(img) => {
+                                    c.atlas_released.remove(&r.key);
                                     if let Some(u) = c.thumb_use.get_mut(&r.key) {
-                                        let bytes = r.image.as_ref().map_or(0, |b| b.data.len());
-                                        c.thumb_cost = c.thumb_cost - cost(u.1) + cost(bytes);
+                                        c.thumb_cost = c.thumb_cost.saturating_sub(cost(u.1)) + cost(bytes);
                                         u.1 = bytes;
                                         c.thumb_ready += 1;
                                     }
@@ -181,6 +241,14 @@ impl ImageCache {
                     })
                     .is_ok();
                 if !ok {
+                    break;
+                }
+            }
+        });
+        let atlas_task = cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(ATLAS_SWEEP).await;
+                if this.update(cx, |c, cx| c.release_stale_atlas(cx)).is_err() {
                     break;
                 }
             }
@@ -206,9 +274,12 @@ impl ImageCache {
             thumb_ready: 0,
             tick: 0,
             evicted: Vec::new(),
+            atlas_released: HashSet::new(),
+            atlas_sweep_tick: 0,
             budget: crate::thumb_cache::budget(cx),
             stats,
             _task: task,
+            _atlas_task: atlas_task,
             _settings_sub: sub,
         }
     }
@@ -243,11 +314,12 @@ impl ImageCache {
         for k in dropped_keys {
             if let Some((_, b)) = self.thumb_use.remove(&k) {
                 bytes += b;
-                self.thumb_cost -= cost(b).min(self.thumb_cost);
+                self.thumb_cost = self.thumb_cost.saturating_sub(cost(b));
             }
         }
         // (every made picture is gone; what is still tracked is pending)
         self.thumb_ready = 0;
+        self.atlas_released.clear();
         self.publish();
         self.release_evicted(cx);
         cx.notify();
@@ -268,11 +340,18 @@ impl ImageCache {
             }
         }
         match self.map.get(&key) {
-            Some(Slot::Ready(img)) => Some(img.clone()),
+            Some(Slot::Ready(img)) => {
+                // (it is being drawn again: GPUI uploads it if the sweep let the tile go)
+                self.atlas_released.remove(&key);
+                Some(img.clone())
+            }
             Some(Slot::Pending(_)) | Some(Slot::Failed) => None,
             None => {
                 let token = request_picture(&self.pool, make);
                 self.map.insert(key, Slot::Pending(token));
+                // (a new pending slot is charged at once; this is the only miss path that can put
+                // the cache over its budget, so hits pay nothing here)
+                self.evict_over_budget();
                 None
             }
         }
@@ -286,11 +365,18 @@ impl ImageCache {
             let items: Vec<(u64, u64, usize)> = self.thumb_use.iter().map(|(k, (t, b))| (*k, *t, *b)).collect();
             for key in rf_core::thumbcache::eviction_victims(&items, self.thumb_cost, self.budget) {
                 if let Some((_, bytes)) = self.thumb_use.remove(&key) {
-                    self.thumb_cost -= cost(bytes).min(self.thumb_cost);
+                    self.thumb_cost = self.thumb_cost.saturating_sub(cost(bytes));
                 }
-                if let Some(Slot::Ready(img)) = self.map.remove(&key) {
-                    self.evicted.push(img);
-                    self.thumb_ready = self.thumb_ready.saturating_sub(1);
+                self.atlas_released.remove(&key);
+                match self.map.remove(&key) {
+                    Some(Slot::Ready(img)) => {
+                        self.evicted.push(img);
+                        self.thumb_ready = self.thumb_ready.saturating_sub(1);
+                    }
+                    // (still being made: stop it instead of spending a decode on a picture that
+                    // is off the screen and over budget)
+                    Some(Slot::Pending(stamp)) => cancel_picture(&self.pool, key, stamp),
+                    Some(Slot::Failed) | None => {}
                 }
             }
         }
@@ -312,6 +398,29 @@ impl ImageCache {
         });
     }
 
+    /// Lets go of the GPU-side copy of pictures that have not been looked up since the last
+    /// sweep (they are still cached, and GPUI uploads one again if it is drawn). For a folder of
+    /// big previews the sprite atlas otherwise holds a second copy of the whole cache: 64 MB of
+    /// pictures was 64 MB more in every window.
+    fn release_stale_atlas(&mut self, cx: &mut Context<Self>) {
+        let cutoff = self.atlas_sweep_tick;
+        self.atlas_sweep_tick = self.tick;
+        if self.tick == 0 {
+            return;
+        }
+        let stale = atlas_stale(&self.thumb_use, &self.atlas_released, cutoff);
+        if stale.is_empty() {
+            return;
+        }
+        for key in &stale {
+            if let Some(Slot::Ready(img)) = self.map.get(key) {
+                self.evicted.push(img.clone());
+            }
+        }
+        self.atlas_released.extend(stale);
+        self.release_evicted(cx);
+    }
+
     /// Small shell icon for a row. Generic types are cached per extension, plain folders once; a folder that can have an icon of its
     /// own (`folder_has_own_icon`) is asked for it, like a program or a shortcut.
     pub fn icon(&mut self, dir: &Path, e: &Entry, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
@@ -327,10 +436,9 @@ impl ImageCache {
         } else {
             key_of(&[&"ext", &&*e.ext, &ICON_PX])
         };
-        let path = dir.join(&*e.name);
         // Per-file icons (exe/lnk/…) are unbounded in number: keep them in the LRU too.
-        let r = self.lookup(key, || Request::new(key, path, ICON_PX, Kind::Icon), unique);
-        self.evict_over_budget();
+        // (the path is built only on a miss: a hit must not allocate one per row per frame)
+        let r = self.lookup(key, || Request::new(key, dir.join(&*e.name), ICON_PX, Kind::Icon), unique);
         self.release_evicted(cx);
         r
     }
@@ -343,7 +451,6 @@ impl ImageCache {
         let key = key_of(&[&"shell", &parsing, &px]);
         let path = std::path::PathBuf::from(parsing);
         let r = self.lookup(key, || Request::new(key, path, px, Kind::Thumbnail), true);
-        self.evict_over_budget();
         self.release_evicted(cx);
         r
     }
@@ -355,7 +462,6 @@ impl ImageCache {
         let key = key_of(&[&"shell-state", &parsing, &px, &state]);
         let path = std::path::PathBuf::from(parsing);
         let r = self.lookup(key, || Request::new(key, path, px, Kind::Thumbnail), true);
-        self.evict_over_budget();
         self.release_evicted(cx);
         r
     }
@@ -382,20 +488,19 @@ impl ImageCache {
         } else {
             key_of(&[&"extL", &&*e.ext, &size])
         };
-        let path = dir.join(&*e.name);
         let kind = if wants_thumb { Kind::Thumbnail } else { Kind::Icon };
         // every per-file picture (an exe's or a shortcut's icon too) is in the LRU, or browsing
         // folders of programs would keep them all until the app closes
+        // (the path is built only on a miss: a hit must not allocate one per tile per frame)
         let r = self.lookup(
             key,
             || {
-                let mut req = Request::new(key, path, size, kind);
+                let mut req = Request::new(key, dir.join(&*e.name), size, kind);
                 req.urgent = urgent && wants_thumb;
                 req
             },
             per_file,
         );
-        self.evict_over_budget();
         self.release_evicted(cx);
         r
     }
@@ -414,7 +519,7 @@ impl ImageCache {
             }
             keep
         });
-        self.thumb_cost -= freed;
+        self.thumb_cost = self.thumb_cost.saturating_sub(freed);
         self.publish();
     }
 }
@@ -428,7 +533,7 @@ fn own_picture(e: &Entry) -> bool {
 #[cfg(test)]
 mod tests {
     // (not `super::*`: the toolkit's glob import brings a `test` attribute of its own that shadows the standard one)
-    use super::{cost, file_picture_key, forget_pending, own_picture};
+    use super::{atlas_stale, cost, file_picture_key, forget_pending, own_picture};
 
     /// A plain folder shares the folders' one picture; a folder Windows marks as customised (read-only or system) is asked for its
     /// own, as a program is; a document is not.
@@ -443,7 +548,7 @@ mod tests {
         assert!(own_picture(&Entry::new("a.exe", EntryKind::File, 1, 0, 0, 0x20)));
         assert!(!own_picture(&Entry::new("a.txt", EntryKind::File, 1, 0, 0, 0x21)), "a read-only document is still its kind's picture");
     }
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::path::Path;
 
     /// A picture asked for and dropped leaves nothing charged behind; one that holds pixels gives back what it cost.
@@ -465,6 +570,22 @@ mod tests {
         assert_eq!(thumb_cost, cost(4096));
         forget_pending(&mut thumb_use, &mut thumb_cost, 8);
         assert_eq!((thumb_use.len(), thumb_cost), (0, 0));
+    }
+
+    /// Only pictures not used since the cutoff lose their GPU copy, and only once: one still on
+    /// screen (its use is newer) keeps it, and a second sweep does not release it again.
+    #[test]
+    fn only_pictures_off_the_screen_lose_their_atlas_tile() {
+        let mut used = HashMap::new();
+        used.insert(1u64, (5u64, 100usize)); // last drawn before the cutoff
+        used.insert(2u64, (11u64, 100)); // drawn after it
+        used.insert(3u64, (5u64, 100));
+        let released = std::collections::HashSet::new();
+        assert_eq!(atlas_stale(&used, &released, 10), vec![1, 3]);
+        let mut released = std::collections::HashSet::new();
+        released.insert(1);
+        assert_eq!(atlas_stale(&used, &released, 10), vec![3], "a picture already let go is not pushed again");
+        assert!(atlas_stale(&used, &released, 0).is_empty(), "nothing was off-screen before the first sweep");
     }
 
     /// The pane's picture of a file never has the key of the list's picture of it, whatever the size; the same

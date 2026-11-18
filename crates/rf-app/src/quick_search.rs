@@ -341,7 +341,14 @@ fn find_bookmark_files() -> Vec<PathBuf> {
     dirs::data_local_dir().map(|d| bookmark_files_in(&d)).unwrap_or_default()
 }
 
+/// How many bookmarks are kept from a browser profile: a profile with a huge export is cut
+/// here rather than parsed into hundreds of thousands of rows nobody scrolls.
+const MAX_BOOKMARKS_CACHE: usize = 20_000;
+
 fn collect_urls(node: &serde_json::Value, out: &mut Vec<Bookmark>) {
+    if out.len() >= MAX_BOOKMARKS_CACHE {
+        return;
+    }
     match node.get("type").and_then(|t| t.as_str()) {
         Some("url") => {
             let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("");
@@ -354,6 +361,9 @@ fn collect_urls(node: &serde_json::Value, out: &mut Vec<Bookmark>) {
             if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                 for c in children {
                     collect_urls(c, out);
+                    if out.len() >= MAX_BOOKMARKS_CACHE {
+                        return;
+                    }
                 }
             }
         }
@@ -990,10 +1000,11 @@ pub(crate) fn search_files(query: &str, index_on: bool) -> FilesFound {
 }
 
 /// What was opened before (for the candidates it adds) and what use lifts an item by for this query: how often it is opened
-/// ([`boost`]) and whether it was chosen for these letters ([`pick_points`]).
-fn lifts(query: &str) -> (HashMap<String, Use>, impl Fn(&Target) -> i32) {
+/// ([`boost`]) and whether it was chosen for these letters ([`pick_points`]). The map is cloned once, behind an `Arc`: both
+/// callers need the counts, and one keystroke runs both of them.
+fn lifts(query: &str) -> (Arc<HashMap<String, Use>>, impl Fn(&Target) -> i32) {
     let q = pick_query(query);
-    let (used, weights) = with_store(|u| (u.map.clone(), pick_weights(&u.picks, &q, now_secs())));
+    let (used, weights) = with_store(|u| (Arc::new(u.map.clone()), pick_weights(&u.picks, &q, now_secs())));
     let counts = used.clone();
     (used, move |t: &Target| {
         let key = t.key();

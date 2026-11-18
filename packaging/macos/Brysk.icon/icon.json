@@ -1,0 +1,11 @@
+{
+  "fill": { "solid": "srgb:0.00000,0.53333,1.00000,1.00000" },
+  "groups": [{
+    "name": "Brysk artwork",
+    "layers": [{ "image-name": "Artwork.png", "name": "Artwork", "glass": false }],
+    "shadow": { "kind": "none", "opacity": 0 },
+    "translucency": { "enabled": false, "value": 0 },
+    "specular": false
+  }],
+  "supported-platforms": { "squares": ["macOS"] }
+}

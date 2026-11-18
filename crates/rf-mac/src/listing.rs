@@ -1,7 +1,7 @@
 //! Directory listing, the macOS half of `rf-win::listing`.
 //!
 //! The list is built from `readdir` + `lstat`, with the same `rf_core::Entry` shape the UI
-//! already understands. Hidden means "name starts with a dot" (the Finder rule); macOS has no
+//! already understands. Hidden includes dot names and the macOS UF_HIDDEN flag; macOS has no
 //! separate "protected operating system file" attribute a dotfile should carry, so `.git` and
 //! `.config` show with "show hidden items" alone. A symbolic link is marked like a junction is
 //! on Windows. Packages (`.app`, `.photoslibrary`) stay folders the user can enter, exactly as
@@ -50,7 +50,7 @@ fn entry_of(name: &str, md: &std::fs::Metadata) -> Entry {
     use std::os::unix::fs::MetadataExt;
     let is_dir = md.is_dir();
     let mut at = 0u32;
-    if name.starts_with('.') {
+    if name.starts_with('.') || std::os::macos::fs::MetadataExt::st_flags(md) & libc::UF_HIDDEN != 0 {
         at |= attrs::HIDDEN;
     }
     if is_dir {
@@ -66,8 +66,26 @@ fn entry_of(name: &str, md: &std::fs::Metadata) -> Entry {
         at |= attrs::OFFLINE | attrs::RECALL_ON_DATA_ACCESS;
     }
     let mut e = Entry::new(name, if is_dir { EntryKind::Dir } else { EntryKind::File }, md.size(), ms(md.modified().ok()), ms(md.created().ok()), at);
+    if name.chars().any(char::is_control) {
+        // Keep the real filename for operations; make otherwise invisible characters visible.
+        e.label = Some(name.chars().map(|c| if c.is_control() { '?' } else { c }).collect::<String>().into());
+    }
     e.link = md.file_type().is_symlink();
     e
+}
+
+/// Finder's empty Utilities placeholder opens the system Utilities folder. Custom contents
+/// in the user-writable folder are left alone. Runs on the listing thread.
+pub fn directory_redirect(dir: &Path) -> Option<std::path::PathBuf> {
+    if dir != Path::new("/Applications/Utilities") { return None; }
+    let system = Path::new("/System/Applications/Utilities");
+    utilities_placeholder(dir, system).then(|| system.to_path_buf())
+}
+
+fn utilities_placeholder(dir: &Path, system: &Path) -> bool {
+    system.is_dir() && std::fs::read_dir(dir).is_ok_and(|items| items.into_iter().all(|item| {
+        item.is_ok_and(|item| matches!(item.file_name().to_str(), Some(".localized" | ".DS_Store" | "Icon\r")))
+    }))
 }
 
 /// Enumerates `dir` and streams entries to `on_batch` in chunks so the UI can show the first
@@ -157,6 +175,44 @@ fn disk_name(path: &Path) -> std::io::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_icon_keeps_its_real_name_and_shows_its_hidden_control_character() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = std::env::temp_dir().join(format!("brysk-icon-name-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("Icon\r");
+        std::fs::write(&path, b"icon").unwrap();
+        let cpath = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::chflags(cpath.as_ptr(), libc::UF_HIDDEN) }, 0);
+        let mut entries = Vec::new();
+        list_dir(&dir, 16, &|| false, &mut |b| entries.extend(b)).unwrap();
+        let entry = &entries[0];
+        assert_eq!(entry.name.as_ref(), "Icon\r");
+        assert_eq!(entry.shown(), "Icon?");
+        assert!(entry.is_hidden());
+        assert!(dir.join(&*entry.name).is_file());
+        let patched = stat_entry(&dir, "Icon\r").unwrap().unwrap();
+        assert_eq!(patched.shown(), "Icon?");
+        assert!(patched.is_hidden());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn utilities_redirects_only_an_empty_placeholder_not_custom_user_contents() {
+        let root = std::env::temp_dir().join(format!("brysk-utilities-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let user = root.join("user");
+        let system = root.join("system");
+        std::fs::create_dir(&user).unwrap();
+        std::fs::create_dir(&system).unwrap();
+        std::fs::write(user.join(".localized"), b"").unwrap();
+        assert!(utilities_placeholder(&user, &system));
+        std::fs::write(user.join("Custom Utility.app"), b"custom").unwrap();
+        assert!(!utilities_placeholder(&user, &system));
+        std::fs::remove_dir_all(root).unwrap();
+        assert_eq!(directory_redirect(Path::new("/tmp/Applications/Utilities")), None);
+    }
 
     #[test]
     fn watcher_stats_use_the_disk_spelling_and_keep_symlink_identity() {

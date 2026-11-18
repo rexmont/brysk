@@ -46,17 +46,22 @@ pub struct Choice {
     pub selected: Rc<std::cell::Cell<usize>>,
 }
 
+pub struct Check {
+    pub label: SharedString,
+    pub checked: Rc<std::cell::Cell<bool>>,
+}
+
 pub struct DialogView {
     title: SharedString,
     message: Option<SharedString>,
     error: Option<SharedString>,
     input: Option<Entity<InputState>>,
     choices: Vec<Choice>,
+    check: Option<Check>,
     buttons: Vec<Button>,
     focus: FocusHandle,
-    /// The button the keyboard is on: it carries a ring, Enter and Space press it, Tab, Shift+Tab and the arrows move it (the
-    /// owner, 2026-11-17: "hangi butonun seçili olduğu belli olsun. ok tuşlarıyla ya da tabla değişebilsin"). It starts on the
-    /// main button (`main_button`); in a dialog with a text box it starts nowhere, and Tab leaves the box for the buttons.
+    /// Keyboard control: a button index, or `buttons.len()` for the optional checkbox.
+    /// Starts on the main button; a text-input dialog starts in its input instead.
     keyed: Option<usize>,
     _sub: Option<Subscription>,
 }
@@ -86,7 +91,12 @@ pub fn show_with(
     window: &mut Window,
     cx: &mut App,
 ) {
-    show_inner(title, message, input, false, choices, buttons, window, cx)
+    show_inner(title, message, input, false, choices, None, buttons, window, cx)
+}
+
+/// A notice with one optional, large checkbox.
+pub fn show_check(title: impl Into<SharedString>, message: Option<String>, check: Check, buttons: Vec<Button>, window: &mut Window, cx: &mut App) {
+    show_inner(title, message, None, false, Vec::new(), Some(check), buttons, window, cx)
 }
 
 /// A plain notice with one button.
@@ -119,7 +129,7 @@ pub fn ask(title: impl Into<SharedString>, message: String, window: &mut Window,
 
 /// A dialog whose text box hides what is typed (passwords).
 pub fn show_secret(title: impl Into<SharedString>, message: Option<String>, placeholder: String, buttons: Vec<Button>, window: &mut Window, cx: &mut App) {
-    show_inner(title, message, Some((String::new(), placeholder)), true, Vec::new(), buttons, window, cx)
+    show_inner(title, message, Some((String::new(), placeholder)), true, Vec::new(), None, buttons, window, cx)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -129,6 +139,7 @@ fn show_inner(
     input: Option<(String, String)>,
     masked: bool,
     choices: Vec<Choice>,
+    check: Option<Check>,
     buttons: Vec<Button>,
     window: &mut Window,
     cx: &mut App,
@@ -160,6 +171,7 @@ fn show_inner(
             error: None,
             input,
             choices,
+            check,
             buttons,
             focus: cx.focus_handle(),
             keyed,
@@ -194,6 +206,11 @@ impl DialogView {
     }
 
     fn press(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if ix == self.buttons.len() && let Some(check) = &self.check {
+            check.checked.set(!check.checked.get());
+            cx.notify();
+            return;
+        }
         let Some(b) = self.buttons.get(ix) else { return };
         let (run, value) = (b.run.clone(), self.value(cx));
         match run(value, window, cx) {
@@ -208,7 +225,7 @@ impl DialogView {
     /// Moves the keyboard to the next (`step` 1) or the previous (-1) button, round. From the text box it goes to the first or the
     /// last button, and the box gives up the keyboard.
     fn step(&mut self, step: isize, window: &mut Window, cx: &mut Context<Self>) {
-        let n = self.buttons.len();
+        let n = self.buttons.len() + usize::from(self.check.is_some());
         if n == 0 {
             return;
         }
@@ -293,6 +310,28 @@ impl Render for DialogView {
                     .child(seg),
             );
         }
+        let check = self.check.as_ref().map(|check| {
+            let on = check.checked.get();
+            let keyed = self.keyed == Some(self.buttons.len());
+            let me = cx.entity().downgrade();
+            h_flex().id("dlg-check").h(px(40.)).gap_3().items_center().cursor_pointer()
+                .role(Role::CheckBox).aria_label(check.label.clone()).aria_toggled(if on { Toggled::True } else { Toggled::False })
+                .when(keyed, |d| d.aria_active_descendant())
+                .child(div().size(px(22.)).flex_shrink_0().rounded(px(4.)).border_2()
+                    .border_color(if keyed { p.text } else if on { p.accent } else { p.text_secondary })
+                    .bg(if on { p.accent } else { p.content_bg }).flex().items_center().justify_center()
+                    .when(on, |d| d.child(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Check).size(px(16.)).text_color(p.accent_text))))
+                .child(div().text_sm().whitespace_nowrap().child(check.label.clone()))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    let ix = this.buttons.len();
+                    this.keyed = Some(ix);
+                    window.focus(&this.focus, cx);
+                    this.press(ix, window, cx);
+                }))
+                .on_a11y_action(AccessibleAction::Click, move |_, window, cx| {
+                    let _ = me.update(cx, |this, cx| this.press(this.buttons.len(), window, cx));
+                })
+        });
         div()
             .id("dialog-layer")
             .absolute()
@@ -363,7 +402,8 @@ impl Render for DialogView {
                                     .child(Input::new(i).appearance(false))
                             }))
                             .children(self.error.clone().map(|e| div().text_xs().text_color(p.danger).child(e)))
-                            .children(choice_rows),
+                            .children(choice_rows)
+                            .children(check),
                     )
                     .child(div().px_6().py_4().bg(p.hover).border_t_1().border_color(p.divider).child(buttons))
                     .with_animation("dialog-in", Animation::new(std::time::Duration::from_millis(160)).with_easing(ease_out_quint()), |el, t| {

@@ -260,6 +260,10 @@ impl History {
     pub fn current(&self) -> &Location {
         &self.current
     }
+    /// Resolve a placeholder/alias without inserting an extra Back/Forward stop.
+    pub fn replace_current(&mut self, to: Location) {
+        self.current = to.cleaned();
+    }
     pub fn navigate(&mut self, to: Location) {
         let to = to.cleaned();
         if to == self.current {
@@ -318,6 +322,21 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolving_a_placeholder_does_not_create_a_back_forward_loop() {
+        let applications = Location::Path(PathBuf::from("/Applications"));
+        let placeholder = Location::Path(PathBuf::from("/Applications/Utilities"));
+        let utilities = Location::Path(PathBuf::from("/System/Applications/Utilities"));
+        let mut history = History::new(applications.clone());
+        history.navigate(placeholder.clone());
+        history.replace_current(utilities.clone());
+        assert_eq!(history.back(), Some(&applications));
+        assert_eq!(history.forward(), Some(&utilities));
+        let mut first = History::new(placeholder);
+        first.replace_current(utilities);
+        assert!(!first.can_back());
+    }
 
     #[test]
     fn desktop_icons_open_here() {

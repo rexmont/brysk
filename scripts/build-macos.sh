@@ -19,6 +19,9 @@ case "$PROFILE" in
     *) CARGO_PROFILE="$PROFILE"; PROFILE_DIR="$PROFILE" ;;
 esac
 APP="target/Brysk.app"
+if [ "$PROFILE_DIR" != debug ]; then
+    APP="target/$PROFILE_DIR/Brysk.app"
+fi
 BIN="target/$PROFILE_DIR"
 UNIVERSAL="${UNIVERSAL:-0}"
 
@@ -55,8 +58,25 @@ cp LICENSE NOTICE "$HELPER/Contents/Resources/"
 
 # The icon is optional: `packaging/macos/Brysk.icns` when it exists.
 if [ -f packaging/macos/Brysk.icns ]; then
-    cp packaging/macos/Brysk.icns "$APP/Contents/Resources/Brysk.icns"
-    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Brysk" "$APP/Contents/Info.plist"
+    for BUNDLE in "$APP" "$HELPER"; do
+        cp packaging/macos/Brysk.icns "$BUNDLE/Contents/Resources/Brysk.icns"
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string Brysk" "$BUNDLE/Contents/Info.plist"
+    done
+fi
+
+# A native background layer avoids the legacy icon's inset tile in modern macOS lists.
+# Keep the existing ICNS for older systems and builds with only Command Line Tools.
+if [ -d packaging/macos/Brysk.icon ] && xcrun --find actool >/dev/null 2>&1 &&
+    xcrun actool --version --output-format human-readable-text | awk '/^short-bundle-version:/ { found = ($2 + 0 >= 26) } END { exit !found }'; then
+    ICON_BUILD=$(mktemp -d)
+    trap 'rm -rf "$ICON_BUILD"' EXIT
+    xcrun actool packaging/macos/Brysk.icon --compile "$ICON_BUILD" --platform macosx \
+        --minimum-deployment-target 13.0 --app-icon Brysk \
+        --output-partial-info-plist "$ICON_BUILD/icon-info.plist" --output-format human-readable-text
+    for BUNDLE in "$APP" "$HELPER"; do
+        cp "$ICON_BUILD/Assets.car" "$BUNDLE/Contents/Resources/Assets.car"
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string Brysk" "$BUNDLE/Contents/Info.plist"
+    done
 fi
 
 # Mach-O binaries only; the ad-hoc identity is enough for local use.

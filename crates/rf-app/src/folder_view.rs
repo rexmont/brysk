@@ -343,6 +343,7 @@ fn view_from_sorted(entries: &[Entry], sorted: Arc<Vec<u32>>, filter: &Filter, s
 }
 
 enum Msg {
+    Redirect(PathBuf),
     Batch(Vec<Entry>),
     /// Final sorted view computed on the listing thread (keeps big sorts off the UI thread).
     View(View),
@@ -1552,6 +1553,11 @@ impl FolderView {
         std::thread::Builder::new()
             .name("rf-list".into())
             .spawn(move || {
+                #[cfg(target_os = "macos")]
+                if let Some(target) = rf_win::listing::directory_redirect(&path) {
+                    let _ = tx.unbounded_send(Msg::Redirect(target));
+                    return;
+                }
                 let tx2 = tx.clone();
                 let mut all: Vec<Entry> = Vec::new();
                 let r = match crate::archive_view::split(&path) {
@@ -1610,6 +1616,11 @@ impl FolderView {
         if generation != self.generation {
             return;
         }
+        if let Some(target) = msgs.iter().find_map(|m| match m { Msg::Redirect(p) => Some(p.clone()), _ => None }) {
+            self.history.replace_current(Location::Path(target));
+            self.load(cx);
+            return;
+        }
         if self.soft_pending.is_some() {
             self.apply_soft(msgs, cx);
             return;
@@ -1618,6 +1629,7 @@ impl FolderView {
         let mut view = None;
         for m in msgs {
             match m {
+                Msg::Redirect(_) => {},
                 Msg::View(v) => view = Some(v),
                 Msg::Batch(b) => {
                     self.entries.extend(b);
@@ -1730,7 +1742,7 @@ impl FolderView {
                         p.extend(b)
                     }
                 }
-                Msg::Hits(..) | Msg::Shell(..) | Msg::ShellName(_) => {}
+                Msg::Hits(..) | Msg::Shell(..) | Msg::ShellName(_) | Msg::Redirect(_) => {}
                 Msg::Done(Err(e)) if e.contains("bulunamadı") => {
                     // The folder we are showing was deleted/renamed away: step up.
                     self.soft_pending = None;

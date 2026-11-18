@@ -206,6 +206,7 @@ pub struct Workspace {
     picker: Option<std::rc::Rc<crate::picker::PickSession>>,
     /// Window width from the last frame (breadcrumb collapsing).
     viewport_w: f32,
+    address_width: f32,
     last_session: Vec<String>,
     /// A tab or pane was opened, closed, moved or navigated: the session key is built again at the
     /// next frame. (It used to be built, with a clone of every pane's path, on every frame.)
@@ -862,6 +863,7 @@ impl Workspace {
             side_tree: Default::default(),
             picker: None,
             viewport_w: 1300.,
+            address_width: 0.,
             last_session: Vec::new(),
             session_dirty: true,
             _bulk_sub: None,
@@ -2731,7 +2733,7 @@ impl Workspace {
 
     /// Navigation row: back / forward / up / refresh, the Omnibar (one box for path, search and
     /// commands, like Files) and the Status Center button.
-    fn render_toolbar(&mut self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_toolbar(&mut self, p: &Palette, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let popups_open = self.popups_open(cx);
         let tab = self.active_tab().read(cx);
         let can_back = tab.history.can_back();
@@ -2753,7 +2755,7 @@ impl Workspace {
         } else if self.editing_address {
             Input::new(&self.address).appearance(false).into_any_element()
         } else {
-            self.render_breadcrumb(&loc, p, cx).into_any_element()
+            self.render_breadcrumb(&loc, p, window, cx).into_any_element()
         };
         let focused = self.editing_address || searching;
         let chip = active_query.filter(|_| !searching).map(|q| {
@@ -2845,7 +2847,17 @@ impl Workspace {
                 }
             }))
             .when(searching, |d| d.child(Icon::new(L::Search).size(px(14.)).text_color(p.text_secondary)))
-            .child(div().flex_1().min_w_0().overflow_hidden().child(field))
+            .child(div().flex_1().min_w_0().overflow_hidden().relative().child({
+                let me = cx.entity().downgrade();
+                let previous = self.address_width;
+                canvas(move |bounds, _, cx| {
+                    let width = f32::from(bounds.size.width);
+                    if (width - previous).abs() > 0.5 {
+                        let me = me.clone();
+                        cx.defer(move |cx| { let _ = me.update(cx, |this, cx| { this.address_width = width; cx.notify(); }); });
+                    }
+                }, |_, _, _, _| {}).absolute().size_full()
+            }).child(field))
             .children(suggestions)
             .children(chip)
             .child(div().w(px(1.)).h(px(18.)).mx_1().bg(p.divider))
@@ -3053,9 +3065,9 @@ impl Workspace {
             }))
     }
 
-    fn render_breadcrumb(&mut self, loc: &Location, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_breadcrumb(&mut self, loc: &Location, p: &Palette, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let drop_bg = p.selection;
-        let mut row = h_flex().gap_0p5().items_center().text_sm().overflow_hidden();
+        let mut row = h_flex().w_full().min_w_0().gap_0p5().items_center().text_sm().overflow_hidden();
         let crumbs: Vec<(String, Location)> = match loc {
             Location::Path(path) | Location::Search { root: path, .. } => breadcrumbs(path),
             // the shell's own name for the folder (the location may carry none)
@@ -3063,19 +3075,21 @@ impl Workspace {
             Location::DiskUsage(path) => vec![(crate::disk_usage::title(path), loc.clone())],
             other => vec![(crate::i18n::td(&other.title()), other.clone())],
         };
-        // Too long for the address box: hide leading segments after the drive behind "…"
-        // (the current folder must stay visible). Widths are estimated from text length.
-        let budget = self.viewport_w - 260. - 4. * 36. - 9. * 36. - 90.;
-        let est = |l: &str| l.chars().count() as f32 * 7.4 + 30.;
+        let font = window.text_style().font();
+        let text_width = |label: &str, last: bool| {
+            let mut font = font.clone();
+            if last { font.weight = FontWeight::MEDIUM; }
+            let run = TextRun { len: label.len(), font, color: p.text, background_color: None, underline: None, strikethrough: None };
+            f32::from(window.text_system().layout_line(label, window.rem_size() * 0.875, &[run], None).width)
+        };
+        let widths: Vec<f32> = crumbs.iter().enumerate().map(|(i, (label, _))| text_width(label, i + 1 == crumbs.len())).collect();
+        let hidden_count = breadcrumb_hidden_count(&widths, self.address_width, text_width("…", false));
         let mut crumbs = crumbs;
-        let mut hidden: Option<Location> = None;
-        while crumbs.len() > 2 && crumbs.iter().map(|(l, _)| est(l)).sum::<f32>() + 60. > budget {
-            let (_, loc) = crumbs.remove(1);
-            hidden = Some(loc);
-        }
+        let hidden = if hidden_count == 0 { None } else { crumbs.drain(1..1 + hidden_count).last().map(|(_, loc)| loc) };
         let n = crumbs.len();
         let home_icon = div()
             .id("crumb-home")
+            .flex_shrink_0()
             .px_1()
             .py_0p5()
             .rounded(theme::RADIUS_SM)
@@ -3089,6 +3103,7 @@ impl Workspace {
         let chevron = |id: (&'static str, usize), dir: Option<PathBuf>, p: &Palette, cx: &mut Context<Self>| {
             div()
                 .id(id)
+                .flex_shrink_0()
                 .px_0p5()
                 .py_1()
                 .rounded(theme::RADIUS_SM)
@@ -3110,6 +3125,7 @@ impl Workspace {
                     row = row.child(
                         div()
                             .id("crumb-ellipsis")
+                            .flex_shrink_0()
                             .px_1p5()
                             .py_0p5()
                             .rounded(theme::RADIUS_SM)
@@ -3129,6 +3145,8 @@ impl Workspace {
             row = row.child(
                 div()
                     .id(("crumb", i))
+                    .when(!last, |d| d.flex_shrink_0())
+                    .when(last, |d| d.min_w_0().overflow_hidden().text_ellipsis())
                     .px_1p5()
                     .py_0p5()
                     .rounded(theme::RADIUS_SM)
@@ -3843,6 +3861,43 @@ fn render_backend_badge(p: &Palette) -> impl IntoElement + use<> {
         })
 }
 
+/// Hide only middle segments, including the ellipsis itself in the required width.
+fn breadcrumb_hidden_count(widths: &[f32], available: f32, ellipsis: f32) -> usize {
+    if available <= 0. { return 0; } // Not measured yet: let the first layout report its width.
+    // Home/trailing chevron/gaps = 40 px; each label's padding, chevron and gaps = 32 px.
+    let mut total = 40. + widths.iter().map(|w| w + 32.).sum::<f32>();
+    if total <= available { return 0; }
+    let mut hidden = 0;
+    while hidden < widths.len().saturating_sub(2) && total + ellipsis + 32. > available {
+        total -= widths[hidden + 1] + 32.;
+        hidden += 1;
+    }
+    hidden
+}
+
+#[cfg(test)]
+mod breadcrumb_width_tests {
+    use super::breadcrumb_hidden_count;
+
+    #[test]
+    fn keeps_the_full_path_when_the_actual_field_has_room() {
+        let widths = [32., 34., 68., 233.];
+        assert_eq!(breadcrumb_hidden_count(&widths, 800., 14.), 0);
+        assert_eq!(breadcrumb_hidden_count(&widths, 535., 14.), 0);
+        assert_eq!(breadcrumb_hidden_count(&widths, 534., 14.), 1);
+        assert_eq!(breadcrumb_hidden_count(&widths, 0., 14.), 0);
+    }
+
+    #[test]
+    fn folded_path_accounts_for_the_ellipsis_and_keeps_the_current_folder() {
+        let widths = [32., 34., 68., 233.];
+        assert_eq!(breadcrumb_hidden_count(&widths, 450., 14.), 2);
+        assert_eq!(breadcrumb_hidden_count(&widths, 100., 14.), 2);
+        assert_eq!(breadcrumb_hidden_count(&[], 100., 14.), 0);
+        assert_eq!(breadcrumb_hidden_count(&[500.], 100., 14.), 0);
+    }
+}
+
 /// "C:\Users\x" → [("C:", C:\), ("Users", C:\Users), ("x", C:\Users\x)]
 fn breadcrumbs(path: &Path) -> Vec<(String, Location)> {
     let mut out = Vec::new();
@@ -4144,7 +4199,7 @@ impl Render for Workspace {
         let titlebar = self.render_titlebar(&p, cx);
         self.tab_lens = false;
         let strip_frame = crate::glass::StripFrame { on_screen: true, tab_claimed: self.tab_lens_claimed, plus_claimed: self.plus_lens_claimed };
-        let toolbar = self.render_toolbar(&p, cx);
+        let toolbar = self.render_toolbar(&p, window, cx);
         let commandbar = self.render_commandbar(&p, cx);
         let filter_strip = self.render_filter_bar(&p, window, cx);
         // the command bar acts on folder contents: not on Home, Settings, the Recycle Bin…

@@ -292,16 +292,17 @@ fn mac_onboarding(cx: &mut App) {
     use std::cell::Cell;
     use std::rc::Rc;
     let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
-    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time Brysk opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give Brysk Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).\n\nOpen Brysk when you click Finder in the Dock. No system patches or SIP changes.\n\nOnly plain left-clicks are replaced. Right-clicks and clicks with modifier keys keep their usual behavior.\n\nOptional: requires Accessibility access and keeps Brysk running in the background. Change this in Settings → General.";
-    let selected = Rc::new(Cell::new(0));
-    let choice = crate::prompt::Choice {
-        label: "Finder Dock icon".into(),
-        options: vec!["Keep opening Finder".into(), "Open Brysk (optional)".into()],
-        selected: selected.clone(),
+    let message = "Allow folder access when macOS asks. Full Disk Access is optional for browsing the Trash.\n\nThe Finder option below needs Accessibility access and keeps Brysk running in the background.";
+    let checked = Rc::new(Cell::new(cx.global::<settings::Settings>().finder_dock_redirect));
+    let check = crate::prompt::Check {
+        label: "Finder Dock icon opens Brysk".into(),
+        checked: checked.clone(),
     };
     let _ = w.update(cx, |_, window, cx| {
-        crate::prompt::show_with("Welcome to Brysk", Some(message.to_string()), None, vec![choice], vec![Button::new("Continue", Kind::Primary, move |_, _, cx| {
-            if selected.get() == 1 { settings::set_finder_dock_redirect(true, cx); }
+        crate::prompt::show_check("Welcome to Brysk", Some(message.to_string()), check, vec![Button::new("Continue", Kind::Primary, move |_, _, cx| {
+            let enabled = checked.get();
+            // Close the welcome dialog before macOS presents its own permission prompt.
+            cx.defer(move |cx| settings::set_finder_dock_redirect(enabled, cx));
             Ok(())
         })], window, cx);
     });

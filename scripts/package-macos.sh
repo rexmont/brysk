@@ -24,7 +24,7 @@ fi
 
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 UNIVERSAL="${UNIVERSAL:-1}"
-APP="target/Brysk.app"
+APP="target/release/Brysk.app"
 DMG="dist/Brysk-$VERSION.dmg"
 mkdir -p dist
 

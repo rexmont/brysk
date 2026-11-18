@@ -108,22 +108,20 @@ impl LookManager {
             Self::pin_current(cx);
         } else if Self::with_active(cx, |v, w, cx| {
             v.set_path(path.clone(), w, cx);
+            let wanted = opts.topmost || cx.global::<LookSettings>().look_topmost;
+            v.set_topmost(wanted, cx);
             // macOS: it may be a preview window from an earlier Space press, left behind the
-            // main window; bring it forward again without taking the keyboard.
+            // main window; set the level on the live NSWindow and order it in front without
+            // taking the keyboard.
             #[cfg(target_os = "macos")]
-            rf_win::window::bring_to_front_quietly(window::hwnd_of(w));
+            {
+                let hwnd = window::hwnd_of(w);
+                let _ = rf_win::window::set_topmost(hwnd, wanted);
+                rf_win::window::bring_to_front_quietly(hwnd);
+            }
         })
         .is_some()
         {
-            #[cfg(target_os = "macos")]
-            {
-                let wanted = opts.topmost || cx.global::<LookSettings>().look_topmost;
-                Self::with_active(cx, |v, _, cx| v.set_topmost(wanted, cx));
-            }
-            #[cfg(not(target_os = "macos"))]
-            if opts.topmost {
-                Self::with_active(cx, |v, _, cx| v.set_topmost(true, cx));
-            }
             return;
         }
         Self::open(path, opts, cx);
@@ -175,7 +173,11 @@ impl LookManager {
                 // keyboard is not taken (unless "focus on open" is on), so arrow keys keep
                 // stepping the selection in the file list.
                 #[cfg(target_os = "macos")]
-                let _ = h.update(cx, |_, window, _| rf_win::window::bring_to_front_quietly(window::hwnd_of(window)));
+                let _ = h.update(cx, |_, window, _| {
+                    let hwnd = window::hwnd_of(window);
+                    let _ = rf_win::window::set_topmost(hwnd, topmost);
+                    rf_win::window::bring_to_front_quietly(hwnd);
+                });
                 Self::global(cx).active = Some(h);
                 Self::report_windows(cx);
                 if slow {

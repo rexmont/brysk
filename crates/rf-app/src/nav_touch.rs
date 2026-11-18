@@ -236,6 +236,7 @@ mod tests {
     /// (name only) must not depend on that: it did, while `may_hold_archive` and the tab icon went through `is_browsable`, which
     /// opens a `.001` file to see what it is. Reading the file on a WSL path is the first touch of it.
     #[test]
+    #[cfg(windows)]
     fn a_split_volume_name_is_never_opened_by_the_name_checks() {
         use std::os::windows::fs::OpenOptionsExt;
         let d = std::env::temp_dir().join(format!("rf-nav-vol-{}", std::process::id()));

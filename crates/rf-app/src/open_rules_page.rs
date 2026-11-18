@@ -304,7 +304,7 @@ pub fn page(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     out
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     // (not `super::*`: the glob of the UI kit above carries its own `test` attribute)
     use rf_core::openrules::OpenRule;

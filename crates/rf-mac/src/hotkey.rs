@@ -25,7 +25,7 @@ struct EventTypeSpec {
 }
 
 const K_EVENT_CLASS_KEYBOARD: u32 = u32::from_be_bytes(*b"keyb");
-const K_EVENT_HOTKEY_PRESSED: u32 = 1;
+const K_EVENT_HOTKEY_PRESSED: u32 = 5;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -158,10 +158,7 @@ pub fn set_handler(f: impl Fn() + Send + 'static) {
     *CALLBACK.lock().unwrap() = Some(Box::new(f));
 }
 
-/// Makes `keys` (GPUI syntax: "alt-space", "ctrl-shift-k") the global shortcut, or drops it.
-pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
-    unregister();
-    let Some(keys) = keys else { return Ok(()) };
+fn parse(keys: &str) -> Result<(u32, u32), HotkeyError> {
     let mut mods = 0u32;
     let mut code = None;
     for part in keys.to_ascii_lowercase().split(['-', '+']) {
@@ -169,7 +166,7 @@ pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
             "alt" | "option" | "opt" => mods |= OPTION_KEY,
             "ctrl" | "control" => mods |= CONTROL_KEY,
             "shift" => mods |= SHIFT_KEY,
-            "cmd" | "meta" | "super" => mods |= CMD_KEY,
+            "cmd" | "meta" | "super" | "win" => mods |= CMD_KEY,
             other => code = key_code(other).or(code),
         }
     }
@@ -177,6 +174,14 @@ pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
     if mods == 0 {
         return Err(HotkeyError::Invalid);
     }
+    Ok((code, mods))
+}
+
+/// Makes `keys` (GPUI syntax: "alt-space", "ctrl-shift-k") the global shortcut, or drops it.
+pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
+    unregister();
+    let Some(keys) = keys else { return Ok(()) };
+    let (code, mods) = parse(keys)?;
     let installed = with_main(move || unsafe {
         // one handler for the application's key events, installed once per process
         static HANDLER: Mutex<bool> = Mutex::new(false);
@@ -206,4 +211,19 @@ pub fn set(keys: Option<&str>) -> Result<(), HotkeyError> {
 /// How many times the shortcut fired (a cheap check for tests and the log).
 pub fn presses() -> u32 {
     PRESSES.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recorded_shortcuts_preserve_mac_modifiers() {
+        assert_eq!(parse("alt-space"), Ok((49, OPTION_KEY)));
+        assert_eq!(parse("ctrl-shift-k"), Ok((40, CONTROL_KEY | SHIFT_KEY)));
+        assert_eq!(parse("win-shift-k"), Ok((40, CMD_KEY | SHIFT_KEY)));
+        assert_eq!(parse("cmd-shift-k"), parse("win-shift-k"));
+        assert_eq!(parse("space"), Err(HotkeyError::Invalid));
+        assert_eq!(parse("alt"), Err(HotkeyError::Invalid));
+    }
 }

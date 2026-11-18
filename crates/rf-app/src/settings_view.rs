@@ -682,7 +682,7 @@ pub fn render(p: &Palette, window: &mut Window, cx: &mut App, lens_owner: bool) 
 fn quick_search_cards(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     let capture = crate::quick_search::CAPTURE_ACTION;
     let waiting = crate::keymap_editor::capturing(cx).as_deref() == Some(capture);
-    let shown: SharedString = if waiting { t!("Tuşlara basın…").into() } else { crate::keymap_editor::pretty(&s.quick_search_keys).into() };
+    let shown: SharedString = if waiting { t!("Tuşlara basın…").into() } else { crate::keymap_editor::pretty_hotkey(&s.quick_search_keys).into() };
     let keys_desc = match crate::quick_search::problem() {
         Some(rf_win::hotkey::HotkeyError::Taken) if s.quick_search => t!("Bu kısayolu başka bir uygulama kullanıyor (ChatGPT, Gemini, PowerToys…): başka bir kısayol seçin"),
         Some(rf_win::hotkey::HotkeyError::Invalid) if s.quick_search => {
@@ -3581,6 +3581,7 @@ mod search_tests {
     }
 
     /// Builds the Dock page the way the search does (the builders note their texts) and returns what was noted.
+    #[cfg(windows)]
     fn noted_on_the_dock_page(s: &Settings, p: &Palette) -> Vec<Found> {
         COLLECT.with(|c| *c.borrow_mut() = Some(Vec::new()));
         COLLECT_AT.with(|a| a.set((Page::Dock, None)));
@@ -3589,6 +3590,7 @@ mod search_tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn the_weather_from_position_card_stands_directly_after_the_weather_city_row() {
         crate::dock_page::while_turkish(|| {
             let p = Palette::light();
@@ -3603,6 +3605,7 @@ mod search_tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn the_dock_page_follows_the_look_page_and_the_search_finds_every_dock_setting_on_it() {
         crate::dock_page::while_turkish(|| {
             let at = |pg: Page| PAGES.iter().position(|x| x.0 == pg).unwrap();
@@ -3635,7 +3638,7 @@ mod search_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod desktop_page_tests {
     use super::{COLLECT, COLLECT_AT, Found, PAGES, Page, experimental, matching, page_title};
     use crate::settings::Settings;

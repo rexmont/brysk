@@ -39,14 +39,23 @@ fn keys_of(k: &Keystroke) -> Option<String> {
 
 /// "ctrl-shift-k" → "Ctrl+Shift+K" (as shown in the UI).
 pub fn pretty(keys: &str) -> String {
+    pretty_with_control(keys, cfg!(target_os = "macos"))
+}
+
+/// Global shortcuts retain physical Control; action bindings use it as the primary modifier.
+pub fn pretty_hotkey(keys: &str) -> String {
+    pretty_with_control(keys, false)
+}
+
+fn pretty_with_control(keys: &str, primary_control: bool) -> String {
     // "ctrl--" means Ctrl + minus: keep the trailing '-' as the key
     if let Some(mods) = keys.strip_suffix("--") {
-        let head = pretty(mods);
+        let head = pretty_with_control(mods, primary_control);
         return if head.is_empty() { "-".into() } else { format!("{head}+-") };
     }
     keys.split('-')
         .map(|p| match p {
-            "ctrl" => if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }.to_string(),
+            "ctrl" => if primary_control { "Cmd" } else { "Ctrl" }.to_string(),
             "alt" => if cfg!(target_os = "macos") { "Option" } else { "Alt" }.to_string(),
             "shift" => "Shift".to_string(),
             "win" | "cmd" => if cfg!(target_os = "macos") { "Cmd" } else { "Win" }.to_string(),
@@ -206,7 +215,8 @@ mod tests {
 
     #[test]
     fn a_custom_shortcut_on_another_commands_keys_is_reported() {
-        let entries = [("Yeni sekme", "Ctrl+T", "NewTab".to_string()), ("Geri", "Alt+←", "GoBack".to_string()), ("Rafı göster/gizle", "", "ToggleShelf".to_string())];
+        let (tab, back) = if cfg!(target_os = "macos") { ("Cmd+T", "Option+←") } else { ("Ctrl+T", "Alt+←") };
+        let entries = [("Yeni sekme", tab, "NewTab".to_string()), ("Geri", back, "GoBack".to_string()), ("Rafı göster/gizle", "", "ToggleShelf".to_string())];
         let none = |_: &str| None;
         assert!(super::conflicts(&entries, &none).is_empty());
         // the shelf gets Ctrl+T: both commands are marked, each naming the other
@@ -232,6 +242,8 @@ mod tests {
         #[cfg(target_os = "macos")]
         {
             assert_eq!(pretty("ctrl-shift-k"), "Cmd+Shift+K");
+            assert_eq!(super::pretty_hotkey("ctrl-alt-k"), "Ctrl+Option+K");
+            assert_eq!(super::pretty_hotkey("win-shift-k"), "Cmd+Shift+K");
             assert_eq!(pretty("alt-f4"), "Option+F4");
             assert_eq!(pretty("ctrl-pageup"), "Cmd+Pageup");
             assert_eq!(pretty("ctrl--"), "Cmd+-");

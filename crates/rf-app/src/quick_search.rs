@@ -1546,6 +1546,20 @@ mod tests {
     }
 
     #[test]
+    fn turning_off_recent_items_leaves_an_empty_query_empty() {
+        let found = super::search("   ", WebSearch::Google, true, false, false);
+        assert!(found.items.is_empty());
+        assert!(!found.index_building && !found.index_off);
+    }
+
+    #[test]
+    fn turning_off_bookmarks_keeps_other_search_sources() {
+        let items = super::search_local("brysk", WebSearch::Google, false);
+        assert!(items.iter().all(|i| i.section != super::Section::Bookmarks));
+        assert!(items.iter().any(|i| matches!(&i.target, super::Target::Web { query } if query == "brysk")));
+    }
+
+    #[test]
     fn web_search_urls() {
         assert_eq!(web_url(WebSearch::Google, "rust gpui"), "https://www.google.com/search?q=rust+gpui");
         assert_eq!(web_url(WebSearch::DuckDuckGo, "ç&="), "https://duckduckgo.com/?q=%C3%A7%26%3D");

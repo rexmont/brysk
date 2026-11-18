@@ -182,7 +182,8 @@ impl FolderView {
         let dates: Vec<String> = [400 * DAY, 59 * 60_000, 23 * 3_600_000, 6 * DAY].iter().map(|ago| format::datetime(now - ago)).collect();
         let date_w = widest(&dates, sm);
         // sizes: four digits, three with a unit, a decimal point; and the "calculate" link of a folder, which is drawn smaller
-        let sizes: Vec<String> = [1023, 1023 << 10, 104_752_742, 10_726_932_152, 1023 << 30].iter().map(|b| format::size(*b)).collect();
+        // Decimal units switch to KB at 1000; include the widest bytes label in both modes.
+        let sizes: Vec<String> = [999, 1023, 1023 << 10, 104_752_742, 10_726_932_152, 1023 << 30].iter().map(|b| format::size(*b)).collect();
         let size_w = widest(&sizes, sm).max(if key.calc_link { width(t!("Boyutu hesapla"), xs) } else { 0. });
         // types: what this listing has
         let k = kinds(self.entries.iter().take(SCAN).map(|e| (e.is_dir(), &e.ext)));

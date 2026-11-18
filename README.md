@@ -16,7 +16,7 @@ and a native macOS core. Based on [rustyfiles](https://github.com/gelenmedya/rus
 and file-operation layer, macOS system integration, a rebuilt preview pipeline, and substantial
 performance and interface changes.
 
-> **Version: 0.1.0 — initial release.** Requires macOS 13 or later. Releases are universal (Apple silicon + Intel)
+> **Version: 0.1.1.** Requires macOS 13 or later. Releases are universal (Apple silicon + Intel)
 > Developer ID builds, notarised and stapled as DMGs.
 
 ## Why Brysk

@@ -4871,8 +4871,8 @@ const RENAME_INSET: f32 = 5.;
 /// column takes what is free, so the strip is made on purpose. The rows, their hover and selection fill and the column headings all
 /// end before it; the scrollbar, when shown, lies over its outer part.
 ///
-/// HOW WIDE (the user, of a fixed 24 px: "bu 24px olayı büyük monitörlerde nasıl olacak peki?"): 3 % of the list's width, never
-/// under 24 px and never over 56. A fixed strip is the same few millimetres on every screen, since these are the pixels Windows'
+/// The strip is 3% of the list's width, clamped to 24–56 px. A fixed strip is the same few millimetres on every screen, since
+/// these are the pixels Windows'
 /// display scaling multiplies, but beside a list 1600 px wide it is a sliver, and that is where the name column has width to
 /// spare. So a narrow list (a small window, two panes, the preview pane open) keeps the 24 px it can afford and a wide one gets
 /// up to 56. Pure.
@@ -5167,8 +5167,7 @@ struct FirstClick {
 /// Whether a click that Windows counts as the second of a double click is one HERE: its first click was made in this same listing
 /// and on the same thing (the entry `name`, or the empty area for `None`).
 ///
-/// WHY (a user on Discord, 2026-11-14: "when you click on one of the drive really fast like usual explorer thing the folders doesn't
-/// load"). A drive or a folder tile of the Home page, a place in the sidebar, a part of the address opens on ONE click. A user who
+/// A drive or folder tile, sidebar item, or address segment navigates on a single click. A user who
 /// double-clicks it, as in Explorer, sent a second click, and that click landed on whatever the new listing had under the pointer by
 /// then: Windows still called it a double click, so the folder there was opened too (a double click on drive C: ended inside
 /// `C:\MSI`), or, on the empty area with "double-click an empty area to go up" on, the drive was left again. Windows counts clicks by

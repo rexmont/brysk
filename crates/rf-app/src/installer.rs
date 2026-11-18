@@ -110,9 +110,7 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 static IMPORTANT: Mutex<Option<String>> = Mutex::new(None);
 
 /// The mark that makes a release an important one: a line in its release notes on GitHub, an HTML comment, so nobody reading the
-/// notes sees it. WHY (the owner, 2026-11-17, the morning 0.8.6 left the dock empty: "güncelleme denetimine de önemli fix modu
-/// ekleyelim. bunun gibi önemli fixleri yayınlayınca önemli bir güncelleme olduğunu belirtsin uygulamada"): an update was always
-/// announced the same quiet way, "ready, restart", which a fix for a broken dock should not be.
+/// notes sees it. Critical fixes can use this marker to receive a more prominent update notice.
 pub const IMPORTANT_MARK: &str = "<!-- rustyfiles: important -->";
 
 /// Whether the downloaded `version` brings an important fix.

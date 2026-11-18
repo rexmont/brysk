@@ -444,6 +444,8 @@ pub struct Settings {
     pub open_rules: Vec<rf_core::openrules::OpenRule>,
     /// Closing the last window keeps Brysk in the notification area (the menu bar on macOS): the next window opens instantly.
     pub run_in_background: bool,
+    /// macOS only: redirect plain clicks on Finder's Dock icon while Brysk runs. Opt-in.
+    pub finder_dock_redirect: bool,
     /// Status bar: listing time and the GPU/CPU renderer badge (developer info).
     pub show_perf_info: bool,
     /// A notification when a long operation finishes while Brysk is not in front (Windows only: `rf-mac`'s notification call is
@@ -749,6 +751,7 @@ impl Default for Settings {
             accent_color: String::new(),
             open_rules: Vec::new(),
             run_in_background: false,
+            finder_dock_redirect: false,
             show_perf_info: false,
             notify_long_ops: cfg!(windows),
             auto_update: true,
@@ -1142,6 +1145,10 @@ impl Settings {
         // (a text that is no colour is no colour: Windows' accent)
         rf_win::accent::set_override(rf_win::accent::parse_hex(&self.accent_color));
         crate::background::sync_tray(self.run_in_background);
+        #[cfg(target_os = "macos")]
+        if !crate::background::side_process() {
+            rf_win::finder_replace::set_enabled(self.finder_dock_redirect);
+        }
         crate::quick_search::sync(self);
         // (the system's own short date and time for the "System" style and older dates, issue 59; set once)
         rf_core::format::set_system_format(rf_win::datefmt::short_date_time);
@@ -1229,6 +1236,15 @@ pub fn update(cx: &mut App, f: impl FnOnce(&mut Settings)) {
         crate::dock::control::sync_process(&s);
     });
     cx.refresh_windows();
+}
+
+#[cfg(target_os = "macos")]
+pub fn set_finder_dock_redirect(enabled: bool, cx: &mut App) {
+    update(cx, |s| {
+        s.finder_dock_redirect = enabled;
+        if enabled { s.run_in_background = true; }
+    });
+    if enabled { rf_win::finder_replace::request_permission(); }
 }
 
 /// Like [`update`] for a control that changes on every step of a drag (a slider): the change is applied and drawn at once, the file is

@@ -33,6 +33,7 @@ pub mod fastcopy;
 pub mod fastdelete;
 pub mod fileinfo;
 pub mod fileops;
+pub mod finder_replace;
 pub mod foldersize;
 pub mod glass;
 pub mod handover;

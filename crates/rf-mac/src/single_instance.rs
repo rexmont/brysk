@@ -57,6 +57,54 @@ pub fn send_to(app: &str, message: &str) -> bool {
     }
 }
 
+/// Whether the live helper uses another bundle, or predates its executable on disk.
+/// Called on the IPC worker, before sending to a helper that may have survived an app update.
+pub fn peer_is_stale(app: &str, executable: &std::path::Path) -> Option<bool> {
+    use std::os::fd::AsRawFd;
+    let stream = std::os::unix::net::UnixStream::connect(socket_path(app)).ok()?;
+    let mut pid = 0i32;
+    let mut len = std::mem::size_of_val(&pid) as libc::socklen_t;
+    if unsafe { libc::getsockopt(stream.as_raw_fd(), libc::SOL_LOCAL, libc::LOCAL_PEERPID, (&mut pid as *mut i32).cast(), &mut len) } != 0 {
+        return None;
+    }
+    process_is_stale(pid, executable)
+}
+
+fn process_is_stale(pid: i32, executable: &std::path::Path) -> Option<bool> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut path = [0u8; 4096];
+    if unsafe { libc::proc_pidpath(pid, path.as_mut_ptr().cast(), path.len() as u32) } <= 0 { return None; }
+    let path = std::ffi::CStr::from_bytes_until_nul(&path).ok()?;
+    let running = std::path::Path::new(std::ffi::OsStr::from_bytes(path.to_bytes()));
+    if running.canonicalize().ok()? != executable.canonicalize().ok()? { return Some(true); }
+    let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::uninit();
+    let len = std::mem::size_of_val(&info) as i32;
+    if unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, info.as_mut_ptr().cast(), len) } != len { return None; }
+    let info = unsafe { info.assume_init() };
+    let started = std::time::UNIX_EPOCH + std::time::Duration::new(info.pbi_start_tvsec, info.pbi_start_tvusec as u32 * 1000);
+    Some(std::fs::metadata(executable).ok()?.modified().ok()? > started)
+}
+
+#[cfg(test)]
+mod freshness_tests {
+    #[test]
+    fn finds_the_process_behind_a_live_helper_socket() {
+        let app = format!("brysk-freshness-test-{}", std::process::id());
+        let path = super::socket_path(&app);
+        let _cleanup = super::InstanceGuard::new(path.clone());
+        let _listener = std::os::unix::net::UnixListener::bind(path).unwrap();
+        assert_eq!(super::peer_is_stale(&app, &std::env::current_exe().unwrap()), Some(false));
+    }
+
+    #[test]
+    fn recognizes_its_current_executable_and_a_different_bundle() {
+        let pid = std::process::id() as i32;
+        assert_eq!(super::process_is_stale(pid, &std::env::current_exe().unwrap()), Some(false));
+        assert_eq!(super::process_is_stale(pid, std::path::Path::new("/System/Library/CoreServices/Finder.app")), Some(true));
+        assert_eq!(super::process_is_stale(-1, &std::env::current_exe().unwrap()), None);
+    }
+}
+
 /// Receives messages meant for `app` (a socket of its own; used by the search pipe).
 pub fn serve_app(app: &str, on_message: impl Fn(String) + Send + Sync + 'static) {
     let path = socket_path(app);

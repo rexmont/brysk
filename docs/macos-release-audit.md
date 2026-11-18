@@ -17,6 +17,9 @@ Reviewed the two supplied audits against `a74d503` on 2026-11-18. Their snapshot
 - Icon columns distribute spare width evenly, including when the preview pane is visible; marquee hit testing uses the same column widths. Paste/rename reselection scrolls to the item's grid row rather than treating its file index as a row index. Copy naming remains `Name copy.ext`, then `Name copy 2.ext`, as confirmed by the user.
 - DirectLook's pin button toggles the window it belongs to. Unpinning makes it the following preview and preserves any previous following preview as pinned. Share uses the owning window and the toolbar button's measured rectangle for the native popover anchor.
 - In-app file drag previews include cached icons/thumbnails and names; multiple items use a stack and count badge. Source items remain visible. Settings search results reveal the matching row, open its expander, and briefly highlight it before fading. The menu-bar SF Symbol uses an explicit 18-point medium configuration without bitmap scaling.
+- Onboarding and Settings → General offer optional Finder Dock-click redirection, default off. The Rust port of finder-replace matches live Dock accessibility elements with a bounded timeout, preserves modified/right-clicks, and consumes matched mouse sequences. Enabling it enables background mode and prompts for Accessibility; a live status row reports missing permissions. Attribution and the full upstream MIT notice are bundled in NOTICE and linked from About.
+- Finder redirection lives only in the Brysk process. Quit/crash leaves no service or system patch. A half-second executable check stops the tap if the running app is moved or removed, including being dragged to Trash; a missing app fails the click-candidate gate.
+- macOS DirectLook IPC detects a running helper from another bundle or one started before its executable was rebuilt. Startup replaces a stale helper before forwarding previews, so a lingering old process cannot silently keep serving an earlier build.
 
 ## Already fixed at the starting commit
 
@@ -39,7 +42,7 @@ Do not advertise the deferred features as supported. If full Finder metadata pre
 ## Validation and remaining checks
 
 - Both application binaries build on macOS.
-- macOS backend: 84 tests passed, one manual timing benchmark ignored by default. This includes two share-anchor coordinate tests and the existing same-folder file/folder copy-name tests.
+- macOS backend: 90 tests passed, one manual timing benchmark ignored by default. This includes Finder-click modifier/sequence/identity/screen-edge/missing-app checks, helper freshness and live-socket checks, share-anchor coordinate tests and existing same-folder copy-name tests.
 - Four focused grid-layout and settings-highlight checks passed using the actual source functions. The queued changes build into an ad-hoc signed `target/Brysk.app`; signature verification passed. UI verification of pin/unpin, Share placement, drag appearance, settings reveal/fade and menu-bar sharpness is left to the user as requested.
 - Archive unit suite: 66 passed, one ignored; three additional Unix package/security integration tests passed.
 - Core suite: 390 passed and 57 failed. The identical 57 failures reproduce at the untouched starting commit; they concern existing Windows-path/platform assumptions. No new core failures were introduced.

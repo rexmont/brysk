@@ -285,14 +285,25 @@ pub fn open_main_window_made(
 }
 
 /// The first launch on macOS: macOS will ask for folder access on its own; this says what the
-/// prompts are and where the one optional switch (Full Disk Access, for the Finder's Trash) is.
+/// prompts are, with an optional Finder Dock-click integration.
 #[cfg(target_os = "macos")]
 fn mac_onboarding(cx: &mut App) {
     use crate::prompt::{Button, Kind};
+    use std::cell::Cell;
+    use std::rc::Rc;
     let Some(w) = cx.active_window().or_else(|| cx.windows().first().copied()) else { return };
-    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time Brysk opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give Brysk Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).";
+    let message = "macOS protects Desktop, Documents, Downloads and network volumes. The first time Brysk opens one, macOS asks for permission — choose Allow.\n\nTo list and restore items other apps put in the Trash, give Brysk Full Disk Access in System Settings → Privacy & Security → Full Disk Access (optional).\n\nOpen Brysk when you click Finder in the Dock. No system patches or SIP changes.\n\nOnly plain left-clicks are replaced. Right-clicks and clicks with modifier keys keep their usual behavior.\n\nOptional: requires Accessibility access and keeps Brysk running in the background. Change this in Settings → General.";
+    let selected = Rc::new(Cell::new(0));
+    let choice = crate::prompt::Choice {
+        label: "Finder Dock icon".into(),
+        options: vec!["Keep opening Finder".into(), "Open Brysk (optional)".into()],
+        selected: selected.clone(),
+    };
     let _ = w.update(cx, |_, window, cx| {
-        crate::prompt::show("Welcome to Brysk", Some(message.to_string()), None, vec![Button::new("Continue", Kind::Primary, |_, _, _| Ok(()))], window, cx);
+        crate::prompt::show_with("Welcome to Brysk", Some(message.to_string()), None, vec![choice], vec![Button::new("Continue", Kind::Primary, move |_, _, cx| {
+            if selected.get() == 1 { settings::set_finder_dock_redirect(true, cx); }
+            Ok(())
+        })], window, cx);
     });
 }
 

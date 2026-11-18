@@ -911,10 +911,40 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     v.push(section(p, t!("Kaydırma")));
     #[cfg(windows)]
     v.push(card(p, L::ChevronsUpDown, t!("Akıcı kaydırma"), None, sw("smooth", p, s.smooth_scroll, |s, v| s.smooth_scroll = v)));
+    #[cfg(target_os = "macos")]
+    v.extend(finder_dock_cards(p, s));
     v.extend(quick_search_cards(p, s, cx));
     #[cfg(windows)]
     v.extend(crate::snip::settings_cards(p, s));
     v
+}
+
+#[cfg(target_os = "macos")]
+fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
+    use crate::i18n::tx;
+    use rf_win::finder_replace::{self, Status};
+    let enabled = s.finder_dock_redirect;
+    let mut cards = vec![
+        section(p, "macOS"),
+        card(p, L::FolderOpen, tx("Finder Dock simgesinden Brysk'ı aç", "Open Brysk from the Finder Dock icon"),
+            Some(tx("Finder'ın Dock simgesine normal sol tıklamayı yönlendirir ve Brysk'ı arka planda tutar. Erişilebilirlik izni gerekir. Sağ tık ve değiştirici tuşlarla tıklamalar Finder'da kalır.", "Redirect plain left-clicks on Finder in the Dock and keep Brysk running in the background. Requires Accessibility access. Right-clicks and modified clicks keep their Finder behavior.")),
+            switch("finder-dock-redirect", p, enabled, move |_, cx| settings::set_finder_dock_redirect(!enabled, cx))),
+    ];
+    if enabled {
+        let status = match finder_replace::status() {
+            Status::Active => tx("Etkin. Brysk'tan çıkınca Finder tıklamaları normale döner.", "Active. Quitting Brysk restores normal Finder clicks."),
+            Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin. İzin verildiğinde otomatik etkinleşir.", "Allow Brysk in System Settings → Privacy & Security → Accessibility. It activates automatically once access is granted."),
+            Status::TapUnavailable => tx("Fare erişimi açılamadı. Erişilebilirlik iznini ve gerekirse Giriş İzleme'yi denetleyin. Finder tıklamaları değiştirilmez; otomatik yeniden denenir.", "Mouse access is unavailable. Check Accessibility and, if needed, Input Monitoring. Finder clicks pass through; Brysk retries automatically."),
+            Status::AppUnavailable => tx("Brysk taşındı veya kaldırıldı. Finder tıklamaları normale döndü. Brysk'ı kurulu konumundan yeniden açın.", "Brysk was moved or removed. Finder clicks have been restored. Reopen Brysk from its installed location."),
+            Status::Off => tx("Başlatılıyor…", "Starting…"),
+        };
+        cards.push(card(p, L::ShieldCheck, tx("Finder tıklama erişimi", "Finder click access"), Some(status),
+            button("finder-accessibility", p, tx("Erişilebilirlik ayarları", "Accessibility settings"), |_, _| {
+                finder_replace::request_permission();
+                open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+            })));
+    }
+    cards
 }
 
 /// Background tint presets (Files' "Background color").
@@ -3029,27 +3059,26 @@ fn open_url(url: &'static str) {
 
 /// The upstream project and licence, always shown in About → Open source.
 const UPSTREAM_URL: &str = "https://github.com/gelenmedya/rustyfiles";
-const UPSTREAM_LICENSE_URL: &str = "https://github.com/gelenmedya/rustyfiles/blob/main/LICENSE";
+const NOTICE_URL: &str = "https://github.com/rexmont/brysk/blob/macos/NOTICE";
 
-/// `Brysk.app/Contents/Resources/LICENSE` inside the bundle (the release workflow puts
-/// `LICENSE` beside the executable on Windows).
-fn bundled_license_path() -> Option<std::path::PathBuf> {
+/// The attribution notices travel beside LICENSE in every packaged build.
+fn bundled_notice_path() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     #[cfg(target_os = "macos")]
     {
-        Some(exe.parent()?.parent()?.join("Resources").join("LICENSE"))
+        Some(exe.parent()?.parent()?.join("Resources").join("NOTICE"))
     }
     #[cfg(not(target_os = "macos"))]
     {
-        Some(exe.with_file_name("LICENSE"))
+        Some(exe.with_file_name("NOTICE"))
     }
 }
 
-fn open_bundled_license() {
+fn open_bundled_notices() {
     std::thread::spawn(|| {
-        let target = bundled_license_path()
+        let target = bundled_notice_path()
             .filter(|p| p.is_file())
-            .unwrap_or_else(|| std::path::PathBuf::from(UPSTREAM_LICENSE_URL));
+            .unwrap_or_else(|| std::path::PathBuf::from(NOTICE_URL));
         if let Err(e) = rf_win::shell::open(&target) {
             log::warn!("open licence: {e:#}");
         }
@@ -3260,6 +3289,14 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
         ),
         link_row(
             p,
+            "finder-replace-source",
+            L::Globe,
+            "finder-replace (MIT)",
+            Some(crate::i18n::tx("Finder Dock tıklama yönlendirmesi için Mikhail Khrustik'in çalışmasından Rust'a uyarlanmıştır. Tam MIT bildirimi uygulamayla gelir.", "Finder Dock-click integration adapted into Rust from Mikhail Khrustik's work. The full MIT notice is bundled with Brysk.")),
+            |_, _| open_url("https://github.com/mishamyrt/finder-replace"),
+        ),
+        link_row(
+            p,
             "license",
             L::ScrollText,
             crate::i18n::tx("Lisans ve bildirimler", "Licence and notices"),
@@ -3267,7 +3304,7 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
                 "Uygulamayla gelen MIT lisansını ve kaynak bildirimlerini aç.",
                 "Open the bundled MIT licence and attribution notices.",
             )),
-            |_, _| open_bundled_license(),
+            |_, _| open_bundled_notices(),
         ),
         expander(
             "libs",
@@ -3283,6 +3320,7 @@ fn about(p: &Palette, cx: &mut App) -> Vec<AnyElement> {
                     ("gpui-kit", "Apache-2.0"),
                     ("objc2, block2, dispatch2", "MIT"),
                     ("core-foundation", "MIT / Apache-2.0"),
+                    ("finder-replace (Rust port)", "MIT · Mikhail Khrustik"),
                     ("Lucide icons", "ISC"),
                     ("zip, sevenz-rust2, tar, flate2, zstd", "MIT / Apache-2.0"),
                     ("notify", "CC0 / Artistic-2.0"),

@@ -72,6 +72,13 @@ on; the other figures are debug builds, where the relative improvement is what m
 Download the latest DMG from [Releases](https://github.com/rexmont/brysk/releases), open it and
 drag **Brysk** to Applications. The build is signed and notarised; no Gatekeeper bypass is needed.
 
+Onboarding and Settings → General offer an optional Finder Dock-click replacement. It needs
+Accessibility access and enables background mode. Plain left-clicks open Brysk; right-clicks
+and modified clicks keep their usual behavior. Turning it off or quitting Brysk restores
+normal Finder clicks. It needs no system patches or SIP changes.
+If Brysk is moved or removed while still running, redirection stops when its executable
+disappears (checked every half-second). No separate replacement service is installed.
+
 ## Build from source
 
 ```sh
@@ -99,13 +106,17 @@ Port notes: [`docs/port-macos.md`](docs/port-macos.md). Upstream sync:
   enumerated. The empty state explains this.
 - Name clashes keep both instead of asking replace/skip; nothing is overwritten.
 - Get Info is read-only (no permission or tag editing yet).
-- No Finder Services/default-file-manager integration; network locations must be mounted first.
+- Finder Services/system-wide default-file-manager registration are not implemented; network locations must be mounted first.
 - Speed test and Folder organizer are Windows-only features and are not part of the macOS build.
 
 ## Credits
 
 Brysk is based on [rustyfiles](https://github.com/gelenmedya/rustyfiles) by
 [Özer Güzel](https://github.com/gelenmedya). The macOS port keeps the MIT licence of the original.
+
+The Finder Dock-click integration is a Rust port of
+[finder-replace](https://github.com/mishamyrt/finder-replace) by Mikhail Khrustik, also MIT
+licensed. Its copyright and full permission notice are reproduced in [NOTICE](NOTICE).
 
 The full MIT licence, including the upstream copyright notice, is in [LICENSE](LICENSE). Fork
 attribution is in [NOTICE](NOTICE); both files ship inside `Brysk.app`.

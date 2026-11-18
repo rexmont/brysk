@@ -62,6 +62,20 @@ pub fn sync_tray(on: bool) {
 
 /// Routes tray clicks to the app (call once at startup).
 pub fn init(cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        rf_win::finder_replace::start(move |event| { let _ = tx.unbounded_send(event); });
+        cx.spawn(async move |cx| {
+            use futures::StreamExt;
+            while let Some(event) = rx.next().await {
+                cx.update(|cx| match event {
+                    rf_win::finder_replace::Event::Open => on_tray(rf_win::tray::TrayEvent::Open, cx),
+                    rf_win::finder_replace::Event::StatusChanged => cx.refresh_windows(),
+                });
+            }
+        }).detach();
+    }
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<rf_win::tray::TrayEvent>();
     rf_win::tray::set_handler(move |e| {
         let _ = tx.unbounded_send(e);

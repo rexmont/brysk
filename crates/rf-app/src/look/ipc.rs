@@ -134,6 +134,20 @@ pub fn exe() -> Option<PathBuf> {
 /// Hiç beklemez: arka planda yapılır.
 pub fn send(msg: Msg, start: bool) {
     std::thread::spawn(move || {
+        #[cfg(target_os = "macos")]
+        let _serial = {
+            static SEND: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            SEND.lock().unwrap_or_else(|e| e.into_inner())
+        };
+        #[cfg(target_os = "macos")]
+        if start && let Some(exe) = exe() && rf_win::single_instance::peer_is_stale(&app_name(), &exe) == Some(true) {
+            log::info!("directlook: replacing helper from an older build");
+            rf_win::single_instance::send_to(&app_name(), &Msg::Quit.encode());
+            for _ in 0..100 {
+                if !rf_win::single_instance::send_to(&app_name(), "") { break; }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
         let text = msg.encode();
         if rf_win::single_instance::send_to(&app_name(), &text) {
             return;

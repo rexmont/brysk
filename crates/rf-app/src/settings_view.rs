@@ -933,9 +933,9 @@ fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     if enabled {
         let status = match finder_replace::status() {
             Status::Active => tx("Etkin. Brysk'tan çıkınca Finder tıklamaları normale döner.", "Active. Quitting Brysk restores normal Finder clicks."),
-            Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin. İzin verildiğinde otomatik etkinleşir.", "Allow Brysk in System Settings → Privacy & Security → Accessibility. It activates automatically once access is granted."),
-            Status::TapUnavailable => tx("Fare erişimi açılamadı. Erişilebilirlik iznini ve gerekirse Giriş İzleme'yi denetleyin. Finder tıklamaları değiştirilmez; otomatik yeniden denenir.", "Mouse access is unavailable. Check Accessibility and, if needed, Input Monitoring. Finder clicks pass through; Brysk retries automatically."),
-            Status::AppUnavailable => tx("Brysk taşındı veya kaldırıldı. Finder tıklamaları normale döndü. Brysk'ı kurulu konumundan yeniden açın.", "Brysk was moved or removed. Finder clicks have been restored. Reopen Brysk from its installed location."),
+            Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin, ardından Brysk'a dönün.", "Allow Brysk in System Settings → Privacy & Security → Accessibility, then return to Brysk."),
+            Status::TapUnavailable => tx("Finder tıklama erişimi başlatılamadı. Erişilebilirlik iznini ve gerekirse Giriş İzleme'yi denetleyip Brysk'a dönün. Finder tıklamaları değiştirilmez.", "Finder click access could not start. Check Accessibility and, if needed, Input Monitoring, then return to Brysk. Finder clicks pass through."),
+            Status::AppUnavailable => tx("Brysk kullanılamıyor veya konumu değişti. Finder tıklamaları normale döndü. Brysk'ı kurulu konumundan yeniden açın.", "Brysk is unavailable or its location changed. Finder clicks have been restored. Reopen Brysk from its installed location."),
             Status::Off => tx("Başlatılıyor…", "Starting…"),
         };
         cards.push(card(p, L::ShieldCheck, tx("Finder tıklama erişimi", "Finder click access"), Some(status),

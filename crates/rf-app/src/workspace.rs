@@ -658,6 +658,10 @@ impl Workspace {
         let filter_input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("Dosya adı")));
 
         let mut subs = Vec::new();
+        #[cfg(target_os = "macos")]
+        subs.push(cx.observe_window_activation(window, |_, window, _| {
+            if window.is_window_active() { rf_win::finder_replace::retry(); }
+        }));
         subs.push(cx.subscribe_in(&address, window, |this, input, ev: &InputEvent, window, cx| match ev {
             InputEvent::PressEnter { .. } => {
                 let from_completion = this.addr_sel.and_then(|i| this.addr_suggest.get(i)).is_some();

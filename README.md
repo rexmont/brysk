@@ -76,8 +76,9 @@ Onboarding and Settings → General offer an optional Finder Dock-click replacem
 Accessibility access and enables background mode. Plain left-clicks open Brysk; right-clicks
 and modified clicks keep their usual behavior. Turning it off or quitting Brysk restores
 normal Finder clicks. It needs no system patches or SIP changes.
-If Brysk is moved or removed while still running, redirection stops when its executable
-disappears (checked every half-second). No separate replacement service is installed.
+If Brysk is moved or removed while still running, native filesystem notifications stop
+redirection. There is no periodic file check or separate replacement service. After granting
+Accessibility access, return to Brysk to activate the integration.
 
 ## Build from source
 

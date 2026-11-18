@@ -12,7 +12,7 @@ use core_foundation::base::{CFType, CFTypeRef, TCFType};
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
 use core_foundation::mach_port::{CFMachPort, CFMachPortInvalidate, CFMachPortRef};
-use core_foundation::runloop::{CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode};
+use core_foundation::runloop::{CFRunLoop, CFRunLoopRef, CFRunLoopWakeUp, kCFRunLoopCommonModes};
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::url::CFURL;
 use core_graphics::display::CGDisplay;
@@ -25,12 +25,12 @@ const UP: u32 = 2;
 const DRAG: u32 = 6;
 const MODIFIERS: u64 = 0x0002_0000 | 0x0004_0000 | 0x0008_0000 | 0x0010_0000;
 const AX_BUDGET: Duration = Duration::from_millis(250);
-const RETRY: Duration = Duration::from_millis(500);
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static APP_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static STATUS: AtomicU8 = AtomicU8::new(0);
 static WORKER: OnceLock<std::thread::Thread> = OnceLock::new();
+static RUNLOOP: OnceLock<CFRunLoop> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -48,7 +48,7 @@ pub enum Event {
 }
 
 pub fn status() -> Status {
-    match STATUS.load(Ordering::Relaxed) {
+    match STATUS.load(Ordering::SeqCst) {
         1 => Status::NeedsAccessibility,
         2 => Status::Active,
         3 => Status::TapUnavailable,
@@ -58,9 +58,40 @@ pub fn status() -> Status {
 }
 
 pub fn set_enabled(enabled: bool) {
-    ENABLED.store(enabled, Ordering::Relaxed);
+    if ENABLED.swap(enabled, Ordering::SeqCst) != enabled {
+        wake_worker();
+    }
+}
+
+/// Recheck permissions after returning from System Settings or explicitly retrying.
+pub fn retry() {
+    if ENABLED.load(Ordering::SeqCst) && status() != Status::Active {
+        wake_worker();
+    }
+}
+
+fn wake_worker() {
+    if status() == Status::Active
+        && let Some(runloop) = RUNLOOP.get()
+    {
+        stop_runloop(runloop);
+    }
     if let Some(thread) = WORKER.get() {
         thread.unpark();
+    }
+}
+
+fn stop_runloop(runloop: &CFRunLoop) {
+    let target = runloop.clone();
+    let stop = block2::RcBlock::new(move || target.stop());
+    // Queue the stop as work, so a notification arriving just before Run cannot be lost.
+    unsafe {
+        CFRunLoopPerformBlock(
+            runloop.as_concrete_TypeRef(),
+            kCFRunLoopCommonModes.cast(),
+            &*stop,
+        );
+        CFRunLoopWakeUp(runloop.as_concrete_TypeRef());
     }
 }
 
@@ -69,21 +100,22 @@ pub fn start(on_event: impl Fn(Event) + Send + 'static) {
     WORKER.get_or_init(|| {
         let executable = std::env::current_exe().ok();
         std::thread::spawn(move || {
+            let _ = RUNLOOP.set(CFRunLoop::get_current());
             loop {
                 let available = executable.as_deref().is_some_and(std::path::Path::is_file);
-                APP_AVAILABLE.store(available, Ordering::Relaxed);
-                if !ENABLED.load(Ordering::Relaxed) {
+                APP_AVAILABLE.store(available, Ordering::SeqCst);
+                if !ENABLED.load(Ordering::SeqCst) {
                     publish(Status::Off, &on_event);
                     std::thread::park();
                 } else if !available {
                     publish(Status::AppUnavailable, &on_event);
-                    std::thread::park_timeout(RETRY);
+                    std::thread::park();
                 } else if !trusted() {
                     publish(Status::NeedsAccessibility, &on_event);
-                    std::thread::park_timeout(RETRY);
+                    std::thread::park();
                 } else if !run_tap(executable.as_deref().unwrap(), &on_event) {
                     publish(Status::TapUnavailable, &on_event);
-                    std::thread::park_timeout(RETRY);
+                    std::thread::park();
                 }
             }
         })
@@ -93,7 +125,7 @@ pub fn start(on_event: impl Fn(Event) + Send + 'static) {
 }
 
 fn publish(status: Status, on_event: &dyn Fn(Event)) {
-    if STATUS.swap(status as u8, Ordering::Relaxed) != status as u8 {
+    if STATUS.swap(status as u8, Ordering::SeqCst) != status as u8 {
         on_event(Event::StatusChanged);
     }
 }
@@ -110,6 +142,16 @@ pub fn request_permission() {
     unsafe {
         AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef());
     }
+    retry();
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    fn CFRunLoopPerformBlock(
+        runloop: CFRunLoopRef,
+        mode: CFTypeRef,
+        block: &block2::Block<dyn Fn()>,
+    );
 }
 
 type AxRef = *const c_void;
@@ -153,6 +195,17 @@ struct TapContext<'a> {
 }
 
 fn run_tap(executable: &std::path::Path, on_event: &dyn Fn(Event)) -> bool {
+    let _watch = match watch_application(executable, || {
+        if APP_AVAILABLE.swap(false, Ordering::SeqCst) {
+            wake_worker();
+        }
+    }) {
+        Ok(watch) => watch,
+        Err(e) => {
+            log::warn!("Finder click app watch: {e}");
+            return false;
+        }
+    };
     let system = unsafe { AXUIElementCreateSystemWide() };
     if system.is_null() {
         return false;
@@ -192,15 +245,8 @@ fn run_tap(executable: &std::path::Path, on_event: &dyn Fn(Event)) -> bool {
         CGEventTapEnable(context.tap, true);
     }
     publish(Status::Active, on_event);
-    while ENABLED.load(Ordering::Relaxed) && trusted() {
-        let available = executable.is_file();
-        APP_AVAILABLE.store(available, Ordering::Relaxed);
-        if !available {
-            break;
-        }
-        unsafe {
-            CFRunLoop::run_in_mode(kCFRunLoopDefaultMode, RETRY, false);
-        }
+    if ENABLED.load(Ordering::SeqCst) && APP_AVAILABLE.load(Ordering::SeqCst) {
+        CFRunLoop::run_current();
     }
     unsafe {
         CGEventTapEnable(context.tap, false);
@@ -208,6 +254,32 @@ fn run_tap(executable: &std::path::Path, on_event: &dyn Fn(Event)) -> bool {
         CFMachPortInvalidate(context.tap);
     }
     true
+}
+
+fn watch_application(
+    executable: &std::path::Path,
+    unavailable: impl Fn() + Send + 'static,
+) -> notify::Result<notify::RecommendedWatcher> {
+    use notify::{RecursiveMode, Watcher};
+    let path = executable.to_path_buf();
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        if event.is_err() || !path.is_file() {
+            unavailable();
+        }
+    })?;
+    // Watch both the executable and the bundle root: Trash usually renames the whole .app.
+    watcher.watch(executable, RecursiveMode::NonRecursive)?;
+    if let Some(bundle) = executable
+        .ancestors()
+        .find(|p| p.extension().is_some_and(|ext| ext == "app"))
+    {
+        watcher.watch(bundle, RecursiveMode::NonRecursive)?;
+    }
+    // Close the race between registering the watch and installing the tap.
+    if !executable.is_file() {
+        return Err(notify::Error::path_not_found());
+    }
+    Ok(watcher)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -248,8 +320,12 @@ unsafe extern "C" fn on_mouse(
     // The tap invokes this only on its owning run loop; context outlives the invalidated tap.
     let context = unsafe { &mut *(context as *mut TapContext<'_>) };
     if kind == 0xffff_fffe || kind == 0xffff_ffff {
+        if !trusted() {
+            CFRunLoop::get_current().stop();
+            return event;
+        }
         unsafe {
-            CGEventTapEnable(context.tap, ENABLED.load(Ordering::Relaxed));
+            CGEventTapEnable(context.tap, ENABLED.load(Ordering::SeqCst));
         }
         return event;
     }
@@ -258,8 +334,8 @@ unsafe extern "C" fn on_mouse(
     }
     let finder = kind == DOWN
         && plain_click(
-            ENABLED.load(Ordering::Relaxed),
-            APP_AVAILABLE.load(Ordering::Relaxed),
+            ENABLED.load(Ordering::SeqCst),
+            APP_AVAILABLE.load(Ordering::SeqCst),
             unsafe { CGEventGetFlags(event) },
         )
         && finder_at(&context.system, unsafe { CGEventGetLocation(event) });
@@ -435,6 +511,73 @@ fn screen_point(point: CGPoint, displays: &[CGRect]) -> CGPoint {
 mod tests {
     use super::*;
     use core_foundation::url::kCFURLPOSIXPathStyle;
+
+    #[test]
+    fn file_notifications_report_executable_deletion_and_whole_app_move() {
+        for remove_file in [true, false] {
+            let root = std::env::temp_dir().join(format!(
+                "brysk-finder-watch-{}-{remove_file}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&root).unwrap();
+            let bundle = root.join("Brysk.app");
+            let exe = bundle.join("Contents/MacOS/brysk");
+            std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+            std::fs::write(&exe, b"test executable").unwrap();
+            let (tx, rx) = std::sync::mpsc::channel();
+            let watch = watch_application(&exe, move || {
+                let _ = tx.send(());
+            })
+            .unwrap();
+            if remove_file {
+                std::fs::remove_file(exe).unwrap();
+            } else {
+                std::fs::rename(bundle, root.join("Removed.app")).unwrap();
+            }
+            let reported = rx.recv_timeout(Duration::from_secs(5));
+            drop(watch);
+            std::fs::remove_dir_all(root).unwrap();
+            reported.expect("native file event must stop redirection");
+        }
+    }
+
+    #[test]
+    fn wake_queued_before_run_is_not_lost() {
+        use core_foundation::runloop::{CFRunLoopTimer, kCFRunLoopDefaultMode};
+        extern "C" fn unused_timer(_: core_foundation::runloop::CFRunLoopTimerRef, _: *mut c_void) {
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let runloop = CFRunLoop::get_current();
+            // An inert source keeps this test loop alive; production has the mouse event tap.
+            let timer = CFRunLoopTimer::new(
+                unsafe { core_foundation::date::CFAbsoluteTimeGetCurrent() } + 60.,
+                0.,
+                0,
+                0,
+                unused_timer,
+                ptr::null_mut(),
+            );
+            unsafe {
+                runloop.add_timer(&timer, kCFRunLoopDefaultMode);
+            }
+            tx.send(runloop.clone()).unwrap();
+            go_rx.recv().unwrap();
+            CFRunLoop::run_current();
+            unsafe {
+                runloop.remove_timer(&timer, kCFRunLoopDefaultMode);
+            }
+            let _ = done_tx.send(());
+        });
+        stop_runloop(&rx.recv().unwrap());
+        go_tx.send(()).unwrap();
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("notification must wake the worker");
+        thread.join().unwrap();
+    }
 
     #[test]
     fn only_plain_clicks_are_candidates() {

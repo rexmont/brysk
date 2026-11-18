@@ -166,7 +166,8 @@ fn path_exists(p: &Path) -> bool {
 /// The folder a started program gets as its working directory: the open folder when it is a folder on the disk, else the profile
 /// folder.
 fn working_dir(open_dir: Option<&Path>) -> PathBuf {
-    open_dir.filter(|d| d.is_dir()).map(Path::to_path_buf).or_else(dirs::home_dir).unwrap_or_else(|| PathBuf::from(r"C:\"))
+    open_dir.filter(|d| d.is_dir()).map(Path::to_path_buf).or_else(dirs::home_dir)
+        .unwrap_or_else(|| PathBuf::from(if cfg!(windows) { r"C:\" } else { "/" }))
 }
 
 /// Place or command or neither, and the starting itself. Runs on a worker thread.

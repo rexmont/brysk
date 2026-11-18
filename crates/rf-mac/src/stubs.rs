@@ -122,8 +122,15 @@ pub mod runcmd {
 
     pub type ExecError = (u32, String);
 
+    /// A program is a file, or an application bundle: a `.app` is a directory but `open` starts
+    /// it, and the address field treats it as the app it is.
     pub fn is_program_file(p: &Path) -> bool {
-        std::fs::symlink_metadata(p).map(|m| !m.is_dir()).unwrap_or(false)
+        // `metadata`, not `symlink_metadata`: Homebrew and app installers put symlinks in the
+        // PATH (`code` -> the app's CLI), and those are programs too.
+        match std::fs::metadata(p) {
+            Ok(m) => m.is_file() || (m.is_dir() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("app"))),
+            Err(_) => false,
+        }
     }
 
     pub fn search_dirs() -> Vec<PathBuf> {
@@ -133,7 +140,12 @@ pub mod runcmd {
             PathBuf::from("/usr/bin"),
             PathBuf::from("/bin"),
             PathBuf::from("/Applications"),
+            PathBuf::from("/System/Applications"),
+            PathBuf::from("/System/Applications/Utilities"),
         ];
+        if let Some(home) = dirs::home_dir() {
+            out.push(home.join("Applications"));
+        }
         if let Some(path) = std::env::var_os("PATH") {
             out.extend(std::env::split_paths(&path));
         }
@@ -169,12 +181,26 @@ pub mod runcmd {
         None
     }
 
-    /// Starts the program with the open folder as its working directory.
+    /// Starts the program with the open folder as its working directory. A `.app` bundle is
+    /// started through LaunchServices (`open -a`), which activates it; command-line programs
+    /// run with the folder as their working directory.
     pub fn start(found: &Found, work_dir: &Path) -> Started {
-        let mut cmd = std::process::Command::new(&found.exe);
-        if !found.args.is_empty() {
-            cmd.args(found.args.split_whitespace());
-        }
+        let is_app = found.exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("app"));
+        let mut cmd = if is_app {
+            let mut c = std::process::Command::new("/usr/bin/open");
+            c.arg("-a").arg(&found.exe);
+            if !found.args.is_empty() {
+                c.arg("--args");
+                c.args(found.args.split_whitespace());
+            }
+            c
+        } else {
+            let mut c = std::process::Command::new(&found.exe);
+            if !found.args.is_empty() {
+                c.args(found.args.split_whitespace());
+            }
+            c
+        };
         cmd.current_dir(work_dir);
         match cmd.spawn() {
             Ok(_) => Started::Yes,
@@ -188,6 +214,27 @@ pub mod runcmd {
             Ok(Err((_, message))) => Started::Failed(message),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Started::Pending,
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Started::Failed("the thread that starts programs ended without an answer".into()),
+        }
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn an_app_bundle_is_a_program_but_a_plain_folder_is_not() {
+            let d = std::env::temp_dir().join(format!("rf-runcmd-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&d);
+            std::fs::create_dir_all(d.join("Foo.app")).unwrap();
+            std::fs::create_dir_all(d.join("Plain")).unwrap();
+            std::fs::write(d.join("tool"), b"#!/bin/sh\n").unwrap();
+            std::os::unix::fs::symlink(d.join("tool"), d.join("tool-link")).unwrap();
+            assert!(is_program_file(&d.join("Foo.app")));
+            assert!(is_program_file(&d.join("tool")));
+            assert!(is_program_file(&d.join("tool-link")), "a symlink to a program is a program");
+            assert!(!is_program_file(&d.join("Plain")));
+            let found = find(&[CommandLine { program: d.join("Foo.app").display().to_string(), args: String::new() }], &d);
+            assert_eq!(found.map(|f| f.exe), Some(d.join("Foo.app")));
+            let _ = std::fs::remove_dir_all(&d);
         }
     }
 }

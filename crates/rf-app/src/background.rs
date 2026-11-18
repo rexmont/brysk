@@ -1,4 +1,4 @@
-//! Running in the background (tray icon after the last window closes) and notifications for
+//! Running in the background, optional tray visibility and notifications for
 //! long operations — Files' "leave app running in the background" and its toasts.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,7 +42,7 @@ pub fn side_process() -> bool {
     DIRECTLOOK_PROCESS.load(Ordering::Relaxed) || DOCK_PROCESS.load(Ordering::Relaxed)
 }
 
-/// Settings changed: the tray icon is there exactly while background mode is on.
+/// Synchronizes icon visibility; macOS controls this independently of background mode.
 pub fn sync_tray(on: bool) {
     if side_process() {
         return;

@@ -912,7 +912,7 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
     #[cfg(windows)]
     v.push(card(p, L::ChevronsUpDown, t!("Akıcı kaydırma"), None, sw("smooth", p, s.smooth_scroll, |s, v| s.smooth_scroll = v)));
     #[cfg(target_os = "macos")]
-    v.extend(finder_dock_cards(p, s));
+    v.extend(macos_cards(p, s));
     v.extend(quick_search_cards(p, s, cx));
     #[cfg(windows)]
     v.extend(crate::snip::settings_cards(p, s));
@@ -920,7 +920,7 @@ fn general(p: &Palette, s: &Settings, cx: &mut App) -> Vec<AnyElement> {
 }
 
 #[cfg(target_os = "macos")]
-fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
+fn macos_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     use crate::i18n::tx;
     use rf_win::finder_replace::{self, Status};
     let enabled = s.finder_dock_redirect;
@@ -948,6 +948,9 @@ fn finder_dock_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
                 }
             })));
     }
+    cards.push(card(p, L::PanelTop, tx("Menü çubuğu simgesini göster", "Show menu-bar icon"),
+        Some(tx("Brysk çalışırken pencerelere ve Ayarlar'a hızlı erişim.", "Quick access to windows and Settings while Brysk is running.")),
+        sw("menu-bar-icon", p, s.show_menu_bar_icon, |s, v| s.show_menu_bar_icon = v)));
     cards
 }
 
@@ -2872,7 +2875,7 @@ fn advanced(p: &Palette, s: &Settings, cx: &App) -> Vec<AnyElement> {
             L::PanelBottom,
             t!("Pencere kapatılınca arka planda çalışmaya devam et"),
             Some(if cfg!(target_os = "macos") {
-                crate::i18n::tx("Pencereler kapanınca menü çubuğu simgesini koru. Çık (⌘Q), Brysk'ı kapatır.", "Keep the menu-bar icon when windows close. Quit (⌘Q) exits Brysk.")
+                crate::i18n::tx("Tüm pencereler kapanınca Brysk'ı ve HyperSearch'ü çalışır tut. Çık (⌘Q), Brysk'ı kapatır.", "Keep Brysk and HyperSearch running when all windows close. Quit (⌘Q) exits Brysk.")
             } else {
                 t!("Bildirim alanında bir simge kalır; yeni pencere anında açılır")
             }),

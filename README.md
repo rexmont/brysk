@@ -87,6 +87,10 @@ Finder behavior. Turning the option off unregisters the helper. Native filesyste
 restore Finder clicks if Brysk is moved or removed. There is no polling, system patch or SIP
 change. After granting Accessibility access, return to Brysk to activate the integration.
 
+The optional menu-bar icon is off by default and can be enabled in Settings → General.
+Settings → Advanced controls whether Brysk keeps running after its windows close; this is
+independent of the icon and Finder helper. **Quit (⌘Q)** exits Brysk.
+
 ## Build from source
 
 ```sh

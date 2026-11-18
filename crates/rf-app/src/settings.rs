@@ -442,9 +442,11 @@ pub struct Settings {
     /// The user's own programs for kinds of files (Settings > File types; `rf_core::openrules`): the first program of a list opens
     /// such a file on a double click, all of them stand first under "Open with". Only Brysk follows them.
     pub open_rules: Vec<rf_core::openrules::OpenRule>,
-    /// Closing the last window keeps Brysk in the notification area (the menu bar on macOS): the next window opens instantly.
+    /// Closing the last window keeps Brysk running: the next window opens instantly.
     pub run_in_background: bool,
-    /// macOS only: redirect plain clicks on Finder's Dock icon while Brysk runs. Opt-in.
+    /// macOS only: show the menu-bar icon independently of background mode. Opt-in.
+    pub show_menu_bar_icon: bool,
+    /// macOS only: a separate helper redirects plain Finder Dock clicks, including after Quit. Opt-in.
     pub finder_dock_redirect: bool,
     /// Status bar: listing time and the GPU/CPU renderer badge (developer info).
     pub show_perf_info: bool,
@@ -751,6 +753,7 @@ impl Default for Settings {
             accent_color: String::new(),
             open_rules: Vec::new(),
             run_in_background: false,
+            show_menu_bar_icon: false,
             finder_dock_redirect: false,
             show_perf_info: false,
             notify_long_ops: cfg!(windows),
@@ -1144,7 +1147,7 @@ impl Settings {
         rf_win::drives::set_hidden(rf_win::drives::mask_of_letters(&self.hidden_drives));
         // (a text that is no colour is no colour: Windows' accent)
         rf_win::accent::set_override(rf_win::accent::parse_hex(&self.accent_color));
-        crate::background::sync_tray(self.run_in_background);
+        crate::background::sync_tray(if cfg!(target_os = "macos") { self.show_menu_bar_icon } else { self.run_in_background });
         #[cfg(target_os = "macos")]
         if !crate::background::side_process() {
             rf_win::finder_replace::set_enabled(self.finder_dock_redirect);
@@ -1272,6 +1275,22 @@ pub fn update_live(cx: &mut App, f: impl FnOnce(&mut Settings)) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn menu_bar_icon_is_opt_in_and_persists_independently_of_background_mode() {
+        use super::Settings;
+        assert!(!Settings::default().show_menu_bar_icon);
+        let old = Settings::parse_lenient("run_in_background = true\n").unwrap();
+        assert!(old.run_in_background && !old.show_menu_bar_icon);
+        for background in [false, true] {
+            for icon in [false, true] {
+                let settings = Settings { run_in_background: background, show_menu_bar_icon: icon, ..Default::default() };
+                let restored = Settings::parse_lenient(&toml::to_string_pretty(&settings).unwrap()).unwrap();
+                assert_eq!(restored.run_in_background, background);
+                assert_eq!(restored.show_menu_bar_icon, icon);
+            }
+        }
+    }
+
     #[test]
     fn the_dock_stays_on_the_graphics_card_unless_the_user_chose_the_software_renderer() {
         use super::{RendererPref as P, renderer_mode};

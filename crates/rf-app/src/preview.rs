@@ -152,8 +152,11 @@ impl Preview {
         if wants {
             self.trace.asked(size, true, self.last_thumb.is_some());
         }
-        // (the pane's picture is what the user waits for: it is not made behind the list's own tiles)
-        let thumb = if wants { self.images.update(cx, |c, cx| c.pane_picture(dir, e, size, cx)) } else { None };
+        // The pane's picture is what the user waits for: it is not made behind the list's own
+        // tiles. Entries without a thumbnail get the Finder's own icon at a size that is sharp
+        // at the pane's largest view but not a 1280 px bitmap just to draw a small folder.
+        let icon_size = size.min(256);
+        let thumb = self.images.update(cx, |c, cx| c.pane_picture(dir, e, if wants { size } else { icon_size }, cx));
         match thumb {
             Some(im) => {
                 self.trace.shown();

@@ -86,7 +86,7 @@ fn on_tray(e: rf_win::tray::TrayEvent, cx: &mut App) {
                 Some(w) => {
                     let _ = w.update(cx, |_, window, _| window.activate_window());
                 }
-                None => crate::open_main_window(None, None, crate::restored_bounds(cx), cx),
+                None => crate::open_main_window(None, None, None, cx),
             }
         }
         TrayEvent::NewWindow => crate::open_main_window(Some(rf_core::Location::Home), None, None, cx),

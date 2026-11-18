@@ -125,7 +125,9 @@ pub(crate) fn titlebar_options() -> TitlebarOptions {
     TitlebarOptions { traffic_light_position: Some(point(px(16.), px(12.))), ..TitleBar::title_bar_options() }
 }
 
-/// Window placement from the last session (ignored if it is implausibly small).
+/// Window placement from the last session (ignored if it is implausibly small). Windows
+/// restores the last placement; macOS always opens a new main window centred.
+#[cfg(windows)]
 pub(crate) fn restored_bounds(cx: &App) -> Option<WindowBounds> {
     let [x, y, w, h, max] = cx.global::<settings::Settings>().window?;
     if w < 500. || h < 350. {
@@ -816,7 +818,8 @@ pub fn main() {
         if let Some(w) = workspace::main_windows(cx).into_iter().next() {
             let _ = w.update(cx, |_, window, _| window.activate_window());
         } else {
-            open_main_window(None, None, restored_bounds(cx), cx);
+            // centred, like the first launch (the last placement is not reused on macOS)
+            open_main_window(None, None, None, cx);
         }
     });
     application.run(move |cx| {
@@ -865,7 +868,12 @@ pub fn main() {
         if let Some(d) = settings::local_data_dir() {
             rf_win::foldersize::shared_cache().persist(d.join("foldersizes.bin"));
         }
+        #[cfg(windows)]
         let bounds = restored_bounds(cx);
+        // The macOS window opens centred on the screen, like a freshly launched app, not at
+        // the place the last session left it.
+        #[cfg(not(windows))]
+        let bounds = None;
         match pick.clone() {
             // started only to answer a dialog: no main window
             Some(pipe) => picker::begin(pipe, cx),
@@ -994,17 +1002,17 @@ pub fn main() {
             // workspace handles them, so these do nothing then.)
             cx.on_action(|_: &crate::actions::NewWindow, cx| {
                 if !workspace::any_main_window(cx) {
-                    open_main_window(None, None, restored_bounds(cx), cx);
+                    open_main_window(None, None, None, cx);
                 }
             });
             cx.on_action(|_: &crate::actions::NewTab, cx| {
                 if !workspace::any_main_window(cx) {
-                    open_main_window(None, None, restored_bounds(cx), cx);
+                    open_main_window(None, None, None, cx);
                 }
             });
             cx.on_action(|_: &crate::actions::GoSettings, cx| {
                 if !workspace::any_main_window(cx) {
-                    open_main_window(Some(Location::Settings), None, restored_bounds(cx), cx);
+                    open_main_window(Some(Location::Settings), None, None, cx);
                 }
             });
             cx.on_action(|_: &crate::actions::Quit, cx| {

@@ -30,6 +30,6 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright (c) 2026 Özer Güzel (gelenmedya). DirectLook is part of Brysk, an MIT-licensed macOS fork of rustyfiles.</string>
+    <string>DirectLook — file previews for Brysk.</string>
 </dict>
 </plist>

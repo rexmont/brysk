@@ -1,9 +1,9 @@
 #!/bin/sh
-# Builds Brysk.app for macOS: the two binaries, the Info.plist, and an ad-hoc signature
+# Builds Brysk for macOS: the binaries, the Info.plist, and an ad-hoc signature
 # (replace `-` with a Developer ID to ship it). A debug build by default; releases go
 # through scripts/package-macos.sh.
 #
-#   scripts/build-macos.sh            # debug → target/Brysk.app
+#   scripts/build-macos.sh            # debug → target/Brysk Debug.app (isolated from release)
 #   PROFILE=release scripts/build-macos.sh
 #   CODESIGN_ID="Developer ID Application: …" scripts/build-macos.sh
 #
@@ -18,7 +18,7 @@ case "$PROFILE" in
     release) CARGO_PROFILE=release; PROFILE_DIR=release ;;
     *) CARGO_PROFILE="$PROFILE"; PROFILE_DIR="$PROFILE" ;;
 esac
-APP="target/Brysk.app"
+APP="target/Brysk Debug.app"
 if [ "$PROFILE_DIR" != debug ]; then
     APP="target/$PROFILE_DIR/Brysk.app"
 fi
@@ -50,9 +50,11 @@ ditto target/sparkle/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framewo
 ./scripts/sign-sparkle.sh "$APP"
 cp packaging/macos/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/brysk" "$APP/Contents/MacOS/brysk"
-cp "$BIN/brysk-finder-agent" "$APP/Contents/MacOS/brysk-finder-agent"
-mkdir -p "$APP/Contents/Library/LaunchAgents"
-cp packaging/macos/com.rexmont.brysk.finder-agent.plist "$APP/Contents/Library/LaunchAgents/"
+if [ "$PROFILE_DIR" != debug ]; then
+    cp "$BIN/brysk-finder-agent" "$APP/Contents/MacOS/brysk-finder-agent"
+    mkdir -p "$APP/Contents/Library/LaunchAgents"
+    cp packaging/macos/com.rexmont.brysk.finder-agent.plist "$APP/Contents/Library/LaunchAgents/"
+fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # DirectLook is an app of its own (a nested agent bundle): run as a bare binary inside
@@ -64,6 +66,16 @@ cp packaging/macos/DirectLook-Info.plist "$HELPER/Contents/Info.plist"
 cp "$BIN/directlook" "$HELPER/Contents/MacOS/directlook"
 # The nested bundle is distributed as its own app, so it carries its own notice too.
 cp LICENSE NOTICE "$HELPER/Contents/Resources/"
+
+if [ "$PROFILE_DIR" = debug ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.rexmont.brysk.debug" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName Brysk Debug" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Brysk Debug" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks false" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.rexmont.brysk.debug.directlook" "$HELPER/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName DirectLook Debug" "$HELPER/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName DirectLook Debug" "$HELPER/Contents/Info.plist"
+fi
 
 # The icon is optional: `packaging/macos/Brysk.icns` when it exists.
 if [ -f packaging/macos/Brysk.icns ]; then
@@ -97,10 +109,12 @@ else
 fi
 # shellcheck disable=SC2086
 codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" "$APP/Contents/Helpers/DirectLook.app"
-# shellcheck disable=SC2086
-codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" --identifier com.rexmont.brysk.finder-agent "$APP/Contents/MacOS/brysk-finder-agent"
+if [ "$PROFILE_DIR" != debug ]; then
+    # shellcheck disable=SC2086
+    codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" --identifier com.rexmont.brysk.finder-agent "$APP/Contents/MacOS/brysk-finder-agent"
+fi
 # shellcheck disable=SC2086
 codesign $SIGN_FLAGS --sign "${CODESIGN_ID:--}" "$APP"
 
 echo "built $APP"
-echo "run: open $APP --args /Users/you"
+echo "run: open \"$APP\" --args /Users/you"

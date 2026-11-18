@@ -226,7 +226,7 @@ Done:
 * `scripts/package-macos.sh` builds a universal (arm64 + x86_64) release, signs the nested
   DirectLook helper and the app with the Developer ID identity (hardened runtime + timestamp),
   creates a DMG, notarises it with the `notarytool` keychain profile and staples it —
-  `dist/Brysk-<version>.dmg`. `scripts/build-macos.sh` builds `target/Brysk.app` (debug by
+  `dist/Brysk-<version>.dmg`. `scripts/build-macos.sh` builds `target/Brysk Debug.app` (debug by
   default, `PROFILE=release` for a release; Info.plist with the TCC usage
   texts, ad-hoc signature) with DirectLook as a **nested agent app** under
   `Contents/Helpers/DirectLook.app`: as a bare binary in `Contents/MacOS`, LaunchServices

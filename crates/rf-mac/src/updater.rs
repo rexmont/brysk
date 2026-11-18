@@ -87,6 +87,9 @@ define_class!(
 
 /// Returns false for an unpackaged Cargo binary; it cannot replace an app bundle.
 pub fn start(handler: impl Fn(Event) + Send + 'static) -> Result<bool, String> {
+    if cfg!(debug_assertions) {
+        return Ok(false);
+    }
     let mtm = MainThreadMarker::new().ok_or("Updater must start on the main thread")?;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let contents = exe
@@ -169,5 +172,15 @@ pub fn install() {
     let block = INSTALL.with(|pending| pending.borrow_mut().take());
     if let Some(block) = block {
         block.call(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_app_never_initializes_the_release_updater() {
+        assert_eq!(super::start(|_| panic!("debug must not check for release updates")), Ok(false));
+        assert!(super::UPDATER.with(|slot| slot.borrow().is_none()));
     }
 }

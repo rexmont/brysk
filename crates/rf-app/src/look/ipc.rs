@@ -12,6 +12,7 @@ pub const APP: &str = "directlook";
 pub fn app_name() -> String {
     match std::env::var("RUSTYFILES_LOOK_INSTANCE") {
         Ok(x) if !x.is_empty() => format!("{APP}-{x}"),
+        _ if cfg!(all(target_os = "macos", debug_assertions)) => format!("{APP}-debug"),
         _ => APP.to_string(),
     }
 }
@@ -177,6 +178,12 @@ mod tests {
 
     use super::{Msg, ToApp};
     use crate::look::ShowOpts;
+
+    #[cfg(all(target_os = "macos", debug_assertions))]
+    #[test]
+    fn debug_directlook_does_not_use_the_release_channel() {
+        assert_ne!(super::app_name(), super::APP);
+    }
 
     #[test]
     fn messages_round_trip() {

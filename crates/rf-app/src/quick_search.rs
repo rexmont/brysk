@@ -61,7 +61,9 @@ pub fn disable_hotkey() {
 /// copy hold it like the real one (a copy the user tries the next version with, while the installed app is not running); without it a
 /// test copy never takes the user's hotkey.
 fn hotkey_owner() -> bool {
-    let test_copy = std::env::var_os("RUSTYFILES_MULTI_INSTANCE").is_some() || std::env::var_os("RUSTYFILES_INSTANCE").is_some();
+    let test_copy = cfg!(all(target_os = "macos", debug_assertions))
+        || std::env::var_os("RUSTYFILES_MULTI_INSTANCE").is_some()
+        || std::env::var_os("RUSTYFILES_INSTANCE").is_some();
     !crate::background::DIRECTLOOK_PROCESS.load(std::sync::atomic::Ordering::Relaxed)
         && !NO_HOTKEY.load(std::sync::atomic::Ordering::Relaxed)
         && (!test_copy || std::env::var_os("RUSTYFILES_QUICK_HOTKEY").is_some())

@@ -299,6 +299,9 @@ pub fn open_background_settings() {
 
 /// All registration and status I/O stays off the UI thread. Filesystem events redraw the status row.
 pub fn start(changed: impl Fn() + Send + 'static) {
+    if cfg!(debug_assertions) {
+        return;
+    }
     CONTROL.get_or_init(|| {
         let (tx, rx) = mpsc::channel();
         let watcher_tx = tx.clone();
@@ -570,6 +573,15 @@ fn open_brysk(bundle: &Path, pending: std::sync::Arc<AtomicBool>) {
 #[cfg(test)]
 mod tests {
     use super::{runtime_directory, secure_directory};
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_app_never_initializes_the_finder_service() {
+        super::start(|| panic!("debug must not register a Finder service"));
+        assert!(super::CONTROL.get().is_none());
+        assert!(super::DIRECTORY.get().is_none());
+        assert!(super::ENABLED_FILE.get().is_none());
+    }
+
     #[test]
     fn copied_app_cannot_control_another_bundles_finder_service() {
         let production =

@@ -926,11 +926,17 @@ fn macos_cards(p: &Palette, s: &Settings) -> Vec<AnyElement> {
     let enabled = s.finder_dock_redirect;
     let mut cards = vec![
         section(p, "macOS"),
-        card(p, L::FolderOpen, tx("Finder Dock simgesinden Brysk'ı aç", "Open Brysk from the Finder Dock icon"),
+        if cfg!(debug_assertions) {
+            card(p, L::FolderOpen, tx("Finder Dock tümleştirmesi", "Finder Dock integration"),
+                Some(tx("Finder Dock tümleştirmesi, kararlı Brysk uygulaması tarafından yönetilir.", "Finder Dock integration is handled by the release app.")),
+                div().into_any_element())
+        } else {
+            card(p, L::FolderOpen, tx("Finder Dock simgesinden Brysk'ı aç", "Open Brysk from the Finder Dock icon"),
             Some(tx("Küçük bir arka plan yardımcısı, Brysk kapalıyken de Finder tıklamalarını yönlendirir. Erişilebilirlik izni gerekir. Sağ tık ve değiştirici tuşlarla tıklamalar Finder'da kalır.", "A small background helper opens Brysk from Finder clicks, even after Quit. Requires Accessibility access. Right-clicks and modified clicks keep their Finder behavior.")),
-            switch("finder-dock-redirect", p, enabled, move |_, cx| settings::set_finder_dock_redirect(!enabled, cx))),
+            switch("finder-dock-redirect", p, enabled, move |_, cx| settings::set_finder_dock_redirect(!enabled, cx)))
+        },
     ];
-    if enabled {
+    if enabled && !cfg!(debug_assertions) {
         let status = match finder_replace::status() {
             Status::Active => tx("Etkin. Finder'a tıklamak, Brysk'tan çıktıktan sonra da Brysk'ı açar.", "Active. Finder clicks open Brysk, including after Quit."),
             Status::NeedsAccessibility => tx("Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik'te Brysk'a izin verin, ardından Brysk'a dönün.", "Allow Brysk in System Settings → Privacy & Security → Accessibility, then return to Brysk."),

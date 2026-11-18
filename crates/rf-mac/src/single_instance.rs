@@ -30,10 +30,11 @@ impl Drop for InstanceGuard {
     }
 }
 
-/// "Brysk", or "Brysk-NAME" with `RUSTYFILES_INSTANCE=NAME`.
+/// Separate default channels for debug and release; `RUSTYFILES_INSTANCE` can override either.
 pub fn instance_name() -> String {
     match std::env::var("RUSTYFILES_INSTANCE") {
         Ok(n) if !n.is_empty() => format!("Brysk-{n}"),
+        _ if cfg!(debug_assertions) => "Brysk-Debug".to_string(),
         _ => "Brysk".to_string(),
     }
 }
@@ -87,6 +88,12 @@ pub(crate) fn process_is_stale(pid: i32, executable: &std::path::Path) -> Option
 
 #[cfg(test)]
 mod freshness_tests {
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_app_does_not_use_the_release_socket() {
+        assert_ne!(super::socket_path(&super::instance_name()), super::socket_path("Brysk"));
+    }
+
     #[test]
     fn finds_the_process_behind_a_live_helper_socket() {
         let app = format!("brysk-freshness-test-{}", std::process::id());

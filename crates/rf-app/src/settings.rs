@@ -1290,6 +1290,22 @@ pub fn update_live(cx: &mut App, f: impl FnOnce(&mut Settings)) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_os = "macos", debug_assertions))]
+    #[test]
+    fn debug_settings_do_not_migrate_release_preferences() {
+        let base = std::env::temp_dir().join(format!("rf-debug-settings-{}", std::process::id()));
+        std::fs::create_dir_all(base.join("rustyfiles")).unwrap();
+        std::fs::write(base.join("rustyfiles/settings.toml"), "legacy").unwrap();
+        assert_eq!(super::product_dir(base.clone(), "Brysk"), base.join("Brysk Debug"));
+        assert_eq!(std::fs::read_to_string(base.join("rustyfiles/settings.toml")).unwrap(), "legacy");
+        std::fs::create_dir_all(base.join("Brysk")).unwrap();
+        std::fs::write(base.join("Brysk/settings.toml"), "release").unwrap();
+        assert_eq!(super::product_dir(base.clone(), "Brysk"), base.join("Brysk Debug"));
+        assert_eq!(std::fs::read_to_string(base.join("Brysk/settings.toml")).unwrap(), "release");
+        assert_eq!(std::fs::read_to_string(base.join("rustyfiles/settings.toml")).unwrap(), "legacy");
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn home_is_pinned_below_applications_once() {
@@ -1436,6 +1452,10 @@ pub fn local_data_dir() -> Option<std::path::PathBuf> {
 
 /// `base/Brysk`, moving a `base/rustyfiles` from before the rename out of the way once.
 fn product_dir(base: std::path::PathBuf, name: &str) -> std::path::PathBuf {
+    if cfg!(all(target_os = "macos", debug_assertions)) {
+        return base.join(format!("{name} Debug"));
+    }
+
     let dir = base.join(name);
     #[cfg(target_os = "macos")]
     {

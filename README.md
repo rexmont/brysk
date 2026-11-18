@@ -99,9 +99,12 @@ independent of the icon and Finder helper. **Quit (⌘Q)** exits Brysk.
 ```sh
 git clone https://github.com/rexmont/brysk.git
 cd brysk
-./scripts/build-macos.sh          # debug → target/Brysk.app
-open target/Brysk.app
+./scripts/build-macos.sh          # → target/Brysk Debug.app
+open "target/Brysk Debug.app"
 ```
+
+Debug builds use a separate app identity, settings folder and DirectLook instance. They leave
+Finder Dock integration, the global HyperSearch shortcut and release updates to the release app.
 
 For a release DMG (universal, Developer ID, notarised):
 

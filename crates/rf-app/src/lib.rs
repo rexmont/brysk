@@ -925,7 +925,7 @@ pub fn main() {
                 // a copy or move cut off last time: ask to carry it on
                 status_center::offer_resume(cx);
                 #[cfg(target_os = "macos")]
-                if first_run && pick.is_none() {
+                if first_run && pick.is_none() && !cfg!(debug_assertions) {
                     crate::settings::update(cx, |s| s.first_start_ms = chrono::Utc::now().timestamp_millis());
                     cx.spawn(async move |cx| {
                         cx.background_executor().timer(std::time::Duration::from_millis(400)).await;

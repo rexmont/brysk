@@ -30,7 +30,7 @@ freeze it.
 </p>
 
 <p align="center">
-  <a href="https://www.buymeacoffee.com/ozerguzel"><img alt="Buy me a coffee" src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="44"></a>
+  <a href="https://ko-fi.com/rexmont"><img alt="Support on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg" height="44"></a>
 </p>
 
 <p align="center">

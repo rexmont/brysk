@@ -4,7 +4,7 @@
 
 pub const APP_ID: &str = "brysk";
 pub const REPO: &str = "https://github.com/rexmont/brysk";
-pub const DONATE: &str = "https://www.buymeacoffee.com/ozerguzel";
+pub const DONATE: &str = "https://ko-fi.com/rexmont";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {

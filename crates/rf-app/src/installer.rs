@@ -387,7 +387,7 @@ pub fn star_due(s: &crate::settings::Settings) -> bool {
 }
 
 /// Where a coffee is bought (the README's button).
-pub const DONATE: &str = "https://www.buymeacoffee.com/ozerguzel";
+pub const DONATE: &str = "https://ko-fi.com/rexmont";
 
 const DAY_MS: i64 = 24 * 3600 * 1000;
 
